@@ -1,8 +1,10 @@
 # src/engine/matcher.py
 import json
 import re
-from typing import Dict, Any, List
+from typing import Any
+
 from src.core.config import settings
+
 
 def load_skills_registry(category_slug: str = "data_engineering") -> dict:
     """Loads the skill taxonomy dictionary for match scoring."""
@@ -15,7 +17,7 @@ def load_skills_registry(category_slug: str = "data_engineering") -> dict:
     with open(skills_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def calculate_match_score(job_description: str, category_slug: str = "data_engineering") -> Dict[str, Any]:
+def calculate_match_score(job_description: str, category_slug: str = "data_engineering") -> dict[str, Any]:
     """
     Computes an algorithmic fit score based on core tech stack coverage,
     supporting tools, and seniority alignment.
@@ -24,8 +26,8 @@ def calculate_match_score(job_description: str, category_slug: str = "data_engin
         return {"score": 0, "matched_skills": [], "missing_skills": []}
 
     registry = load_skills_registry(category_slug)
-    core_techs: List[str] = registry.get("core_techs", [])
-    supporting_tools: List[str] = registry.get("supporting_tools", [])
+    core_techs: list[str] = registry.get("core_techs", [])
+    supporting_tools: list[str] = registry.get("supporting_tools", [])
 
     jd_lower = job_description.lower()
 

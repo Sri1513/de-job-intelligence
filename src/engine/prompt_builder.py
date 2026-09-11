@@ -1,9 +1,11 @@
 # src/engine/prompt_builder.py
 import json
-from typing import Dict, Any
+from typing import Any
+
 from src.core.config import settings
 from src.core.database import get_job_by_id
 from src.core.utils import get_cached_resume
+
 
 def load_frameworks() -> dict:
     """Loads the deterministic RAG framework mapping for semantic tool swapping."""
@@ -23,7 +25,7 @@ def load_role_config(category_slug: str) -> dict:
     with open(config_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def build_tailoring_payload(job_id: str) -> Dict[str, Any]:
+def build_tailoring_payload(job_id: str) -> dict[str, Any]:
     """
     Constructs the secure JSON-structured tailoring payload with dynamic phase weighting
     and deterministic tool bridging policies.

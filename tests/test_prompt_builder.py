@@ -1,8 +1,8 @@
 # tests/test_prompt_builder.py
-import pytest
 from src.core.utils import get_cached_resume
-from src.engine.prompt_builder import load_frameworks, load_role_config
 from src.engine.matcher import calculate_match_score
+from src.engine.prompt_builder import load_frameworks, load_role_config
+
 
 def test_configurations_load():
     frameworks = load_frameworks()

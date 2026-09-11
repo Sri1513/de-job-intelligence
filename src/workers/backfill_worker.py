@@ -1,13 +1,14 @@
 # src/workers/backfill_worker.py
-import time
 import logging
-from typing import Dict, Any
-from src.workers.pipeline_utils import get_unprocessed_jobs, update_job_evaluation, mark_job_failed
+import time
+from typing import Any
+
 from src.engine.analyzer import evaluate_job_fit
+from src.workers.pipeline_utils import get_unprocessed_jobs, mark_job_failed, update_job_evaluation
 
 logger = logging.getLogger("de-job-intelligence.backfill")
 
-def run_backfill_batch(batch_size: int = 10, delay_seconds: float = 2.0) -> Dict[str, Any]:
+def run_backfill_batch(batch_size: int = 10, delay_seconds: float = 2.0) -> dict[str, Any]:
     """
     Pulls pending/failed jobs from PostgreSQL, executes LLM evaluations,
     and commits the results with rate pacing.

@@ -1,7 +1,7 @@
 # src/protocols/schemas.py
-from typing import Dict, Any, List
+from typing import Any
 
-MCP_TOOLS: List[Dict[str, Any]] = [
+MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "prepare_job_tailoring_prompt",
         "description": (

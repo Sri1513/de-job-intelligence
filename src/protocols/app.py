@@ -1,12 +1,12 @@
 # src/protocols/app.py
-from typing import Dict, Any
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.routing import Route
-from src.core.config import settings
-from src.protocols.schemas import MCP_TOOLS
+
 from src.protocols.dispatcher import dispatch_tool_call
+from src.protocols.schemas import MCP_TOOLS
+
 
 async def health_check(request: Request) -> JSONResponse:
     """Service health and liveness probe."""
@@ -94,7 +94,7 @@ async def handle_rpc(request: Request) -> JSONResponse:
                 ]
             }
         })
-    
+
     # Inside src/protocols/app.py -> handle_rpc:
     elif method in ("tools/call", "call_tool"):
         tool_name = params.get("name")
@@ -131,7 +131,7 @@ async def handle_rpc(request: Request) -> JSONResponse:
                     "data": str(exc)
                 }
             }, status_code=200)
-        
+
     # 5. Unsupported RPC Method
     return JSONResponse({
         "jsonrpc": "2.0",

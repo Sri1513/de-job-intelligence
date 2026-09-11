@@ -1,5 +1,6 @@
 # tests/test_synthesis.py
-from src.synthesis.resume_mapper import map_resume_placeholders, STATIC_PROFILE
+from src.synthesis.resume_mapper import STATIC_PROFILE, map_resume_placeholders
+
 
 def test_resume_mapper_fallback_resilience():
     # Simulate an incomplete LLM response missing several bullets and fields

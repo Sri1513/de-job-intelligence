@@ -1,10 +1,12 @@
 # src/synthesis/gdrive_docs.py
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+
 from src.core.config import settings
 
 SCOPES = [
@@ -46,7 +48,7 @@ def get_google_credentials() -> Credentials:
     return creds
 
 def create_tailored_document(
-    replacements: Dict[str, str],
+    replacements: dict[str, str],
     document_title: str,
     template_id: str = None
 ) -> str:
@@ -71,7 +73,7 @@ def create_tailored_document(
     new_doc_id = copied_file.get("id")
 
     # 2. Build batch replacement requests
-    requests: List[Dict[str, Any]] = []
+    requests: list[dict[str, Any]] = []
     for placeholder, text in replacements.items():
         requests.append({
             "replaceAllText": {

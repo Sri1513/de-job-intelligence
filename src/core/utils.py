@@ -1,6 +1,6 @@
 # src/core/utils.py
 from functools import lru_cache
-from pathlib import Path
+
 from src.core.config import settings
 
 RESUMES_DIR = settings.CONFIG_DIR / "resumes"

@@ -1,7 +1,7 @@
 # src/ingestion/scraper.py
-import re
 import logging
-from typing import Optional
+import re
+
 import requests
 from bs4 import BeautifulSoup
 

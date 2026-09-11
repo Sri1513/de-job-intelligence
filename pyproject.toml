@@ -40,6 +40,23 @@ include = ["src*"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined vars)
+    "I",    # isort (import sorting)
+]
+ignore = [
+    "E501", # Line too long
+    "W291", # Trailing whitespace (common in multiline SQL queries)
+    "W293", # Blank line contains whitespace
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/*" = ["F401", "F841"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

@@ -1,31 +1,31 @@
 # src/workers/pipeline_utils.py
 import logging
-from typing import List, Dict, Any
+from typing import Any
+
 from src.core.database import get_db_connection
 
 logger = logging.getLogger("de-job-intelligence.pipeline_utils")
 
-def get_unprocessed_jobs(limit: int = 10) -> List[Dict[str, Any]]:
+def get_unprocessed_jobs(limit: int = 10) -> list[dict[str, Any]]:
     """
     Fetches records needing evaluation (PENDING or FAILED status).
     Orders by saved_at descending.
     """
     query = """
-        SELECT 
-            job_id, title, company, location, is_remote, job_url, 
-            description, job_category, 
-            fit_score AS match_score, 
-            notes AS ai_notes, 
+        SELECT
+            job_id, title, company, location, is_remote, job_url,
+            description, job_category,
+            fit_score AS match_score,
+            notes AS ai_notes,
             ai_status
         FROM saved_jobs
         WHERE ai_status IN ('PENDING', 'FAILED') OR ai_status IS NULL
         ORDER BY saved_at DESC
         LIMIT %s;
     """
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, (limit,))
-            return [dict(row) for row in cur.fetchall()]
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute(query, (limit,))
+        return [dict(row) for row in cur.fetchall()]
 
 def update_job_evaluation(
     job_id: str,

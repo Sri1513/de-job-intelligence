@@ -1,13 +1,14 @@
 # src/workers/batch_ingestion.py
 import logging
-from typing import List, Dict, Any
+from typing import Any
+
 from src.core.database import get_db_connection
 from src.engine.matcher import calculate_match_score
 from src.ingestion.dice_client import DiceJobClient
 
 logger = logging.getLogger("de-job-intelligence.batch_ingestion")
 
-def persist_jobs(jobs: List[Dict[str, Any]], category_slug: str = "data_engineering") -> int:
+def persist_jobs(jobs: list[dict[str, Any]], category_slug: str = "data_engineering") -> int:
     """
     Inserts raw job records into saved_jobs.
     Computes heuristic fit score upon ingestion and marks records as PENDING.
@@ -17,7 +18,7 @@ def persist_jobs(jobs: List[Dict[str, Any]], category_slug: str = "data_engineer
 
     insert_query = """
         INSERT INTO saved_jobs (
-            job_id, title, company, location, is_remote, job_url, 
+            job_id, title, company, location, is_remote, job_url,
             description, job_category, fit_score, ai_status, saved_at
         ) VALUES (
             %(job_id)s, %(title)s, %(company)s, %(location)s, %(is_remote)s, %(job_url)s,
@@ -32,7 +33,7 @@ def persist_jobs(jobs: List[Dict[str, Any]], category_slug: str = "data_engineer
             for job in jobs:
                 description = job.get("description", "")
                 scoring = calculate_match_score(description, category_slug=category_slug)
-                
+
                 params = {
                     "job_id": job["job_id"],
                     "title": job["title"],
@@ -50,7 +51,7 @@ def persist_jobs(jobs: List[Dict[str, Any]], category_slug: str = "data_engineer
 
     return inserted_count
 
-def run_dice_ingestion(query: str = "Data Engineer", pages: int = 1) -> Dict[str, Any]:
+def run_dice_ingestion(query: str = "Data Engineer", pages: int = 1) -> dict[str, Any]:
     """Runs a batch ingestion cycle from Dice."""
     client = DiceJobClient()
     total_found = 0

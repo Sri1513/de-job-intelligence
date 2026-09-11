@@ -1,7 +1,8 @@
 # src/ingestion/dice_client.py
 import logging
+from typing import Any
+
 import requests
-from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("de-job-intelligence.dice_client")
 
@@ -28,7 +29,7 @@ class DiceJobClient:
         location: str = "United States",
         page: int = 1,
         page_size: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Queries the Dice API and normalizes the job payloads."""
         params = {
             "q": query,

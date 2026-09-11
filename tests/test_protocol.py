@@ -1,8 +1,8 @@
 # tests/test_protocol.py
 import pytest
 from starlette.testclient import TestClient
+
 from src.protocols.app import app
-from src.protocols.schemas import MCP_TOOLS
 from src.protocols.dispatcher import dispatch_tool_call
 
 client = TestClient(app)

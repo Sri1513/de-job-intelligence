@@ -1,5 +1,5 @@
 # src/synthesis/resume_mapper.py
-from typing import Dict, Any, List
+from typing import Any
 
 # Synchronized deterministic profile defaults
 STATIC_PROFILE = {
@@ -64,12 +64,12 @@ def clean_bullet(text: str) -> str:
         cleaned = cleaned[2:].strip()
     return cleaned
 
-def map_resume_placeholders(llm_payload: Dict[str, Any]) -> Dict[str, str]:
+def map_resume_placeholders(llm_payload: dict[str, Any]) -> dict[str, str]:
     """
     Transforms tailored LLM output into key-value replacement tokens
     for the Google Docs template, falling back defensively to verified base values.
     """
-    replacements: Dict[str, str] = {f"{{{{{k}}}}}": v for k, v in STATIC_PROFILE.items()}
+    replacements: dict[str, str] = {f"{{{{{k}}}}}": v for k, v in STATIC_PROFILE.items()}
 
     # Professional Summary
     summary = llm_payload.get("professional_summary") or (
@@ -117,7 +117,7 @@ def map_resume_placeholders(llm_payload: Dict[str, Any]) -> Dict[str, str]:
     ]
 
     for key, prefix, required_count in company_mapping:
-        provided_bullets: List[str] = experience.get(key, [])
+        provided_bullets: list[str] = experience.get(key, [])
         fallback_bullets = BASE_BULLETS[key]
 
         for i in range(1, required_count + 1):

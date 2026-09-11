@@ -1,7 +1,9 @@
 # tests/test_ingestion.py
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.ingestion.dice_client import DiceJobClient
 from src.workers.batch_ingestion import persist_jobs
+
 
 @patch("src.ingestion.dice_client.requests.Session.get")
 def test_dice_client_search_jobs(mock_get):

@@ -1,8 +1,10 @@
 # src/engine/analyzer.py
 import json
 import logging
+from typing import Any
+
 import google.generativeai as genai
-from typing import Dict, Any
+
 from src.core.config import settings
 from src.core.utils import get_cached_resume
 
@@ -37,7 +39,7 @@ Output MUST be strict JSON matching this schema:
 Do not wrap output in markdown codeblocks. Return valid JSON only.
 """
 
-def evaluate_job_fit(job_description: str, category_slug: str = "data_engineering") -> Dict[str, Any]:
+def evaluate_job_fit(job_description: str, category_slug: str = "data_engineering") -> dict[str, Any]:
     """
     Invokes Gemini to evaluate job requirements against candidate experience.
     """
@@ -68,10 +70,8 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
         text_content = response.text.strip()
 
         # Clean JSON fences if present
-        if text_content.startswith("```json"):
-            text_content = text_content[7:]
-        if text_content.endswith("```"):
-            text_content = text_content[:-3]
+        text_content = text_content.removeprefix("```json")
+        text_content = text_content.removesuffix("```")
         text_content = text_content.strip()
 
         return json.loads(text_content)
@@ -82,5 +82,5 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
             "key_matches": [],
             "missing_skills": [],
             "role_focus": "ERROR",
-            "summary_rationale": f"AI analysis failed: {str(exc)}"
+            "summary_rationale": f"AI analysis failed: {exc!s}"
         }

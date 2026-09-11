@@ -1,13 +1,15 @@
 # src/protocols/dispatcher.py
 import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from src.core.database import get_job_by_id
 from src.engine.prompt_builder import build_tailoring_payload
-from src.synthesis.resume_mapper import map_resume_placeholders
 from src.synthesis.gdrive_docs import create_tailored_document
+from src.synthesis.resume_mapper import map_resume_placeholders
 from src.workers.backfill_worker import run_backfill_batch
 
-async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+
+async def dispatch_tool_call(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """
     Asynchronously routes tool requests to the appropriate subsystem.
     Delegates synchronous I/O and external API calls to thread pools.

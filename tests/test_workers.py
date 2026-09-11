@@ -1,7 +1,9 @@
 # tests/test_workers.py
-from unittest.mock import patch, MagicMock
-from src.workers.pipeline_utils import get_unprocessed_jobs, update_job_evaluation
+from unittest.mock import MagicMock, patch
+
 from src.workers.backfill_worker import run_backfill_batch
+from src.workers.pipeline_utils import get_unprocessed_jobs
+
 
 @patch("src.workers.pipeline_utils.get_db_connection")
 def test_get_unprocessed_jobs(mock_get_db):
