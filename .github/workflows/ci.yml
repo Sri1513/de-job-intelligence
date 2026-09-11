@@ -10,6 +10,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      DB_HOST: "localhost"
+      DB_PORT: 5432
+      DB_NAME: "job_scout_db"
+      DB_USER: "postgres"
+      DB_PASSWORD: "ci-dummy-password"
+      GEMINI_API_KEY: "ci-dummy-key"
+      GOOGLE_DOCS_TEMPLATE_ID: "ci-dummy-doc-id"
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4

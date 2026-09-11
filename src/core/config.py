@@ -11,10 +11,10 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
     DB_NAME: str = "job_scout_db"
     DB_USER: str = "postgres"
-    DB_PASSWORD: str
+    DB_PASSWORD: str = ""
 
     # AI Engine
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str = ""
 
     # Google Workspace Configuration
     RESUME_TEMPLATE_DOC_ID: str = ""
