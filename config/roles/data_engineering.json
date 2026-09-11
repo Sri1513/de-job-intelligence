@@ -1,0 +1,13 @@
+{
+  "role_title": "Data Engineer",
+  "boundaries": "1. Herc Rentals Inc. (Nov 2024 – Present): AWS Lakehouse (S3, Kinesis, EMR), Databricks Streaming, Delta Lake, PySpark, Teradata, SQL data serving.\n2. Blue Yonder (08/2021 – 03/2023): Microsoft Azure (ADLS Gen2, Databricks), Python (FastAPI, Requests, SQLAlchemy), Snowflake, Exasol, Terraform, Docker.\n3. Accenture (06/2018 – 07/2021): AWS + Spark Core/SQL tuning, Apache Airflow, Amazon Redshift, Docker, Jenkins, CI/CD, Financial Regulatory Compliance.\n4. Thomson Reuters (07/2016 – 05/2018): Big Data / Hadoop Migration, AWS EMR, Glue, Sqoop, HiveQL, Athena, Redshift, MS SQL Server, Parquet, HiveQL.",
+  "bridging_rules": "- If BI/Dashboards (Tableau, Power BI, Qlik, SSRS) are NOT explicitly demanded in the target JD: STRICTLY SUPPRESS dashboard bullets and analyst vocabulary. Focus all Phase 4/5 bullets on SQL performance, partition pruning, materialized views, and analytical table optimization.\n- If Kafka is requested: Map to Kinesis / Databricks streaming pipelines and event-streaming paradigms.\n- If Snowflake / BigQuery is requested: Emphasize cloud warehousing patterns (clustering, star schemas, query profiling, partition pruning).\n- If 3rd-party APIs are requested: Emphasize the metadata-driven REST API ingestion framework built in Python (FastAPI, SQLAlchemy) at Blue Yonder.\n- If Data Governance / Catalogs (Atlan, Collibra) are requested: Map to AWS Glue Data Catalog and metadata-driven access control policies.",
+  "skills_schema": {
+    "cloud": "<Cloud platforms emphasizing those in the JD (AWS, Azure, GCP)>",
+    "bigdata": "<Distributed processing frameworks (Spark, PySpark, Databricks, Delta Lake, Kafka/Kinesis)>",
+    "languages": "<Programming languages & backend tools (Python, SQL, Bash)>",
+    "databases": "<Databases, warehouses & storage formats (Redshift, Snowflake, PostgreSQL, Teradata, Parquet)>",
+    "devops": "<Orchestration & deployment (Airflow, Docker, Jenkins, Git, Terraform, CI/CD)>",
+    "modeling_tuning": "<Data modeling, query tuning & architectural concepts (Star Schema, SCD Type 2, CDC, AQE, Broadcast Joins)>"
+  }
+}

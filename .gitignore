@@ -1,0 +1,27 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+
+# Environment and Secrets (CRITICAL)
+.env
+.env.*
+credentials.json
+token.json
+client_secrets.json
+
+# Process IDs and Daemon Logs
+logs/
+*.pid
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride

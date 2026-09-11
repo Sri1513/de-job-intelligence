@@ -1,0 +1,208 @@
+{
+  "companies": {
+    "herc_rentals": {
+      "company_name": "Herc Rentals Inc.",
+      "domain": "Equipment Rental, Fleet Operations & Billing Analytics",
+      "business_context": "Legacy processes relied on full-refresh load patterns and monolithic transformation chains that caused severe compute overhead, long daily batch runtimes, and costly rerun efforts upon failure.",
+      "process_framework": {
+        "phase_1_ingestion": {
+          "phase_name": "Data Ingestion & Event Streaming",
+          "daily_activity": "Extracting high-volume operational records from legacy/on-prem sources and streaming real-time IoT equipment telemetry payloads.",
+          "native_tools": ["Python", "AWS Kinesis", "Databricks Streaming", "AWS DMS", "REST APIs"],
+          "source_systems": ["RentalMan", "AS400", "Oracle OLTP", "Teradata", "IoT Telemetry (JSON/XML)"],
+          "swappable_categories": ["Ingestion Tools (Kafka, Fivetran, Event Hubs, Debezium)"]
+        },
+        "phase_2_storage": {
+          "phase_name": "Cloud Storage & Lakehouse Landing",
+          "daily_activity": "Landing high-throughput raw operational and telemetry datasets into structured cloud storage layers.",
+          "native_tools": ["AWS S3", "Delta Lake"],
+          "swappable_categories": ["Cloud Storage (Azure ADLS, Google Cloud Storage, MinIO)"]
+        },
+        "phase_3_transformation": {
+          "phase_name": "Distributed Transformation & Incremental CDC",
+          "daily_activity": "Building PySpark and Spark SQL pipelines to clean, normalize, and process CDC incremental updates while decoupling monolithic transformation chains into modular, restartable stages.",
+          "native_tools": ["Databricks", "PySpark", "Spark SQL", "Delta Lake"],
+          "key_optimizations": [
+            "Replaced full-refresh cycles with scheduled incremental load patterns",
+            "Tuned partition strategies and optimized Spark SQL joins",
+            "Decoupled pipelines into modular checkpointed stages"
+          ],
+          "swappable_categories": ["Transformation & Modeling (dbt, Apache Flink, Snowflake SQL, BigQuery)"]
+        },
+        "phase_4_orchestration_and_modeling": {
+          "phase_name": "Workflow Orchestration, Dimensional Modeling & Governance",
+          "daily_activity": "Managing pipeline dependencies with retry policies, enforcing schema validation, and structuring dimensional star schemas and materialized tables in Teradata.",
+          "native_tools": ["Apache Airflow", "SQL Server Agent", "Teradata", "SQL"],
+          "data_quality": ["Automated source-to-target reconciliation", "Null validation checks", "Schema enforcement"],
+          "swappable_categories": ["Orchestrators (Prefect, Dagster)", "Warehouses (Snowflake, Redshift, BigQuery)"]
+        },
+        "phase_5_serving_and_bi": {
+          "phase_name": "Semantic Layers & BI Serving (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+          "daily_activity": "Building optimized SQL semantic reporting layers and interactive dashboards to deliver operational and fleet metrics to business leadership.",
+          "native_tools": ["SQL", "Qlik Sense", "Tableau", "Power BI"],
+          "swappable_categories": ["BI Platforms (Looker, QuickSight)"]
+        }
+      },
+      "tech_stack": [
+        "AWS (S3, Kinesis, DMS)", "Databricks", "Databricks Streaming", "PySpark", "Spark SQL",
+        "Python", "Teradata", "Oracle OLTP", "AS400", "RentalMan", "Qlik Sense", "Apache Airflow", "SQL Server Agent"
+      ],
+      "metrics_and_impact": {
+        "rerun_reduction": "Decreased pipeline rerun effort by 30–40% through modular stage design",
+        "runtime_reduction": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
+        "reliability": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+      }
+    },
+    "blue_yonder": {
+      "company_name": "Blue Yonder",
+      "domain": "Retail Supply Chain & Demand Optimization",
+      "business_context": "Ingestion and transformation of massive, multi-tenant retail supply chain datasets suffered from Spark Catalyst planning bottlenecks on wide transformations and unoptimized queries in downstream analytical models.",
+      "process_framework": {
+        "phase_1_ingestion": {
+          "phase_name": "API-Driven ERP Ingestion",
+          "daily_activity": "Constructing programmatic REST API services to securely ingest, validate, and parse complex client ERP JSON payloads and flat files.",
+          "native_tools": ["Python", "FastAPI", "SQLAlchemy", "REST APIs"],
+          "source_systems": ["Client ERPs", "POS Feeds", "Inventory Systems", "Order Feeds (JSON/CSV)"],
+          "swappable_categories": ["API Frameworks (Flask, Django, Requests)", "Ingestion Connectors (Airbyte, Fivetran)"]
+        },
+        "phase_2_storage": {
+          "phase_name": "Enterprise Data Lake & Cloud Infrastructure",
+          "daily_activity": "Routing standardized ERP payloads into cloud lake storage while automating cloud infrastructure provisioning with strict security controls.",
+          "native_tools": ["Azure Data Lake Storage Gen2 (ADLS Gen2)", "Terraform", "Docker", "Azure Key Vault", "Azure RBAC"],
+          "swappable_categories": ["IaC & Cloud Storage (AWS S3, CloudFormation, GCP Cloud Storage)"]
+        },
+        "phase_3_transformation": {
+          "phase_name": "Distributed Data Processing & Catalyst Plan Optimization",
+          "daily_activity": "Engineering distributed pipelines to cleanse, deduplicate, and merge retail datasets, eliminating Spark Catalyst planning overhead by consolidating iterative column operations into unified single-pass DataFrames.",
+          "native_tools": ["Azure Databricks", "PySpark", "Pandas", "Spark SQL"],
+          "key_optimizations": [
+            "Eliminated Spark Catalyst planning overhead by consolidating iterative casting/enrichment into single-pass operations",
+            "Eliminated unnecessary repartitioning and tuned partition boundaries"
+          ],
+          "swappable_categories": ["Distributed Compute (Apache Spark, dbt, EMR, Dataproc)"]
+        },
+        "phase_4_orchestration_and_modeling": {
+          "phase_name": "Workflow Scheduling & Warehouse Query Profiling",
+          "daily_activity": "Orchestrating multi-tiered batch DAGs, tracking job health via cloud monitoring, and tuning downstream data warehouse models through query profiling and partition pruning.",
+          "native_tools": ["Apache Airflow", "Snowflake", "Exasol", "Azure Monitor", "Log Analytics"],
+          "swappable_categories": ["Warehouses (Amazon Redshift, Google BigQuery, ClickHouse)", "Monitoring (CloudWatch, Datadog)"]
+        },
+        "phase_5_serving_and_bi": {
+          "phase_name": "Self-Service Analytics Views (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+          "daily_activity": "Designing enterprise analytical models and views connecting Snowflake to business intelligence tools for stakeholder consumption.",
+          "native_tools": ["Snowflake", "Tableau", "Power BI"],
+          "swappable_categories": ["BI Platforms (Looker, QuickSight)"]
+        }
+      },
+      "tech_stack": [
+        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)", "Python", "FastAPI", "SQLAlchemy",
+        "PySpark", "Pandas", "Snowflake", "Exasol", "Terraform", "Docker", "Apache Airflow"
+      ],
+      "metrics_and_impact": {
+        "runtime_reduction": "Reduced batch transformation runtimes by 25–30% through PySpark Catalyst optimization and partition tuning",
+        "cost_and_efficiency": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
+      }
+    },
+    "accenture": {
+      "company_name": "Accenture",
+      "domain": "Banking, Financial Crime & Regulatory Compliance",
+      "business_context": "Legacy modernization migrating on-premises Mainframe and Ab Initio workflows to AWS. Heavy pipeline degradation caused by full-table merge patterns and severe data skew across multi-billion-row financial transaction tables.",
+      "process_framework": {
+        "phase_1_ingestion": {
+          "phase_name": "Legacy Decommissioning & Ingestion Microservices",
+          "daily_activity": "Decoupling legacy Ab Initio ETL graphs by authoring custom Python ingestion services that stream on-premise transactional and compliance data to the cloud.",
+          "native_tools": ["Python", "REST APIs", "Legacy Ab Initio", "Mainframe"],
+          "swappable_categories": ["Data Ingestion (AWS DMS, Kafka, NiFi)"]
+        },
+        "phase_2_storage": {
+          "phase_name": "Multi-Tiered Data Lake & Governance",
+          "daily_activity": "Structuring multi-tiered Bronze, Silver, and Gold storage layers and registering metadata for seamless enterprise discovery.",
+          "native_tools": ["AWS S3", "AWS Glue Data Catalog"],
+          "swappable_categories": ["Metadata & Catalogs (Unity Catalog, Apache Atlas, Alation, Google Dataplex)"]
+        },
+        "phase_3_transformation": {
+          "phase_name": "Data Skew Remediation & Incremental Anti-Joins",
+          "daily_activity": "Diagnosing cluster bottlenecks using Spark UI, mitigating data skew on multi-billion-row tables using data salting, AQE, and Broadcast Hash Joins, and replacing full merges with partition-aware anti-joins.",
+          "native_tools": ["Apache Spark", "PySpark", "Spark SQL", "Spark UI"],
+          "key_optimizations": [
+            "Resolved data skew via data salting and Broadcast Hash Joins",
+            "Enabled Adaptive Query Execution (AQE) and Dynamic Partition Pruning (DPP)",
+            "Replaced full-table merges with partition-aware anti-join and append patterns"
+          ],
+          "swappable_categories": ["Processing Engines (Databricks, Ray, Trino)"]
+        },
+        "phase_4_orchestration_and_modeling": {
+          "phase_name": "Audit-Ready Warehouse Serving & CI/CD",
+          "daily_activity": "Modeling dimensional schemas and materialized views for financial crime analytics, orchestrating Airflow DAGs, and maintaining automated CI/CD deployment pipelines.",
+          "native_tools": ["Amazon Redshift", "Apache Airflow", "Git", "Jenkins", "CI/CD"],
+          "data_quality": ["Automated source-to-target reconciliation", "Variance audits", "Column-level data masking & RBAC"],
+          "swappable_categories": ["Warehouses (Snowflake, BigQuery)", "CI/CD Tools (GitHub Actions, GitLab CI)"]
+        },
+        "phase_5_serving_and_bi": {
+          "phase_name": "Regulatory & Commercial BI Reporting (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+          "daily_activity": "Building compliance dashboards and analytical models for commercial stakeholders and regulatory audits.",
+          "native_tools": ["Amazon Redshift", "Power BI", "SSRS"],
+          "swappable_categories": ["BI Platforms (Tableau, Looker)"]
+        }
+      },
+      "tech_stack": [
+        "AWS (S3, Glue Data Catalog, Redshift)", "PySpark", "Spark SQL", "Python",
+        "Ab Initio", "Apache Airflow", "Git", "Jenkins", "CI/CD"
+      ],
+      "metrics_and_impact": {
+        "runtime_reduction": "Reduced financial pipeline execution runtimes by 35–40% by eliminating distributed data skew and tuning query plans",
+        "audit_accuracy": "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks"
+      }
+    },
+    "thomson_reuters": {
+      "company_name": "Thomson Reuters",
+      "domain": "Financial Transactions, Sales & Subscription Analytics",
+      "business_context": "Sales and customer usage data was trapped in on-premise relational databases. Early AWS migrations hit severe write bottlenecks due to Parquet file write distribution and S3 metadata rename penalties.",
+      "process_framework": {
+        "phase_1_ingestion": {
+          "phase_name": "Relational Data Extraction",
+          "daily_activity": "Extracting historical relational records and sales data from enterprise databases into the cloud ecosystem.",
+          "native_tools": ["Apache Sqoop", "AWS EMR", "Microsoft SQL Server"],
+          "swappable_categories": ["Extraction Tools (AWS DMS, Stitch, Fivetran, Kafka Connect)"]
+        },
+        "phase_2_storage": {
+          "phase_name": "Data Lake Storage & Hadoop Ecosystem",
+          "daily_activity": "Landing extraction files into S3 and executing native transformations on unstructured/flat files.",
+          "native_tools": ["AWS S3", "HDFS", "HiveQL"],
+          "swappable_categories": ["Storage Layers (ADLS Gen2, GCS, Ceph)"]
+        },
+        "phase_3_transformation": {
+          "phase_name": "Storage Tuning & Serverless Aggregations",
+          "daily_activity": "Authoring PySpark and Glue jobs to clean and aggregate revenue metrics, resolving batch write delays by tuning Parquet block/page sizes and S3 partition keys.",
+          "native_tools": ["AWS Glue", "PySpark", "Spark SQL", "Python (Pandas, NumPy)"],
+          "key_optimizations": [
+            "Tuned Parquet block/page sizes and Snappy compression",
+            "Eliminated S3 metadata rename overhead through optimized partitioning"
+          ],
+          "swappable_categories": ["Serverless ETL (Databricks Serverless, AWS Lambda, Google Cloud Dataflow)"]
+        },
+        "phase_4_orchestration_and_modeling": {
+          "phase_name": "Analytical Querying, Data Quality & Storage Management",
+          "daily_activity": "Loading curated sales datasets into analytical stores, writing complex SQL window functions, and enforcing daily data validation checkpoints.",
+          "native_tools": ["Amazon Redshift", "AWS Athena", "Microsoft SQL Server", "SQL"],
+          "data_quality": ["Missing record detection", "Daily source-to-target row count reconciliation", "Revenue variance reviews"],
+          "swappable_categories": ["Query Engines (Presto, Trino)"]
+        },
+        "phase_5_serving_and_bi": {
+          "phase_name": "Executive Sales & Revenue BI (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+          "daily_activity": "Designing and deploying interactive Tableau, Power BI, and SSRS dashboards connected directly to Athena and Redshift for revenue KPIs.",
+          "native_tools": ["Tableau", "Power BI", "SSRS"],
+          "swappable_categories": ["BI Platforms (Looker, Qlik Sense)"]
+        }
+      },
+      "tech_stack": [
+        "AWS (S3, EMR, Glue, Redshift, Athena)", "Apache Sqoop", "HiveQL", "PySpark",
+        "Python (Pandas, NumPy)", "Microsoft SQL Server", "SQL", "Tableau", "Power BI"
+      ],
+      "metrics_and_impact": {
+        "latency_reduction": "Cut batch write latency and storage delays by 20–25% via Parquet block sizing and S3 partition tuning",
+        "reporting_performance": "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning"
+      }
+    }
+  }
+}

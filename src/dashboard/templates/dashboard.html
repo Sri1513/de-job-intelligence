@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Track Job Scout Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-emerald-400">⚡ Multi-Track Job Scout</h1>
+                <p class="text-sm text-slate-400">Automated ingestion ledger & viewing command center</p>
+            </div>
+            <div id="stats" class="text-sm bg-slate-900 border border-slate-800 px-4 py-2 rounded-lg text-slate-300">
+                Loading stats...
+            </div>
+        </header>
+
+        <!-- Category Tabs -->
+        <div class="flex justify-between items-center mb-6">
+            <!-- Existing Category Tabs -->
+            <div class="flex space-x-3">
+                <button onclick="switchCategory('data_engineering')" id="tab-de" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-emerald-600 text-white shadow-sm">
+                    ⚡ Data Engineering
+                </button>
+                <button onclick="switchCategory('devops')" id="tab-devops" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-slate-900 text-slate-400 border border-slate-800 hover:text-white">
+                    ☁️ DevOps / Cloud
+                </button>
+            </div>
+            <!-- New Skill Audit Button -->
+            <a id="audit-btn" href="/audit?category=data_engineering" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 flex items-center gap-2">
+                🔍 View Skill Audit
+            </a>
+        </div>
+
+        <!-- 🔍 Dashboard Filters Bar -->
+        <div class="flex items-center flex-wrap gap-4 mb-6 bg-slate-900 p-4 rounded-xl border border-slate-800">
+            <!-- Posted Date Filter -->
+            <div class="flex items-center space-x-2">
+                <label class="text-xs font-semibold text-slate-400">POSTED:</label>
+                <select id="filter-posted" onchange="filterAndRenderJobs()" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-blue-500">
+                    <option value="all">Any Time</option>
+                    <option value="today">Today</option>
+                    <option value="past_3_days">Past 3 Days</option>
+                    <option value="past_week">Past Week</option>
+                </select>
+            </div>
+
+            <!-- DB Ingested Timestamp Filter -->
+            <div class="flex items-center space-x-2">
+                <label class="text-xs font-semibold text-slate-400">SWEPT (DB):</label>
+                <select id="filter-swept" onchange="filterAndRenderJobs()" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-emerald-500">
+                    <option value="all">All Time</option>
+                    <option value="today">Swept Today</option>
+                    <option value="past_24h">Swept Past 24 Hours</option>
+                </select>
+            </div>
+
+            <!-- 🌐 Source Filter -->
+            <div class="flex items-center space-x-2">
+                <label class="text-xs font-semibold text-slate-400">SOURCE:</label>
+                <select id="filter-source" onchange="filterAndRenderJobs()" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-indigo-500">
+                    <option value="all">All Sources</option>
+                    <option value="dice">Dice</option>
+                    <option value="indeed">Indeed</option>
+                    <option value="linkedin">LinkedIn</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Job Table Container -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
+                            <th class="p-4 w-24">Fit Score</th>
+                            <th class="p-4 w-1/3">Role & AI Insights</th>
+                            <th class="p-4">Location / Type</th>
+                            <th class="p-4 w-1/4">Missing Skills</th>
+                            <th class="p-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="job-table-body" class="divide-y divide-slate-800/60 text-sm">
+                        <tr><td colspan="5" class="p-6 text-center text-slate-500">Loading records...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCategory = 'data_engineering';
+        let allJobs = []; 
+
+        async function fetchJobs(category = 'data_engineering') {
+            currentCategory = category;
+            
+            const deBtn = document.getElementById('tab-de');
+            const devopsBtn = document.getElementById('tab-devops');
+            
+            if (category === 'data_engineering') {
+                deBtn.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-emerald-600 text-white shadow-sm";
+                devopsBtn.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-slate-900 text-slate-400 border border-slate-800 hover:text-white";
+            } else {
+                devopsBtn.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-emerald-600 text-white shadow-sm";
+                deBtn.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-slate-900 text-slate-400 border border-slate-800 hover:text-white";
+            }
+
+            const tbody = document.getElementById('job-table-body');
+            tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Loading ${category.replace('_', ' ')} records...</td></tr>`;
+
+            try {
+                const response = await fetch(`/api/jobs?category=${category}`);
+                const data = await response.json();
+                
+                allJobs = Array.isArray(data) ? data : (data.jobs || data.data || []);
+                filterAndRenderJobs();
+
+            } catch (err) {
+                console.error('Failed to load jobs:', err);
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-red-400">Error loading job records. Check console.</td></tr>`;
+            }
+        }
+
+        function filterAndRenderJobs() {
+            const postedVal = document.getElementById('filter-posted').value;
+            const sweptVal = document.getElementById('filter-swept').value;
+            const sourceVal = document.getElementById('filter-source').value;
+            const now = new Date();
+
+            const filtered = allJobs.filter(job => {
+                // 1. Date Posted Filter Logic
+                let passesPosted = true;
+                if (postedVal !== 'all' && job.date_posted && job.date_posted !== 'Recently' && job.date_posted !== 'N/A') {
+                    const postedDate = new Date(job.date_posted); 
+                    const diffDays = (now - postedDate) / (1000 * 60 * 60 * 24);
+                    
+                    if (postedVal === 'today') passesPosted = diffDays <= 1;
+                    else if (postedVal === 'past_3_days') passesPosted = diffDays <= 3;
+                    else if (postedVal === 'past_week') passesPosted = diffDays <= 7;
+                } else if (postedVal !== 'all') {
+                    passesPosted = false; 
+                }
+
+                // 2. DB Ingested Timestamp Filter Logic
+                let passesSwept = true;
+                if (sweptVal !== 'all' && job.saved_at) {
+                    const sweptDate = new Date(job.saved_at.replace(' ', 'T')); 
+                    const diffHours = (now - sweptDate) / (1000 * 60 * 60);
+
+                    if (sweptVal === 'today') {
+                        passesSwept = sweptDate.toDateString() === now.toDateString();
+                    } else if (sweptVal === 'past_24h') {
+                        passesSwept = diffHours <= 24;
+                    }
+                }
+
+                // 3. Source Filter Logic
+                let passesSource = true;
+                if (sourceVal !== 'all') {
+                    const jobSource = (job.metadata?.source || job.source || '').toLowerCase();
+                    passesSource = jobSource.includes(sourceVal.toLowerCase());
+                }
+
+                return passesPosted && passesSwept && passesSource;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(jobs) {
+            const tbody = document.getElementById('job-table-body');
+            const stats = document.getElementById('stats');
+            
+            stats.innerText = `Showing ${jobs.length} of ${allJobs.length} ${currentCategory.replace('_', ' ')} Jobs`;
+
+            if (jobs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">No jobs match your filter criteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            jobs.forEach(job => {
+                const fitScore = parseInt(job.fit_score) || 0;
+                const fitColor = fitScore >= 50 ? 'text-emerald-400 bg-emerald-950/40 border-emerald-900' : 'text-amber-400 bg-amber-950/40 border-amber-900';
+                
+                const missingSkills = job.metadata && job.metadata.missing_skills ? job.metadata.missing_skills : [];
+                const missingHtml = missingSkills.length > 0 
+                    ? missingSkills.slice(0, 6).map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] bg-red-950/50 text-red-300 border border-red-900/50">${s}</span>`).join(' ') 
+                    : '<span class="text-slate-500 text-xs">None! Perfect match.</span>';
+                
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-800/40 transition-colors';
+                row.innerHTML = `
+                    <td class="p-4 align-top">
+                        <span class="px-2.5 py-1 rounded-md border font-semibold text-xs ${fitColor}">
+                            ${fitScore}%
+                        </span>
+                    </td>
+                    
+                    <td class="p-4 align-top">
+                        <div class="font-semibold text-slate-200">${job.title || 'Untitled'}</div>
+                        
+                        <!-- Company Name & Posted Date side-by-side (DD-MM-YYYY) -->
+                        <div class="text-xs text-slate-400 mb-2 flex items-center justify-between">
+                            <span>${job.company || 'Unknown Company'}</span>
+                            <span class="text-slate-500 text-[11px]">Posted: ${
+                                (() => {
+                                    const d = job.date_posted;
+                                    if (!d || d === 'N/A' || d === 'Recently') return d || 'Recently';
+                                    const parts = d.split('-');
+                                    return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : d;
+                                })()
+                            }</span>
+                        </div>
+
+                        <div class="text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 text-slate-300 italic">
+                            💡 "${job.notes || 'No notes'}"
+                        </div>
+                        
+                        <div class="flex items-center space-x-2 text-xs text-gray-400 font-mono mt-2">
+                            <span>ID: <code id="job-id-${job.job_id}">${job.job_id}</code></span>
+                            <button onclick="navigator.clipboard.writeText('${job.job_id}'); alert('Copied Job ID!');" 
+                                    class="hover:text-white bg-gray-800 p-1.5 rounded border border-gray-700 flex items-center justify-center transition-colors"
+                                    title="Copy ID">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="9" y="9" width="11" height="13" rx="1.5"></rect>
+                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="p-4 align-top text-xs space-y-1.5">
+                        <div class="text-slate-300 font-medium">${job.location || 'Remote'}</div>
+                        
+                        <div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                ${job.employment_type || 'Unknown'}
+                            </span>
+                        </div>
+
+                        <div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                job.sponsorship === 'Available' 
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                                    : job.sponsorship === 'Not Available' 
+                                    ? 'bg-rose-950 text-rose-300 border border-rose-800' 
+                                    : 'bg-blue-950 text-blue-300 border border-blue-800'
+                            }">
+                                Visa: ${job.sponsorship || 'Not Mentioned'}
+                            </span>
+                        </div>
+
+                        <div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                Source: ${job.metadata?.source || 'JobSpy'}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="p-4 align-top">
+                        <div class="flex flex-wrap gap-1 max-w-xs">
+                            ${missingHtml}
+                        </div>
+                    </td>
+                    <td class="p-4 align-top">
+                        <div class="flex flex-wrap gap-1.5">
+                            ${(job.metadata && job.metadata.locations && job.metadata.locations.length > 0) 
+                                ? job.metadata.locations.map(loc => `
+                                    <a href="${loc.url}" target="_blank" 
+                                        class="bg-blue-600/80 hover:bg-blue-500 text-white font-medium px-2.5 py-1 rounded-md text-xs transition-colors shadow-sm inline-flex items-center gap-1">
+                                    📍 ${loc.city} ↗
+                                    </a>
+                                `).join('')
+                                : `
+                                    <a href="${job.job_url || '#'}" target="_blank" 
+                                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm inline-flex items-center gap-1">
+                                    Apply ↗
+                                    </a>
+                                `
+                            }
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function switchCategory(category) {
+            fetchJobs(category);
+            const auditBtn = document.getElementById('audit-btn');
+            if (auditBtn) {
+                auditBtn.href = `/audit?category=${category}`;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchJobs('data_engineering');
+        });
+    </script>
+</body>
+</html>

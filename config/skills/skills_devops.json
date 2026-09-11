@@ -1,0 +1,45 @@
+{
+  "seniority_keywords": [
+    "senior",
+    "lead",
+    "principal",
+    "staff",
+    "sre"
+  ],
+  "role_keywords": [
+    "devops",
+    "cloud",
+    "infrastructure",
+    "platform",
+    "site reliability"
+  ],
+  "core_techs": [
+    "terraform",
+    "kubernetes",
+    "docker",
+    "aws",
+    "azure",
+    "linux",
+    "ci/cd",
+    "ansible",
+    "python"
+  ],
+  "supporting_tools": [
+    "helm",
+    "prometheus",
+    "grafana",
+    "argocd",
+    "github actions",
+    "jenkins",
+    "gitlab",
+    "bash",
+    "gcp",
+    "databricks",
+    "postgresql"
+  ],
+  "experience_keywords": [
+    "5+",
+    "5 years",
+    "senior experience"
+  ]
+}

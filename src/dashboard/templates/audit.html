@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Skill Audit & Gap Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .badge-match { background-color: #d1e7dd; color: #0f5132; }
+        .badge-missing { background-color: #f8d7da; color: #842029; }
+        .badge-ai { background-color: #cff4fc; color: #055160; }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1>🧠 AI Skill Extraction & Gap Audit</h1>
+                <p class="text-muted">Review what technologies employers demand versus your current resume footprint.</p>
+            </div>
+            <a href="/?category={{ current_category }}" class="btn btn-outline-secondary">← Back to Dashboard</a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Company & Title</th>
+                                <th>🟢 Matched Skills</th>
+                                <th>🔴 Missing Skills</th>
+                                <th>✨ AI Extracted Skills</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in audit_jobs %}
+                            <tr data-bs-toggle="tooltip" title="{{ job.job_category }}">
+                                <td>
+                                    <strong>{{ job.company }}</strong><br>
+                                    <a href="{{ job.job_url }}" target="_blank" class="text-decoration-none">{{ job.title }}</a>
+                                </td>
+                                <td>
+                                    {% for skill in job.matched_skills %}
+                                        <span class="badge badge-match m-1 p-2">{{ skill }}</span>
+                                    {% else %}
+                                        <span class="text-muted">None</span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for skill in job.missing_skills %}
+                                        <span class="badge badge-missing m-1 p-2">{{ skill }}</span>
+                                    {% else %}
+                                        <span class="text-muted">None</span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for skill in job.ai_extracted_skills %}
+                                        <span class="badge badge-ai m-1 p-2">{{ skill }}</span>
+                                    {% else %}
+                                        <span class="text-muted">None</span>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">No jobs or metadata found for this category yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

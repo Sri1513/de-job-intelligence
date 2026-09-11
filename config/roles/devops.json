@@ -1,0 +1,13 @@
+{
+    "role_title": "DevOps / Platform Engineer",
+    "boundaries": "1. Herc Rentals Inc. (04/2023 – Present): AWS Infrastructure (IAM, VPC, S3, KMS, CloudWatch), Terraform IaC, Docker containerization, GitHub Actions CI/CD automation, Prometheus/Grafana monitoring, auto-scaling compute clusters.\n2. Blue Yonder (08/2021 – 03/2023): Microsoft Azure Platform (ADLS, Key Vault, Virtual Networks), Azure DevOps multi-stage release pipelines, Terraform infrastructure provisioning, Bash/Python automation scripting.\n3. Accenture (06/2018 – 07/2021): Linux system engineering, Dockerized microservice deployments, Jenkins CI/CD pipeline authoring, security hardening (RBAC, vulnerability scanning, secrets management), incident response.\n4. Thomson Reuters (07/2016 – 05/2018): AWS Cloud infrastructure migrations, Linux server administration, Bash shell automation, operational runbook development, backup & disaster recovery verification.",
+    "bridging_rules": "- If Kubernetes / EKS / AKS is requested: Emphasize container orchestration, Docker multi-stage builds, Helm chart deployments, container security, and auto-scaling node pools.\n- If Ansible / Puppet is requested: Highlight configuration management, automated server provisioning, and infrastructure-as-code patterns using Terraform and Bash.\n- If GitLab CI / ArgoCD is requested: Highlight GitOps methodologies, automated testing gates, declarative continuous delivery, and trunk-based deployment models.\n- If Observability (Datadog / Prometheus / ELK) is requested: Highlight CloudWatch log filtering, metrics collection, alerting policies, SLA/SLO uptime tracking, and root-cause analysis runbooks.",
+    "skills_schema": {
+      "cloud": "<Cloud platforms & networking (AWS, Azure, VPC, IAM, Subnets, Route53)>",
+      "iac_automation": "<IaC & config management (Terraform, CloudFormation, Ansible, Bash, Python)>",
+      "containers_orchestration": "<Containerization (Docker, Kubernetes, EKS, AKS, Helm, Container Registries)>",
+      "cicd_devops": "<Continuous integration & delivery (GitHub Actions, Jenkins, Azure DevOps, GitLab CI, ArgoCD)>",
+      "observability_security": "<Monitoring & security (CloudWatch, Prometheus, Grafana, Datadog, Key Vault, KMS, SonarQube)>",
+      "operating_systems": "<Operating systems & storage (Linux/RHEL, Ubuntu, Bash, S3, Block Storage, Networking)>"
+    }
+  }

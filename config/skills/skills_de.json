@@ -1,0 +1,47 @@
+{
+  "seniority_keywords": ["senior", "lead", "principal", "staff"],
+  "role_keywords": [
+    "data engineer",
+    "etl developer",
+    "platform engineer",
+    "analytics engineer",
+    "cloud data engineer",
+    "data warehouse engineer"
+  ],
+  "core_techs": [
+    "python",
+    "sql",
+    "spark",
+    "pyspark",
+    "airflow",
+    "snowflake",
+    "redshift",
+    "databricks"
+  ],
+  "supporting_tools": [
+    "aws",
+    "azure",
+    "gcp",
+    "docker",
+    "terraform",
+    "dbt",
+    "kafka",
+    "kinesis",
+    "delta lake",
+    "teradata",
+    "postgresql",
+    "sql server",
+    "ci/cd",
+    "git",
+    "jenkins",
+    "glue",
+    "athena",
+    "sqoop",
+    "hive",
+    "fastapi",
+    "tableau",
+    "power bi",
+    "qlik sense"
+  ],
+  "experience_keywords": ["7+", "5+", "7 years", "5 years", "senior experience", "8+"]
+}
