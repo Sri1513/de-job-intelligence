@@ -8,7 +8,14 @@ from src.workers.pipeline_utils import get_unprocessed_jobs, mark_job_failed, up
 
 logger = logging.getLogger("de-job-intelligence.backfill")
 
-def run_backfill_batch(batch_size: int = 10, delay_seconds: float = 2.0) -> dict[str, Any]:
+def run_backfill_batch(
+    batch_size: int = 10,
+    delay_seconds: float = 2.0,
+    limit: int = None,
+    job_ids: list = None,
+    job_category: str = "data_engineering",
+    **kwargs
+) -> dict[str, Any]:
     """
     Pulls pending/failed jobs from PostgreSQL, executes LLM evaluations,
     and commits the results with rate pacing.

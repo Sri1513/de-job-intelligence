@@ -3,6 +3,9 @@ import json
 import logging
 from typing import Any
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import google.generativeai as genai
 
 from src.core.config import settings
@@ -15,7 +18,7 @@ def get_gemini_model():
     if not settings.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY is not configured in settings or .env file.")
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return genai.GenerativeModel("gemini-3.6-flash")
 
 ANALYSIS_SYSTEM_PROMPT = """
 You are an expert technical recruiter and Senior Data Engineering evaluation agent.

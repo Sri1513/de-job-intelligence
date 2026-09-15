@@ -2,23 +2,18 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
-echo "🛑 Stopping de-job-intelligence platform services..."
+echo "🛑 Stopping NEW platform (de-job-intelligence)..."
+for PID_FILE in logs/mcp.pid logs/dashboard.pid; do
+    if [ -f "$PID_FILE" ]; then
+        kill "$(cat "$PID_FILE")" 2>/dev/null || true
+        rm -f "$PID_FILE"
+    fi
+done
 
-# Graceful shutdown via PID files
-if [ -f "logs/mcp.pid" ]; then
-    PID=$(cat logs/mcp.pid)
-    kill "$PID" 2>/dev/null && echo "Stopped MCP Server (PID $PID)" || true
-    rm -f logs/mcp.pid
-fi
-
-if [ -f "logs/dashboard.pid" ]; then
-    PID=$(cat logs/dashboard.pid)
-    kill "$PID" 2>/dev/null && echo "Stopped Dashboard (PID $PID)" || true
-    rm -f logs/dashboard.pid
-fi
-
-# Fallback cleanup for ports 8000 and 5001
-fuser -k 8000/tcp 2>/dev/null || true
-fuser -k 5001/tcp 2>/dev/null || true
-
-echo "✅ All services stopped."
+for PORT in 8001 5002; do
+    REMAINING=$(lsof -ti :$PORT 2>/dev/null || true)
+    if [ -n "$REMAINING" ]; then
+        kill -9 $REMAINING 2>/dev/null || true
+    fi
+done
+echo "✅ New platform stopped."
