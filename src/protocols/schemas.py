@@ -87,4 +87,18 @@ MCP_TOOLS = [
         }
     }
 },
+{
+    "name": "process_job_alert_draft",
+    "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, tailors/generates the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer', creates a dynamic Gmail draft with the helper in CC, and logs everything to PostgreSQL.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "whatsapp_text": {"type": "string", "description": "The raw text snippet copied from WhatsApp."},
+            "helper_name": {"type": "string", "description": "The name of the helper or referrer."},
+            "helper_email": {"type": "string", "description": "Email of the helper (required if new helper)."},
+            "helper_company": {"type": "string", "description": "Company where the helper works."}
+        },
+        "required": ["whatsapp_text", "helper_name"]
+    }
+}
 ]

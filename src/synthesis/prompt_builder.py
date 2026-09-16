@@ -1,3 +1,5 @@
+# src/synthesis/prompt_builder.py
+
 from __future__ import annotations
 
 import json
@@ -15,6 +17,65 @@ CONFIG_DIR = getattr(settings, "CONFIG_DIR", Path(__file__).resolve().parents[2]
 _RESUME_CACHE: dict[str, str] = {}
 _ROLE_CACHE: dict[str, dict] = {}
 _FRAMEWORK_CACHE: dict[str, dict] = {}
+
+
+def build_whatsapp_outreach_prompt(
+    company_name: str,
+    job_title: str,
+    extracted_jd: str,
+    helper_name: str,
+    resume_url: str,
+    recruiter_name: str = None
+) -> str:
+    """
+    Builds a precise, structured prompt for Gemini to draft a human-like email 
+    matching Sri Omkar's exact format from the reference screenshot.
+    """
+    salutation_target = f"Hi {recruiter_name}," if recruiter_name else "Hi Hiring Team,"
+
+    return f"""
+    You are Sri Omkar D, a Senior Data Engineer with 8+ years of experience specializing in PySpark, AWS, distributed lakehouses, and Apache Airflow.
+    
+    TARGET CONTEXT:
+    - Company: {company_name}
+    - Job Title: {job_title}
+    - Recruiter First Name: {recruiter_name or 'Unknown'}
+    - Details/Requirements: {extracted_jd}
+    - Resume Link: {resume_url}
+
+    INSTRUCTIONS FOR EMAIL GENERATION:
+    You must structure the email to strictly match Sri Omkar's proven high-converting outreach format:
+
+    1. SUBJECT LINE:
+       Format: "Application for {job_title} – {company_name} – Sri Omkar D"
+
+    2. EMAIL BODY:
+       - SALUTATION: "{salutation_target}"
+       - OPENING: "I hope you are having a great day." followed by "I am reaching out regarding the {job_title} position at {company_name}. With over 8 years of hands-on data engineering experience designing, building, and optimizing scalable batch and near-real-time data pipelines across cloud platforms, I am confident in my ability to deliver immediate value to your client's team."
+       - ALIGNMENT BULLETS SECTION: Include the exact header line: 
+         "A summary of how my technical background aligns with your core requirements:"
+         Followed by 4 bullet points (using bullet character '• ') with bold subheadings before colons (e.g., "• ETL/ELT & Distributed Processing: ...").
+       - CANDIDATE SUMMARY BLOCK: Include the exact header line:
+         "Candidate Summary:"
+         Followed by bullet points (using bullet character '• ') with bold keys before colons:
+         • Total Experience: 8+ Years
+         • Work Authorization: F1 VISA (STEM OPT - EAD) – H-1B picked, petition filed
+         • Role Focus: Data Engineer / Senior Data Engineer
+         • LinkedIn: linkedin.com/in/sri-omkar-58r4r4r8
+         • Portfolio: www.sriomkar.com
+       - CLOSING: "I have attached my detailed resume for your review. I would welcome the opportunity to connect for a brief introductory call to discuss the project details and next steps."
+       - SIGN-OFF: 
+         Best regards,
+         Sri Omkar D,
+         +1 (951) 545-2146 | sri.omkar.d@gmail.com
+         sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8
+
+    - **CRITICAL RULE**: DO NOT mention the helper ({helper_name}) or any referral source in the email body AT ALL. (They are placed in the CC field automatically).
+
+    Return a JSON object with EXACTLY these two keys:
+    - "subject": (string)
+    - "body": (string - formatted with proper line breaks matching the layout above)
+    """
 
 
 def load_company_frameworks() -> dict:
@@ -88,7 +149,7 @@ def load_target_resume(role_slug: str) -> str:
     return _RESUME_CACHE[resume_file_suffix]
 
 
-def build_tailoring_prompt(job_id: str) -> Dict[str, Any]:
+def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -193,5 +254,5 @@ def build_tailoring_prompt(job_id: str) -> Dict[str, Any]:
     }
 
 
-prepare_job_tailoring_prompt = build_tailoring_prompt
-build_job_tailoring_prompt = build_tailoring_prompt
+prepare_job_tailoring_prompt = build_job_tailoring_prompt
+build_tailoring_prompt = build_job_tailoring_prompt

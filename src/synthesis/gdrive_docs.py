@@ -12,29 +12,43 @@ from src.synthesis.resume_mapper import build_replacement_payload
 
 logger = logging.getLogger("de-job-intelligence.synthesis")
 
-SCOPES = [
+# Comprehensive scopes covering Docs, Drive, and Gmail draft creation
+DEFAULT_SCOPES = [
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/gmail.compose"
 ]
 
 
-def get_google_credentials() -> Credentials:
-    """Acquires and refreshes Google OAuth 2.0 user credentials."""
+def get_google_credentials(scopes: List[str] = None) -> Credentials:
+    """Acquires and refreshes Google OAuth 2.0 user credentials with dynamic multi-service scopes."""
+    if scopes is None:
+        scopes = DEFAULT_SCOPES
+
     creds = None
     token_path = Path(settings.BASE_DIR) / "token.json" if hasattr(settings, "BASE_DIR") else Path("token.json")
     creds_path = Path(settings.BASE_DIR) / "credentials.json" if hasattr(settings, "BASE_DIR") else Path("credentials.json")
 
     if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+        except Exception as e:
+            logger.warning(f"Existing token.json scope mismatch or invalid: {e}. Re-authenticating...")
+            creds = None
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             from google.auth.transport.requests import Request
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                logger.warning(f"Failed to refresh token: {e}. Starting fresh auth flow...")
+                creds = None
+        
+        if not creds:
             if not creds_path.exists():
                 raise FileNotFoundError(f"Missing {creds_path}. Place credentials.json in the project root.")
-            flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), scopes)
             creds = flow.run_local_server(port=0)
 
         with open(token_path, "w") as token:
@@ -184,18 +198,15 @@ def create_tailored_document(
     drive_service = build("drive", "v3", credentials=creds)
     docs_service = build("docs", "v1", credentials=creds)
 
-    # 1. Extract company name and define clean file naming structure
     company_name = "General Applications"
     if " - " in document_title:
         company_name = document_title.split(" - ")[0].strip()
 
     clean_file_name = "Sri Omkar - Data Engineer"
 
-    # 2. Resolve Google Drive Folder Structure: Resumes and Cover Letters -> <Company Name>
     master_folder_id = get_or_create_folder(drive_service, "Resumes and Cover Letters")
     company_folder_id = get_or_create_folder(drive_service, company_name, parent_id=master_folder_id)
 
-    # 3. Copy template directly into the company folder with clean naming
     copied_file = drive_service.files().copy(
         fileId=target_template,
         body={
@@ -207,7 +218,6 @@ def create_tailored_document(
 
     print(f"📁 [Drive] Placed resume in 'Resumes and Cover Letters/{company_name}/{clean_file_name}'")
 
-    # 4. Execute placeholder replacements
     requests: List[Dict[str, Any]] = []
     for placeholder, text in replacements.items():
         requests.append({
@@ -222,7 +232,6 @@ def create_tailored_document(
         body={"requests": requests},
     ).execute()
 
-    # 5. Apply semantic bolding
     try:
         apply_semantic_bolding(
             docs_service=docs_service,

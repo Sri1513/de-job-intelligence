@@ -9,6 +9,7 @@ from src.workers.backfill_worker import run_backfill_batch
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.prompt_builder import build_tailoring_prompt
 from src.engine.tailor import export_tailored_resume_to_drive
+from src.engine.alert_pipeline import process_whatsapp_job_alert
 
 logger = logging.getLogger("de-job-intelligence.dispatcher")
 
@@ -127,6 +128,14 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
         llm_payload = arguments.get("llm_payload")
         if not llm_payload:
             raise ValueError("Argument 'llm_payload' is required.")
+    
+    elif tool_name == "process_job_alert_draft":
+        return process_whatsapp_job_alert(
+            whatsapp_text=arguments.get("whatsapp_text"),
+            helper_name=arguments.get("helper_name"),
+            helper_email=arguments.get("helper_email"),
+            helper_company=arguments.get("helper_company")
+        )
 
     else:
         raise ValueError(f"Unknown tool: '{tool_name}'")
