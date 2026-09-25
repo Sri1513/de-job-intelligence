@@ -1,11 +1,11 @@
 # tests/test_prompt_builder.py
 from src.core.utils import get_cached_resume
 from src.engine.matcher import calculate_match_score
-from src.engine.prompt_builder import load_frameworks, load_role_config
+from src.synthesis.prompt_builder import load_company_frameworks, load_role_config
 
 
 def test_configurations_load():
-    frameworks = load_frameworks()
+    frameworks = load_company_frameworks()
     assert "companies" in frameworks
     assert "herc_rentals" in frameworks["companies"]
 

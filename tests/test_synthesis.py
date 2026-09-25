@@ -1,5 +1,5 @@
 # tests/test_synthesis.py
-from src.synthesis.resume_mapper import STATIC_PROFILE, map_resume_placeholders
+from src.synthesis.resume_mapper import STATIC_PROFILE, build_replacement_payload
 
 
 def test_resume_mapper_fallback_resilience():
@@ -18,24 +18,23 @@ def test_resume_mapper_fallback_resilience():
         }
     }
 
-    mapped = map_resume_placeholders(sparse_llm_payload)
+    mapped = build_replacement_payload(sparse_llm_payload)
 
     # 1. Verify candidate profile truth preserved
-    assert mapped["{{CANDIDATE_NAME}}"] == STATIC_PROFILE["CANDIDATE_NAME"]
-    assert mapped["{{EMAIL}}"] == STATIC_PROFILE["EMAIL"]
+    assert mapped["{{NAME}}"] == STATIC_PROFILE["{{NAME}}"]
 
-    # 2. Verify markdown bolding stripped
-    assert "**8+ years**" not in mapped["{{PROFESSIONAL_SUMMARY}}"]
-    assert "8+ years" in mapped["{{PROFESSIONAL_SUMMARY}}"]
+    # 2. Verify markdown bolding stripped from summary
+    assert "**8+ years**" not in mapped["{{SUMMARY}}"]
+    assert "8+ years" in mapped["{{SUMMARY}}"]
 
     # 3. Verify custom provided bullet applied cleanly
-    assert mapped["{{HERC_BULLET_1}}"] == "Built high-throughput telemetry pipelines using Databricks Streaming."
+    assert mapped["{{JOB1_BULLET_1}}"] == "Built high-throughput telemetry pipelines using Databricks Streaming."
 
-    # 4. Verify defensive fallback for omitted bullets
-    assert "{{HERC_BULLET_2}}" in mapped
-    assert len(mapped["{{HERC_BULLET_2}}"]) > 30
+    # 4. Verify defensive fallback for omitted bullets in Job 1
+    assert "{{JOB1_BULLET_2}}" in mapped
+    assert len(mapped["{{JOB1_BULLET_2}}"]) > 30
 
-    # 5. Verify omitted companies fell back to verified base bullets
-    assert "{{BLUE_YONDER_BULLET_1}}" in mapped
-    assert "{{ACCENTURE_BULLET_1}}" in mapped
-    assert "{{THOMSON_REUTERS_BULLET_1}}" in mapped
+    # 5. Verify omitted companies (Job 2, 3, 4) fell back to verified base bullets
+    assert "{{JOB2_BULLET_1}}" in mapped
+    assert "{{JOB3_BULLET_1}}" in mapped
+    assert "{{JOB4_BULLET_1}}" in mapped

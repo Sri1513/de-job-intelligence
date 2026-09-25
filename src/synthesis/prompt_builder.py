@@ -34,7 +34,7 @@ def build_whatsapp_outreach_prompt(
     salutation_target = f"Hi {recruiter_name}," if recruiter_name else "Hi Hiring Team,"
 
     return f"""
-    You are Sri Omkar D, a Senior Data Engineer with 8+ years of experience specializing in PySpark, AWS, distributed lakehouses, and Apache Airflow.
+    You are Sri Omkar D, a Senior Data Engineer with 7+ years of experience specializing in PySpark, AWS, distributed lakehouses, and Apache Airflow.
     
     TARGET CONTEXT:
     - Company: {company_name}
@@ -51,14 +51,14 @@ def build_whatsapp_outreach_prompt(
 
     2. EMAIL BODY:
        - SALUTATION: "{salutation_target}"
-       - OPENING: "I hope you are having a great day." followed by "I am reaching out regarding the {job_title} position at {company_name}. With over 8 years of hands-on data engineering experience designing, building, and optimizing scalable batch and near-real-time data pipelines across cloud platforms, I am confident in my ability to deliver immediate value to your client's team."
+       - OPENING: "I hope you are having a great day." followed by "I am reaching out regarding the {job_title} position at {company_name}. With over 7 years of hands-on data engineering experience designing, building, and optimizing scalable batch and near-real-time data pipelines across cloud platforms, I am confident in my ability to deliver immediate value to your client's team."
        - ALIGNMENT BULLETS SECTION: Include the exact header line: 
          "A summary of how my technical background aligns with your core requirements:"
          Followed by 4 bullet points (using bullet character '• ') with bold subheadings before colons (e.g., "• ETL/ELT & Distributed Processing: ...").
        - CANDIDATE SUMMARY BLOCK: Include the exact header line:
          "Candidate Summary:"
          Followed by bullet points (using bullet character '• ') with bold keys before colons:
-         • Total Experience: 8+ Years
+         • Total Experience: 7+ Years
          • Work Authorization: F1 VISA (STEM OPT - EAD) – H-1B picked, petition filed
          • Role Focus: Data Engineer / Senior Data Engineer
          • LinkedIn: linkedin.com/in/sri-omkar-58r4r4r8

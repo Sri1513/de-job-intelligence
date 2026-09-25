@@ -3,8 +3,31 @@ import re
 import json
 import hashlib
 from datetime import datetime
+from typing import Optional
 from src.engine.matcher import calculate_local_fit_score
 from src.core.utils import get_cached_resume
+
+def generate_domain_short_id(email: Optional[str], company_name: Optional[str] = None) -> str:
+    """
+    Extracts the domain after '@' from an email (e.g., 'hr@databricks.com' -> 'databricks'),
+    and returns a clean 4-character code (e.g., 'data'). 
+    Falls back to company name slug if no email is provided.
+    """
+    domain_part = ""
+    if email and "@" in email:
+        domain_part = email.split("@")[1].strip().lower()
+    elif company_name:
+        domain_part = re.sub(r'[^a-z0-9]', '', company_name.lower()) + ".com"
+    else:
+        domain_part = "unknown.com"
+
+    # Get the root domain name (e.g., 'databricks' from 'databricks.com')
+    parts = domain_part.split('.')
+    root_name = parts[-2] if len(parts) >= 2 else parts[0]
+    
+    # Clean and take the first 4 alphanumeric characters (padded with 'x' if too short)
+    clean_name = re.sub(r'[^a-z0-9]', '', root_name)
+    return clean_name[:4].ljust(4, 'x')
 
 def extract_linkedin_id(url: str) -> str:
     """Extracts numeric job ID from LinkedIn URLs."""
@@ -50,6 +73,17 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
     updated_count = 0
     skipped_count = 0
 
+    # Clean dictionary mapping for precise source tags
+    SOURCE_MAP = {
+        "linkedin": "LinkedIn",
+        "indeed": "Indeed",
+        "google": "Google Jobs",
+        "google_jobs": "Google Jobs",
+        "dice": "Dice",
+        "email alert": "Email Alert",
+        "email-to-jobspy bridge": "Email Alert"
+    }
+
     resume_text = get_cached_resume(job_category)
 
     with conn.cursor() as cur:
@@ -58,6 +92,9 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
             company = str(job.get("company", "N/A")).strip()
             job_url = str(job.get("job_url", "")).strip()
             city = str(job.get("location", "United States")).strip()
+
+            raw_source = job.get("source") or job.get("site") or default_source
+            job_source = SOURCE_MAP.get(str(raw_source).lower(), str(raw_source).capitalize())
             
             if not job_url or job_url == "N/A" or not title or not company:
                 continue
@@ -106,7 +143,7 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
                 "locations": [{"city": city, "url": job_url}],
                 "date_posted": str(job.get("date_posted") or "Unknown"),
                 "retrieved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "source": default_source,
+                "source": job_source,
                 "matched_skills": local_eval.get("matched_skills", []),
                 "missing_skills": local_eval.get("missing_skills", []),
                 "semantic_match": local_eval.get("semantic_match", 0),

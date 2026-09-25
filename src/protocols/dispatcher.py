@@ -8,8 +8,8 @@ from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.workers.backfill_worker import run_backfill_batch
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.prompt_builder import build_tailoring_prompt
-from src.engine.tailor import export_tailored_resume_to_drive
 from src.engine.alert_pipeline import process_whatsapp_job_alert
+from src.workers.email_pipeline import run_email_pipeline
 
 logger = logging.getLogger("de-job-intelligence.dispatcher")
 
@@ -137,5 +137,15 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
             helper_company=arguments.get("helper_company")
         )
 
+    elif tool_name == "run_email_pipeline":
+        limit = int(arguments.get("limit", 5))
+        job_category = arguments.get("job_category", "data_engineering")
+
+        return await asyncio.to_thread(
+            run_email_pipeline,
+            limit=limit,
+            job_category=job_category
+        )
+    
     else:
-        raise ValueError(f"Unknown tool: '{tool_name}'")
+            return {"error": f"Unknown tool: '{tool_name}'"}

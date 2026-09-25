@@ -100,5 +100,25 @@ MCP_TOOLS = [
         },
         "required": ["whatsapp_text", "helper_name"]
     }
+},
+# src/protocols/schemas.py (Add this entry to MCP_TOOLS)
+{
+    "name": "run_email_pipeline",
+    "description": "Pulls recent LinkedIn job alerts from Gmail, widens metadata via JobSpy scraper, stages raw jobs with deduplication, and triggers Gemini AI evaluation.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of email alerts to fetch from inbox.",
+                "default": 5
+            },
+            "job_category": {
+                "type": "string",
+                "description": "Target job category (e.g., data_engineering, devops).",
+                "default": "data_engineering"
+            }
+        }
+    }
 }
 ]

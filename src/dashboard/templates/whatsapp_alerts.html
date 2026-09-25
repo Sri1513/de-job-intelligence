@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Job Alerts Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-amber-400">📱 WhatsApp Job Alerts Pipeline</h1>
+                <p class="text-sm text-slate-400">Track incoming recruiter alerts, helper attribution, and outreach statuses</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="stats" class="text-sm bg-slate-900 border border-slate-800 px-4 py-2 rounded-lg text-slate-300">
+                    Loading stats...
+                </div>
+                <a href="/" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-slate-800 text-slate-200 hover:bg-slate-700">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </header>
+
+        <!-- Filters & View Toggle Bar -->
+        <div class="flex items-center justify-between flex-wrap gap-4 mb-6 bg-slate-900 p-4 rounded-xl border border-slate-800">
+            <div class="flex items-center flex-wrap gap-4">
+                <!-- Date Filter -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs font-semibold text-slate-400">DATE:</label>
+                    <select id="filter-date" onchange="applyFilters()" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-amber-500">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="yesterday">Past 24 Hours</option>
+                        <option value="past_week">Past Week</option>
+                    </select>
+                </div>
+
+                <!-- Company Filter -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs font-semibold text-slate-400">COMPANY:</label>
+                    <select id="filter-company" onchange="applyFilters()" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-amber-500">
+                        <option value="all">All Companies</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- View Mode Toggle -->
+            <div class="flex space-x-2">
+                <button onclick="switchView('list')" id="btn-view-list" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white transition-colors">
+                    📋 List View
+                </button>
+                <button onclick="switchView('grouped')" id="btn-view-grouped" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                    🏢 Grouped by Company
+                </button>
+            </div>
+        </div>
+
+        <!-- List View Container -->
+        <div id="container-list" class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
+                            <th class="p-4 w-20">Domain ID</th>
+                            <th class="p-4 w-1/4">Company & Position</th>
+                            <th class="p-4">Recruiter & Target Email</th>
+                            <th class="p-4">Helper Attribution</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-table-body" class="divide-y divide-slate-800/60 text-sm">
+                        <tr><td colspan="6" class="p-6 text-center text-slate-500">Loading WhatsApp alert logs...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Grouped View Container -->
+        <div id="container-grouped" class="hidden space-y-6">
+            <!-- Dynamically populated company accordion groups -->
+        </div>
+    </div>
+
+    <!-- Modal for Exact WhatsApp Message -->
+    <div id="msg-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-amber-400">💬 Exact WhatsApp Message</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+            </div>
+            <div id="modal-msg-content" class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-slate-300 text-sm font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
+                Loading...
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allAlerts = [];
+        let filteredAlerts = [];
+        let currentView = 'list';
+
+        async function fetchAlerts() {
+            try {
+                const response = await fetch('/api/whatsapp-alerts');
+                allAlerts = await response.json();
+                
+                // Sort latest first
+                allAlerts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                
+                populateCompanyDropdown();
+                applyFilters();
+            } catch (err) {
+                console.error('Failed to load WhatsApp alerts:', err);
+                document.getElementById('alerts-table-body').innerHTML = `<tr><td colspan="6" class="p-6 text-center text-red-400">Error loading WhatsApp alerts.</td></tr>`;
+            }
+        }
+
+        function populateCompanyDropdown() {
+            const select = document.getElementById('filter-company');
+            const companies = [...new Set(allAlerts.map(a => a.company_name))].sort();
+            
+            select.innerHTML = '<option value="all">All Companies</option>';
+            companies.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.innerText = c;
+                select.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const dateVal = document.getElementById('filter-date').value;
+            const companyVal = document.getElementById('filter-company').value;
+            const now = new Date();
+
+            filteredAlerts = allAlerts.filter(item => {
+                let passesDate = true;
+                if (item.created_at) {
+                    const itemDate = new Date(item.created_at);
+                    const diffHours = (now - itemDate) / (1000 * 60 * 60);
+
+                    if (dateVal === 'today') {
+                        passesDate = itemDate.toDateString() === now.toDateString();
+                    } else if (dateVal === 'yesterday') {
+                        passesDate = diffHours <= 24;
+                    } else if (dateVal === 'past_week') {
+                        passesDate = diffHours <= (24 * 7);
+                    }
+                } else if (dateVal !== 'all') {
+                    passesDate = false;
+                }
+
+                let passesCompany = (companyVal === 'all' || item.company_name === companyVal);
+
+                return passesDate && passesCompany;
+            });
+
+            renderDashboard();
+        }
+
+        function switchView(view) {
+            currentView = view;
+            const listBtn = document.getElementById('btn-view-list');
+            const groupedBtn = document.getElementById('btn-view-grouped');
+            const listContainer = document.getElementById('container-list');
+            const groupedContainer = document.getElementById('container-grouped');
+
+            if (view === 'list') {
+                listBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white transition-colors";
+                groupedBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 hover:text-white transition-colors";
+                listContainer.classList.remove('hidden');
+                groupedContainer.classList.add('hidden');
+            } else {
+                groupedBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white transition-colors";
+                listBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 hover:text-white transition-colors";
+                groupedContainer.classList.remove('hidden');
+                listContainer.classList.add('hidden');
+            }
+            renderDashboard();
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            // Convert YYYY-MM-DD HH:mm to MM-DD-YYYY HH:mm
+            const parts = dateStr.split('T');
+            const datePart = parts[0];
+            const timePart = parts[1] ? parts[1].substring(0, 5) : '';
+            const dSegments = datePart.split('-');
+            if (dSegments.length === 3) {
+                return `${dSegments[1]}-${dSegments[2]}-${dSegments[0]}${timePart ? ' ' + timePart : ''}`;
+            }
+            return dateStr;
+        }
+
+        function getDateBadgeClass(dateStr) {
+            if (!dateStr) return 'bg-slate-800 text-slate-300 border-slate-700';
+            const itemDate = new Date(dateStr);
+            const now = new Date();
+            const diffHours = (now - itemDate) / (1000 * 60 * 60);
+
+            if (itemDate.toDateString() === now.toDateString()) {
+                // Today -> Green
+                return 'bg-emerald-950 text-emerald-300 border-emerald-800';
+            } else if (diffHours <= 24) {
+                // 1 day back / yesterday -> Light Blue
+                return 'bg-sky-950 text-sky-300 border-sky-800';
+            } else {
+                // Older -> Red/Rose
+                return 'bg-rose-950 text-rose-300 border-rose-800';
+            }
+        }
+
+        function renderDashboard() {
+            document.getElementById('stats').innerText = `Showing ${filteredAlerts.length} of ${allAlerts.length} Alerts`;
+            
+            if (currentView === 'list') {
+                renderListView(filteredAlerts);
+            } else {
+                renderGroupedView(filteredAlerts);
+            }
+        }
+
+        function renderListView(alerts) {
+            const tbody = document.getElementById('alerts-table-body');
+            if (alerts.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-500">No alerts match your filter criteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            alerts.forEach(item => {
+                const isSent = item.status.toLowerCase() === 'sent';
+                const statusBadge = isSent ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-amber-950 text-amber-300 border-amber-800';
+                const dateBadgeClass = getDateBadgeClass(item.created_at);
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-800/40 transition-colors';
+                row.innerHTML = `
+                    <td class="p-4 align-top font-mono">
+                        <span class="px-2 py-1 rounded bg-slate-800 text-amber-400 border border-slate-700 text-xs font-bold">
+                            ${item.short_id}
+                        </span>
+                    </td>
+                    <td class="p-4 align-top">
+                        <div class="font-semibold text-slate-200">${item.company_name}</div>
+                        <div class="text-xs text-slate-400">${item.job_title}</div>
+                        <div class="mt-1.5 inline-block">
+                            <span class="px-2 py-0.5 rounded text-[11px] border font-mono ${dateBadgeClass}">
+                                Logged: ${formatDate(item.created_at)}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="p-4 align-top text-xs space-y-1">
+                        <div class="font-medium text-slate-300">👤 ${item.recruiter_name || 'Hiring Team'}</div>
+                        <div class="text-slate-400 font-mono text-[11px]">✉️ ${item.recipient_email}</div>
+                    </td>
+                    <td class="p-4 align-top text-xs space-y-1">
+                        <div class="font-medium text-indigo-300">🤝 ${item.helper_name}</div>
+                        <div class="text-slate-400 font-mono text-[11px]">${item.helper_email || 'No email'}</div>
+                    </td>
+                    <td class="p-4 align-top">
+                        <span class="px-2.5 py-1 rounded-md border font-semibold text-xs ${statusBadge}">
+                            ${item.status}
+                        </span>
+                    </td>
+                    <td class="p-4 align-top space-y-2">
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="openModal(${item.outreach_id})" 
+                                class="bg-indigo-600/80 hover:bg-indigo-500 text-white px-2.5 py-1 rounded text-xs transition-colors font-medium">
+                                💬 View Msg
+                            </button>
+                            <a href="${item.resume_doc_url}" target="_blank" 
+                                class="bg-blue-600/80 hover:bg-blue-500 text-white px-2.5 py-1 rounded text-xs transition-colors inline-flex items-center gap-1">
+                                📄 Resume ↗
+                            </a>
+                            ${!isSent ? `
+                                <button onclick="updateStatus(${item.outreach_id}, 'Sent')" 
+                                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-xs transition-colors font-medium">
+                                    ✓ Sent
+                                </button>
+                            ` : `
+                                <button onclick="updateStatus(${item.outreach_id}, 'Drafted')" 
+                                    class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1 rounded text-xs transition-colors">
+                                    ↺ Revert
+                                </button>
+                            `}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function renderGroupedView(alerts) {
+            const container = document.getElementById('container-grouped');
+            if (alerts.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-500">No alerts match your filter criteria.</div>`;
+                return;
+            }
+
+            // Group by company name
+            const grouped = {};
+            alerts.forEach(item => {
+                const comp = item.company_name || 'Unknown Company';
+                if (!grouped[comp]) grouped[comp] = [];
+                grouped[comp].push(item);
+            });
+
+            container.innerHTML = '';
+            Object.keys(grouped).sort().forEach(company => {
+                const compAlerts = grouped[company];
+                const card = document.createElement('div');
+                card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl';
+                
+                let rowsHtml = '';
+                compAlerts.forEach(item => {
+                    const isSent = item.status.toLowerCase() === 'sent';
+                    const statusBadge = isSent ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-amber-950 text-amber-300 border-amber-800';
+                    const dateBadgeClass = getDateBadgeClass(item.created_at);
+
+                    rowsHtml += `
+                        <tr class="border-b border-slate-800/60 hover:bg-slate-800/30">
+                            <td class="py-3 px-2 font-mono text-xs text-amber-400">${item.short_id}</td>
+                            <td class="py-3 px-2">
+                                <div class="font-semibold text-slate-200">${item.job_title}</div>
+                                <span class="px-2 py-0.5 rounded text-[10px] border font-mono ${dateBadgeClass}">${formatDate(item.created_at)}</span>
+                            </td>
+                            <td class="py-3 px-2 text-xs text-slate-300">👤 ${item.recruiter_name} (${item.recipient_email})</td>
+                            <td class="py-3 px-2 text-xs text-indigo-300">🤝 ${item.helper_name}</td>
+                            <td class="py-3 px-2"><span class="px-2 py-0.5 rounded border text-[11px] font-semibold ${statusBadge}">${item.status}</span></td>
+                            <td class="py-3 px-2">
+                                <div class="flex gap-2">
+                                    <button onclick="openModal(${item.outreach_id})" class="bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded text-xs">💬 Msg</button>
+                                    <a href="${item.resume_doc_url}" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs">📄 Resume</a>
+                                    ${!isSent ? `<button onclick="updateStatus(${item.outreach_id}, 'Sent')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded text-xs">✓ Sent</button>` : 
+                                               `<button onclick="updateStatus(${item.outreach_id}, 'Drafted')" class="bg-slate-700 text-slate-300 px-2 py-1 rounded text-xs">↺ Revert</button>`}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                        <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                            🏢 ${company} <span class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-400">${compAlerts.length} alert(s)</span>
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-slate-400 text-xs uppercase border-b border-slate-800">
+                                    <th class="py-2 px-2">ID</th>
+                                    <th class="py-2 px-2">Role & Date</th>
+                                    <th class="py-2 px-2">Recruiter</th>
+                                    <th class="py-2 px-2">Helper</th>
+                                    <th class="py-2 px-2">Status</th>
+                                    <th class="py-2 px-2">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function updateStatus(outreachId, newStatus) {
+            try {
+                const response = await fetch('/api/whatsapp-alerts/update-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ outreach_id: outreachId, status: newStatus })
+                });
+                const res = await response.json();
+                if (res.status === 'success') {
+                    const alert = allAlerts.find(a => a.outreach_id === outreachId);
+                    if (alert) alert.status = newStatus;
+                    applyFilters();
+                }
+            } catch (err) {
+                console.error('Error updating status:', err);
+            }
+        }
+
+        function openModal(outreachId) {
+            const alert = allAlerts.find(a => a.outreach_id === outreachId);
+            const content = document.getElementById('modal-msg-content');
+            if (alert) {
+                content.innerText = alert.whatsapp_raw;
+            } else {
+                content.innerText = "Message not found.";
+            }
+            document.getElementById('msg-modal').classList.remove('hidden');
+            document.getElementById('msg-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('msg-modal').classList.add('hidden');
+            document.getElementById('msg-modal').classList.remove('flex');
+        }
+
+        document.addEventListener("DOMContentLoaded", fetchAlerts);
+    </script>
+</body>
+</html>

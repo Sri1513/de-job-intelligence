@@ -1,24 +1,18 @@
 # src/engine/analyzer.py
 import json
 import logging
+import os
 from typing import Any
-
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+from openai import OpenAI
 import google.generativeai as genai
 
 from src.core.config import settings
 from src.core.utils import get_cached_resume
 
 logger = logging.getLogger("de-job-intelligence.analyzer")
-
-def get_gemini_model():
-    """Initializes and configures the Gemini generative model."""
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not configured in settings or .env file.")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-3.6-flash")
 
 ANALYSIS_SYSTEM_PROMPT = """
 You are an expert technical recruiter and Senior Data Engineering evaluation agent.
@@ -42,9 +36,20 @@ Output MUST be strict JSON matching this schema:
 Do not wrap output in markdown codeblocks. Return valid JSON only.
 """
 
+def _clean_and_parse_json(text_content: str) -> dict[str, Any]:
+    """Cleans markdown code fences and parses JSON response."""
+    text_content = text_content.strip()
+    try:
+        return json.loads(text_content)
+    except json.JSONDecodeError:
+        pass
+    
+    cleaned = text_content.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    return json.loads(cleaned)
+
 def evaluate_job_fit(job_description: str, category_slug: str = "data_engineering") -> dict[str, Any]:
     """
-    Invokes Gemini to evaluate job requirements against candidate experience.
+    Evaluates job requirements using Groq API as primary, with Gemini fallback.
     """
     if not job_description or len(job_description.strip()) < 50:
         return {
@@ -56,11 +61,7 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
         }
 
     resume = get_cached_resume(category_slug)
-    model = get_gemini_model()
-
-    prompt = f"""
-{ANALYSIS_SYSTEM_PROMPT}
-
+    user_content = f"""
 --- CANDIDATE MASTER PROFILE ---
 {resume}
 
@@ -68,22 +69,66 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
 {job_description}
 """
 
+    groq_api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY")
+    raw_response = None
+
+    # 1. Try Primary: Groq API
+    if groq_api_key:
+        try:
+            client = OpenAI(
+                base_url="[https://api.groq.com/openai/v1](https://api.groq.com/openai/v1)",
+                api_key=groq_api_key
+            )
+            response = client.chat.completions.create(
+                model=settings.GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=0.1,
+                timeout=30.0
+            )
+            raw_response = response.choices[0].message.content.strip()
+        except Exception as groq_exc:
+            logger.warning(f"⚠️ Groq primary evaluation failed in analyzer: {groq_exc}. Falling back to Gemini...")
+
+    # 2. Fallback: Gemini API
+    if not raw_response:
+        gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                genai.configure(api_key=gemini_key)
+                model_name = settings.GEMINI_MODEL or "gemini-1.5-flash"
+                model = genai.GenerativeModel(model_name)
+                gemini_prompt = f"{ANALYSIS_SYSTEM_PROMPT}\n\n{user_content}"
+                gemini_resp = model.generate_content(gemini_prompt)
+                raw_response = gemini_resp.text.strip()
+            except Exception as gemini_exc:
+                logger.error(f"❌ Gemini fallback also failed in analyzer: {gemini_exc}")
+                return {
+                    "match_score": 0,
+                    "key_matches": [],
+                    "missing_skills": [],
+                    "role_focus": "ERROR",
+                    "summary_rationale": f"All AI providers failed. Groq & Gemini errors encountered."
+                }
+        else:
+            return {
+                "match_score": 0,
+                "key_matches": [],
+                "missing_skills": [],
+                "role_focus": "ERROR",
+                "summary_rationale": "Groq failed and no Gemini fallback API key is configured."
+            }
+
     try:
-        response = model.generate_content(prompt)
-        text_content = response.text.strip()
-
-        # Clean JSON fences if present
-        text_content = text_content.removeprefix("```json")
-        text_content = text_content.removesuffix("```")
-        text_content = text_content.strip()
-
-        return json.loads(text_content)
-    except Exception as exc:
-        logger.error(f"Gemini evaluation failed: {exc}")
+        return _clean_and_parse_json(raw_response)
+    except Exception as parse_exc:
+        logger.error(f"❌ Failed to parse JSON from analyzer response: {parse_exc}")
         return {
             "match_score": 0,
             "key_matches": [],
             "missing_skills": [],
             "role_focus": "ERROR",
-            "summary_rationale": f"AI analysis failed: {exc!s}"
+            "summary_rationale": f"JSON parsing failed: {parse_exc}"
         }

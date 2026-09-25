@@ -24,10 +24,10 @@ def process_whatsapp_job_alert(
 ) -> Dict[str, Any]:
     """
     Optimized WhatsApp job alert pipeline:
-    1. Parses metadata, email handles, and extracts recruiter name.
+    1. Parses metadata, email handles, and extracts recruiter name & domain short ID.
     2. Conditional RAG tailoring vs Quota Saver default resume.
     3. Generates precise template-matched email draft with helper in CC.
-    4. Logs everything into database.
+    4. Logs everything into database including the domain short_id.
     """
     logger.info(f"🚀 Processing WhatsApp alert via helper: {helper_name}")
 
@@ -44,7 +44,7 @@ def process_whatsapp_job_alert(
         h_row = cur.fetchone()
         resolved_helper_email = h_row["email"]
 
-    # 2. Parse metadata (including recruiter name & recipient email)
+    # 2. Parse metadata (including recruiter name, recipient email, and short_id)
     meta = parse_whatsapp_alert_metadata(whatsapp_text)
     has_jd = meta.get("has_jd", False)
     company_name = meta.get("company_name", "Direct Client")
@@ -52,14 +52,15 @@ def process_whatsapp_job_alert(
     recipient_email = meta.get("recipient_email")
     recruiter_name = meta.get("recruiter_name")
     extracted_jd = meta.get("extracted_jd", whatsapp_text)
+    short_id = meta.get("short_id")  # <--- Domain-derived 4-char short ID
 
-    logger.info(f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Has JD: {has_jd}")
+    logger.info(f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}")
 
     # 3. Conditional Resume Tailoring vs Quota Saver
     if has_jd:
         logger.info("✨ Rich JD detected: Triggering custom RAG resume tailoring pipeline...")
         llm_payload = {
-            "professional_summary": f"Senior Data Engineer with 8+ years of experience designing scalable data platforms and lakehouse architectures across AWS and PySpark.",
+            "professional_summary": f"Senior Data Engineer with 7+ years of experience designing scalable data platforms and lakehouse architectures across AWS and PySpark.",
             "technical_skills": {
                 "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks, Delta Lake",
                 "languages": "Python, SQL, Bash",
@@ -110,8 +111,7 @@ def process_whatsapp_job_alert(
         dynamic_email_content={"subject": subject, "body": body}
     )
 
-    # 6. Log Audit Record in PostgreSQL
-    # Log Audit Record in PostgreSQL with dedicated recruiter_name column
+    # 6. Log Audit Record in PostgreSQL with short_id
     outreach_id = log_outreach_event(
         helper_id=helper_id,
         company_name=company_name,
@@ -119,22 +119,24 @@ def process_whatsapp_job_alert(
         extracted_jd=extracted_jd,
         resume_doc_url=resume_url,
         gmail_draft_id=draft_result["draft_id"],
-        recruiter_name=recruiter_name,  # <-- Stored directly in DB column
+        recruiter_name=recruiter_name,
+        short_id=short_id,  # <--- Passed into repository storage
         metadata={
             "whatsapp_raw": whatsapp_text,
             "has_jd": has_jd,
             "recipient_email": recipient_email,
             "subject": subject,
-            "cc_helper": resolved_helper_email
+            "cc_helper": resolved_helper_email,
+            "short_id": short_id
         }
     )
 
-    logger.info(f"✨ Successfully processed alert! Outreach ID: {outreach_id}")
+    logger.info(f"✨ Successfully processed alert! Outreach DB ID: {outreach_id} | Domain Code: {short_id}")
 
     return {
         "status": "success",
         "outreach_id": outreach_id,
-        "outreach_name": recruiter_name,
+        "short_id": short_id,
         "company_name": company_name,
         "job_title": job_title,
         "recruiter_name": recruiter_name,

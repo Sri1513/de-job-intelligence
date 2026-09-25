@@ -245,7 +245,8 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     for prefix, bullet_list, count in job_configs:
         base_list = BASE_BULLETS[prefix]
         for i in range(1, count + 1):
-            key = f"{{{{{prefix}_BULLET{i}}}}}"
+            # FIXED: Removed the underscore between BULLET and {i} to match template {{JOB1_BULLET1}}
+            key = "{{" + f"{prefix}_BULLET{i}" + "}}"
             idx = i - 1
             if idx < len(bullet_list) and bullet_list[idx]:
                 replacements[key] = bullet_list[idx]
@@ -255,7 +256,7 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
                 replacements[key] = ""
 
     print(
-        f"✅ [Mapper] Injected tailored bullets: "
+        f"[Mapper] Injected tailored bullets: "
         f"JOB1={len(parse_experience_text(j1))}/8, "
         f"JOB2={len(parse_experience_text(j2))}/8, "
         f"JOB3={len(parse_experience_text(j3))}/9, "
@@ -263,3 +264,9 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     )
 
     return replacements
+
+def map_resume_placeholders(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Alias for build_replacement_payload to maintain compatibility with test suites.
+    """
+    return build_replacement_payload(dynamic_data)

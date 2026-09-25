@@ -177,9 +177,9 @@ def apply_semantic_bolding(
             documentId=document_id,
             body={"requests": requests}
         ).execute()
-        print(f"✨ [Purposeful Bolder] Successfully styled {len(requests)} entities.")
+        print(f"[Purposeful Bolder] Successfully styled {len(requests)} entities.")
     else:
-        print("ℹ️ [Purposeful Bolder] No terms required styling.")
+        print("[Purposeful Bolder] No terms required styling.")
 
 
 def create_tailored_document(
@@ -216,7 +216,7 @@ def create_tailored_document(
     ).execute()
     new_doc_id = copied_file.get("id")
 
-    print(f"📁 [Drive] Placed resume in 'Resumes and Cover Letters/{company_name}/{clean_file_name}'")
+    print(f"[Drive] Placed resume in 'Resumes and Cover Letters/{company_name}/{clean_file_name}'")
 
     requests: List[Dict[str, Any]] = []
     for placeholder, text in replacements.items():

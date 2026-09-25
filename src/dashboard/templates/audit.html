@@ -12,13 +12,18 @@
     </style>
 </head>
 <body>
-    <div class="container my-4">
+        <!-- Inside audit.html header flex container -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1>🧠 AI Skill Extraction & Gap Audit</h1>
                 <p class="text-muted">Review what technologies employers demand versus your current resume footprint.</p>
             </div>
-            <a href="/?category={{ current_category }}" class="btn btn-outline-secondary">← Back to Dashboard</a>
+            <div class="d-flex gap-2">
+                <a href="/skills-analytics?category={{ current_category }}" class="btn btn-success">
+                    📊 Top Skills Analytics
+                </a>
+                <a href="/?category={{ current_category }}" class="btn btn-outline-secondary">← Back to Dashboard</a>
+            </div>
         </div>
 
         <div class="card shadow-sm">

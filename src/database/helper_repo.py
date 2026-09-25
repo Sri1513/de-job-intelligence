@@ -17,7 +17,6 @@ def get_or_create_helper(
     """
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Check if helper exists by email or name
             if email:
                 cur.execute(
                     "SELECT helper_id FROM scout.helpers WHERE email = %s;",
@@ -32,7 +31,6 @@ def get_or_create_helper(
 
             if row:
                 helper_id = row["helper_id"] if isinstance(row, dict) else row[0]
-                # Update info if provided
                 cur.execute(
                     """
                     UPDATE scout.helpers 
@@ -67,21 +65,61 @@ def log_outreach_event(
     resume_doc_url: str,
     gmail_draft_id: str,
     recruiter_name: Optional[str] = None,
+    short_id: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None
 ) -> int:
     """
-    Logs an outreach event into scout.outreach_tracking, including the recruiter name.
-    Returns the outreach_id.
+    Implements true CDC Type 2 using database versioning columns:
+    - Finds the current active record (`is_current = TRUE`) for the domain `short_id`.
+    - Expires it (`is_current = FALSE`, sets `effective_end`).
+    - Inserts a new row with an incremented `version`, `is_current = TRUE`, and new `effective_start`.
     """
+    import json
+    from datetime import datetime
+
+    metadata = metadata or {}
+    short_id = short_id or "unkx"
+    entity_key = f"domain_{short_id}"
+    now = datetime.now()
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            # 1. Find the current active record for this domain short_id
+            cur.execute(
+                """
+                SELECT outreach_id, version 
+                FROM scout.outreach_tracking 
+                WHERE short_id = %s AND is_current = TRUE;
+                """,
+                (short_id,)
+            )
+            existing = cur.fetchone()
+
+            new_version = 1
+            if existing:
+                old_id = existing["outreach_id"] if isinstance(existing, dict) else existing[0]
+                old_version = existing["version"] if isinstance(existing, dict) else existing[1]
+                new_version = old_version + 1
+
+                # 2. CDC Type 2: Expire the old active record
+                cur.execute(
+                    """
+                    UPDATE scout.outreach_tracking
+                    SET is_current = FALSE, effective_end = %s
+                    WHERE outreach_id = %s;
+                    """,
+                    (now, old_id)
+                )
+
+            # 3. Insert the new active version row
             cur.execute(
                 """
                 INSERT INTO scout.outreach_tracking (
                     helper_id, company_name, job_title, extracted_jd, 
-                    resume_doc_url, gmail_draft_id, recruiter_name, metadata
+                    resume_doc_url, gmail_draft_id, recruiter_name, 
+                    short_id, entity_key, version, is_current, effective_start, metadata
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
                 RETURNING outreach_id;
                 """,
                 (
@@ -92,13 +130,17 @@ def log_outreach_event(
                     resume_doc_url,
                     gmail_draft_id,
                     recruiter_name,
-                    json_str(metadata)
+                    short_id,
+                    entity_key,
+                    new_version,
+                    now,
+                    json.dumps(metadata)
                 )
             )
             row = cur.fetchone()
             outreach_id = row["outreach_id"] if isinstance(row, dict) else row[0]
             conn.commit()
-            logger.info(f"Logged outreach event ID {outrences_id if 'outrences_id' in locals() else outreach_id} for {company_name}")
+            logger.info(f"CDC Type 2: Created version {new_version} (ID: {outreach_id}) for domain code '{short_id}'")
             return outreach_id
 
 
