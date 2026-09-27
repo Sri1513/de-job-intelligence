@@ -9,20 +9,23 @@ description = "Autonomous Job Intelligence & Agentic Document Synthesis Engine v
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic>=2.7.0",
-    "pydantic-settings>=2.2.0",
-    "psycopg[binary]>=3.1.18",
-    "psycopg-pool>=3.2.0",
-    "starlette>=0.37.0",
-    "uvicorn>=0.29.0",
-    "mcp>=1.0.0",
-    "google-generativeai>=0.5.0",
-    "google-api-python-client>=2.125.0",
-    "google-auth-oauthlib>=1.2.0",
-    "google-auth-httplib2>=0.2.0",
-    "beautifulsoup4>=4.12.0",
-    "requests>=2.31.0",
-    "python-dotenv>=1.0.1"
+    "beautifulsoup4",
+    "fastmcp",
+    "google-generativeai",
+    "google-api-python-client",
+    "google-auth",
+    "google-auth-oauthlib",
+    "jinja2",
+    "openai",
+    "pandas",
+    "psycopg[binary,pool]",
+    "pydantic-settings",
+    "python-dotenv",
+    "python-jobspy",
+    "requests",
+    "scikit-learn",
+    "starlette",
+    "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]
