@@ -12,31 +12,33 @@ from src.engine.matcher import calculate_local_fit_score
 def generate_domain_short_id(email: Optional[str], company_name: Optional[str] = None) -> str:
     """
     Extracts the domain after '@' from an email (e.g., 'hr@databricks.com' -> 'databricks'),
-    and returns a clean 4-character code (e.g., 'data'). 
+    and returns a clean 4-character code (e.g., 'data').
     Falls back to company name slug if no email is provided.
     """
     domain_part = ""
     if email and "@" in email:
         domain_part = email.split("@")[1].strip().lower()
     elif company_name:
-        domain_part = re.sub(r'[^a-z0-9]', '', company_name.lower()) + ".com"
+        domain_part = re.sub(r"[^a-z0-9]", "", company_name.lower()) + ".com"
     else:
         domain_part = "unknown.com"
 
     # Get the root domain name (e.g., 'databricks' from 'databricks.com')
-    parts = domain_part.split('.')
+    parts = domain_part.split(".")
     root_name = parts[-2] if len(parts) >= 2 else parts[0]
-    
+
     # Clean and take the first 4 alphanumeric characters (padded with 'x' if too short)
-    clean_name = re.sub(r'[^a-z0-9]', '', root_name)
-    return clean_name[:4].ljust(4, 'x')
+    clean_name = re.sub(r"[^a-z0-9]", "", root_name)
+    return clean_name[:4].ljust(4, "x")
+
 
 def extract_linkedin_id(url: str) -> str:
     """Extracts numeric job ID from LinkedIn URLs."""
     if not url:
         return None
-    match = re.search(r'/jobs/view/(\d+)', url)
+    match = re.search(r"/jobs/view/(\d+)", url)
     return match.group(1) if match else None
+
 
 def generate_job_id(company: str, title: str, job_url: str = None) -> str:
     """Generates a deterministic unique job ID."""
@@ -44,11 +46,11 @@ def generate_job_id(company: str, title: str, job_url: str = None) -> str:
         numeric_id = extract_linkedin_id(job_url)
         if numeric_id:
             return f"li-{numeric_id}"
-            
+
     def slugify(text):
         text = (text or "unknown").lower().strip()
-        text = re.sub(r'[^\w\s-]', '', text)
-        return re.sub(r'[\s_-]+', '-', text)[:30]
+        text = re.sub(r"[^\w\s-]", "", text)
+        return re.sub(r"[\s_-]+", "-", text)[:30]
 
     c_slug = slugify(company)
     t_slug = slugify(title)
@@ -56,13 +58,17 @@ def generate_job_id(company: str, title: str, job_url: str = None) -> str:
     short_hash = hashlib.md5(raw_str.encode()).hexdigest()[:6]
     return f"{c_slug}-{t_slug}-{short_hash}"
 
+
 def safe_float(val):
     try:
         return float(val) if val is not None and val != "N/A" else None
     except (ValueError, TypeError):
         return None
 
-def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", default_source: str = "JobSpy") -> dict:
+
+def stage_raw_jobs(
+    conn, jobs: list, job_category: str = "data_engineering", default_source: str = "JobSpy"
+) -> dict:
     """
     Ingests scraped jobs into PostgreSQL.
     - Prevents duplicate inserts
@@ -83,7 +89,7 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
         "google_jobs": "Google Jobs",
         "dice": "Dice",
         "email alert": "Email Alert",
-        "email-to-jobspy bridge": "Email Alert"
+        "email-to-jobspy bridge": "Email Alert",
     }
 
     resume_text = get_cached_resume(job_category)
@@ -97,14 +103,12 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
 
             raw_source = job.get("source") or job.get("site") or default_source
             job_source = SOURCE_MAP.get(str(raw_source).lower(), str(raw_source).capitalize())
-            
+
             if not job_url or job_url == "N/A" or not title or not company:
                 continue
 
             job_id = generate_job_id(company, title, job_url)
-            job_desc = str(
-                job.get("description") or job.get("job_description") or ""
-            ).strip()
+            job_desc = str(job.get("description") or job.get("job_description") or "").strip()
 
             if len(job_desc) < 20:
                 job_desc = f"Role: {title} at {company}. Extracted via scraper."
@@ -114,10 +118,14 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
             existing_record = cur.fetchone()
 
             if existing_record:
-                metadata = (existing_record["metadata"] if isinstance(existing_record, dict) else existing_record[0]) or {}
+                metadata = (
+                    existing_record["metadata"]
+                    if isinstance(existing_record, dict)
+                    else existing_record[0]
+                ) or {}
                 locations_list = metadata.get("locations", [])
                 location_exists = any(
-                    loc.get("url") == job_url or loc.get("city", "").lower() == city.lower() 
+                    loc.get("url") == job_url or loc.get("city", "").lower() == city.lower()
                     for loc in locations_list
                 )
 
@@ -126,7 +134,7 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
                     metadata["locations"] = locations_list
                     cur.execute(
                         "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
-                        (json.dumps(metadata), job_id)
+                        (json.dumps(metadata), job_id),
                     )
                     updated_count += 1
                 else:
@@ -138,7 +146,7 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
                 resume_text=resume_text,
                 job_description=job_desc,
                 job_title=title,
-                job_category=job_category
+                job_category=job_category,
             )
 
             initial_metadata = {
@@ -149,7 +157,7 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
                 "matched_skills": local_eval.get("matched_skills", []),
                 "missing_skills": local_eval.get("missing_skills", []),
                 "semantic_match": local_eval.get("semantic_match", 0),
-                "skill_match": local_eval.get("skill_match", 0)
+                "skill_match": local_eval.get("skill_match", 0),
             }
 
             cur.execute(
@@ -181,8 +189,8 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
                     json.dumps(initial_metadata),
                     str(job.get("employment_type", "Unknown")),
                     str(job.get("sponsorship", "Not Mentioned")),
-                    job_category
-                )
+                    job_category,
+                ),
             )
             saved_count += 1
             staged_jobs.append({"job_id": job_id, "title": title, "company": company})
@@ -193,5 +201,5 @@ def stage_raw_jobs(conn, jobs: list, job_category: str = "data_engineering", def
         "staged_jobs": staged_jobs,
         "saved": saved_count,
         "updated": updated_count,
-        "skipped": skipped_count
+        "skipped": skipped_count,
     }

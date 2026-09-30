@@ -6,11 +6,12 @@ from src.core.database import get_db_connection
 
 logger = logging.getLogger("de-job-intelligence.database")
 
+
 def get_or_create_helper(
     name: str,
     email: Optional[str] = None,
     company: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> int:
     """
     Retrieves an existing helper by name/email or inserts a new one into scout.helpers.
@@ -19,15 +20,9 @@ def get_or_create_helper(
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             if email:
-                cur.execute(
-                    "SELECT helper_id FROM scout.helpers WHERE email = %s;",
-                    (email,)
-                )
+                cur.execute("SELECT helper_id FROM scout.helpers WHERE email = %s;", (email,))
             else:
-                cur.execute(
-                    "SELECT helper_id FROM scout.helpers WHERE name = %s;",
-                    (name,)
-                )
+                cur.execute("SELECT helper_id FROM scout.helpers WHERE name = %s;", (name,))
             row = cur.fetchone()
 
             if row:
@@ -40,7 +35,7 @@ def get_or_create_helper(
                         metadata = COALESCE(%s, metadata)
                     WHERE helper_id = %s;
                     """,
-                    (name, company, json_str(metadata), helper_id)
+                    (name, company, json_str(metadata), helper_id),
                 )
                 return helper_id
             else:
@@ -50,7 +45,7 @@ def get_or_create_helper(
                     VALUES (%s, %s, %s, %s)
                     RETURNING helper_id;
                     """,
-                    (name, email, company, json_str(metadata))
+                    (name, email, company, json_str(metadata)),
                 )
                 new_row = cur.fetchone()
                 helper_id = new_row["helper_id"] if isinstance(new_row, dict) else new_row[0]
@@ -67,7 +62,7 @@ def log_outreach_event(
     gmail_draft_id: str,
     recruiter_name: Optional[str] = None,
     short_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> int:
     """
     Implements true CDC Type 2 using database versioning columns:
@@ -92,7 +87,7 @@ def log_outreach_event(
                 FROM scout.outreach_tracking 
                 WHERE short_id = %s AND is_current = TRUE;
                 """,
-                (short_id,)
+                (short_id,),
             )
             existing = cur.fetchone()
 
@@ -109,7 +104,7 @@ def log_outreach_event(
                     SET is_current = FALSE, effective_end = %s
                     WHERE outreach_id = %s;
                     """,
-                    (now, old_id)
+                    (now, old_id),
                 )
 
             # 3. Insert the new active version row
@@ -135,18 +130,21 @@ def log_outreach_event(
                     entity_key,
                     new_version,
                     now,
-                    json.dumps(metadata)
-                )
+                    json.dumps(metadata),
+                ),
             )
             row = cur.fetchone()
             outreach_id = row["outreach_id"] if isinstance(row, dict) else row[0]
             conn.commit()
-            logger.info(f"CDC Type 2: Created version {new_version} (ID: {outreach_id}) for domain code '{short_id}'")
+            logger.info(
+                f"CDC Type 2: Created version {new_version} (ID: {outreach_id}) for domain code '{short_id}'"
+            )
             return outreach_id
 
 
 def json_str(data: Optional[Dict[str, Any]]) -> Optional[str]:
     import json
+
     if data is None:
         return None
     return json.dumps(data)

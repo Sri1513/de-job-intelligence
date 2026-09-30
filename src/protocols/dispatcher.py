@@ -1,5 +1,6 @@
 # src/protocols/dispatcher.py
 import asyncio
+import json
 import logging
 from typing import Any, Dict
 
@@ -7,14 +8,17 @@ from src.core.database import get_db_connection, get_job_by_id
 from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
-from src.synthesis.prompt_builder import build_job_tailoring_prompt, build_tailoring_prompt
+from src.synthesis.prompt_builder import build_job_tailoring_prompt
+from src.workers.apply_worker import process_apply_queue
 from src.workers.backfill_worker import run_backfill_batch
 from src.workers.email_pipeline import run_email_pipeline
 
 logger = logging.getLogger("de-job-intelligence.dispatcher")
 
 
-def _search_jobs(category: str = "data_engineering", min_score: int = 0, status: str = "ALL", limit: int = 10) -> list:
+def _search_jobs(
+    category: str = "data_engineering", min_score: int = 0, status: str = "ALL", limit: int = 10
+) -> list:
     conditions = ["job_category ILIKE %s"]
     params = [f"%{category}%"]
 
@@ -23,9 +27,9 @@ def _search_jobs(category: str = "data_engineering", min_score: int = 0, status:
         params.append(status.upper())
 
     query = f"""
-        SELECT job_id, title, company, location, is_remote, fit_score, ai_status, saved_at, job_url
+        SELECT job_id, title, company, location, is_remote, fit_score, ai_status, saved_at, job_url, apply_status
         FROM saved_jobs
-        WHERE {' AND '.join(conditions)}
+        WHERE {" AND ".join(conditions)}
         ORDER BY saved_at DESC NULLS LAST
         LIMIT %s;
     """
@@ -40,7 +44,6 @@ def _search_jobs(category: str = "data_engineering", min_score: int = 0, status:
                 row_dict = dict(r)
                 if row_dict.get("saved_at"):
                     row_dict["saved_at"] = str(row_dict["saved_at"])
-                # Filter score if requested
                 try:
                     score = int(float(row_dict.get("fit_score") or 0))
                 except (ValueError, TypeError):
@@ -51,9 +54,33 @@ def _search_jobs(category: str = "data_engineering", min_score: int = 0, status:
             return results
 
 
+def _queue_job_for_apply(job_id: str) -> dict[str, Any]:
+    """Sets a job's apply_status to QUEUED in PostgreSQL."""
+    query = """
+        UPDATE saved_jobs
+        SET apply_status = 'QUEUED'
+        WHERE job_id = %s
+        RETURNING job_id, title, company, job_url, apply_status;
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (job_id,))
+            row = cur.fetchone()
+            if not row:
+                return {"success": False, "error": f"Job '{job_id}' not found in saved_jobs."}
+            updated = dict(row)
+        conn.commit()
+
+    return {
+        "success": True,
+        "message": f"Job {job_id} successfully queued for browser application.",
+        "job": updated,
+    }
+
+
 async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
     """Dispatches JSON-RPC tool requests asynchronously."""
-    if tool_name == "prepare_job_tailoring_prompt":
+    if tool_name in ("prepare_job_tailoring_prompt", "fetch_job_for_tailoring"):
         job_id = arguments.get("job_id")
         if not job_id:
             raise ValueError("Argument 'job_id' is required.")
@@ -62,7 +89,6 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
     elif tool_name in ("export_tailored_resume", "generate_tailored_resume"):
         llm_payload = arguments.get("llm_payload") or arguments.get("tailored_content") or arguments
         if isinstance(llm_payload, str):
-            import json
             try:
                 llm_payload = json.loads(llm_payload)
             except Exception:
@@ -70,7 +96,11 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
 
         company = arguments.get("company_name") or arguments.get("company")
         title = arguments.get("job_title") or arguments.get("title")
-        default_title = f"{company} - Tailored Resume - {title}" if (company and title) else "Sri Omkar Dumpa - Tailored Resume"
+        default_title = (
+            f"{company} - Tailored Resume - {title}"
+            if (company and title)
+            else "Sri Omkar Dumpa - Tailored Resume"
+        )
         doc_title = arguments.get("document_title") or default_title
 
         doc_url = await asyncio.to_thread(generate_resume_from_llm_payload, llm_payload, doc_title)
@@ -98,11 +128,32 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
         limit = arguments.get("limit", 10)
         return await asyncio.to_thread(_search_jobs, category, min_score, status, limit)
 
+    elif tool_name == "queue_job_for_application":
+        job_id = arguments.get("job_id")
+        if not job_id:
+            raise ValueError("Argument 'job_id' is required.")
+        return await asyncio.to_thread(_queue_job_for_apply, job_id)
+
+    elif tool_name == "run_application_worker":
+        limit = int(arguments.get("limit", arguments.get("max_jobs", 3)))
+        headless = arguments.get("headless", True)
+        if isinstance(headless, str):
+            headless = headless.lower() in ("true", "1", "yes")
+
+        results = await process_apply_queue(limit=limit, headless=headless)
+        return {
+            "success": True,
+            "jobs_processed": len(results),
+            "results": results,
+        }
+
     elif tool_name == "retry_job_evaluations":
         limit = int(arguments.get("limit", 5))
         job_ids = arguments.get("job_ids")
         category = arguments.get("category", "data_engineering")
-        return await asyncio.to_thread(run_backfill_batch, limit=limit, job_ids=job_ids, job_category=category)
+        return await asyncio.to_thread(
+            run_backfill_batch, limit=limit, job_ids=job_ids, job_category=category
+        )
 
     elif tool_name == "run_batch_ingestion":
         search_term = arguments.get("search_term", "Data Engineer")
@@ -117,24 +168,15 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
             location=location,
             results_wanted=results_wanted,
             hours_old=hours_old,
-            job_category=job_category
+            job_category=job_category,
         )
-    
-    elif tool_name in ("fetch_job_for_tailoring", "prepare_job_tailoring_prompt"):
-        job_id = arguments.get("job_id")
-        return await asyncio.to_thread(build_tailoring_prompt, job_id=job_id)
 
-    elif tool_name == "export_tailored_resume":
-        llm_payload = arguments.get("llm_payload")
-        if not llm_payload:
-            raise ValueError("Argument 'llm_payload' is required.")
-    
     elif tool_name == "process_job_alert_draft":
         return process_whatsapp_job_alert(
             whatsapp_text=arguments.get("whatsapp_text"),
             helper_name=arguments.get("helper_name"),
             helper_email=arguments.get("helper_email"),
-            helper_company=arguments.get("helper_company")
+            helper_company=arguments.get("helper_company"),
         )
 
     elif tool_name == "run_email_pipeline":
@@ -144,8 +186,8 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
         return await asyncio.to_thread(
             run_email_pipeline,
             limit=limit,
-            job_category=job_category
+            job_category=job_category,
         )
-    
+
     else:
-            return {"error": f"Unknown tool: '{tool_name}'"}
+        return {"error": f"Unknown tool: '{tool_name}'"}

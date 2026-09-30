@@ -5,6 +5,7 @@ from src.core.config import settings
 
 RESUMES_DIR = settings.CONFIG_DIR / "resumes"
 
+
 @lru_cache(maxsize=4)
 def get_cached_resume(category_slug: str) -> str:
     """
@@ -22,6 +23,7 @@ def get_cached_resume(category_slug: str) -> str:
 
     with open(resume_path, "r", encoding="utf-8") as f:
         return f.read()
+
 
 def clean_text(text: str) -> str:
     """Normalizes whitespace and strips non-printable characters."""

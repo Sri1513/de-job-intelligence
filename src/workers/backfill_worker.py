@@ -8,13 +8,14 @@ from src.workers.pipeline_utils import get_unprocessed_jobs, mark_job_failed, up
 
 logger = logging.getLogger("de-job-intelligence.backfill")
 
+
 def run_backfill_batch(
     batch_size: int = 10,
     delay_seconds: float = 2.0,
     limit: int = None,
     job_ids: list = None,
     job_category: str = "data_engineering",
-    **kwargs
+    **kwargs,
 ) -> dict[str, Any]:
     """
     Pulls pending/failed jobs from PostgreSQL, executes LLM evaluations,
@@ -25,7 +26,7 @@ def run_backfill_batch(
         return {
             "status": "idle",
             "processed_count": 0,
-            "message": "No pending or failed jobs found in queue."
+            "message": "No pending or failed jobs found in queue.",
         }
 
     processed = 0
@@ -43,10 +44,7 @@ def run_backfill_batch(
 
             # Persist evaluation result
             success = update_job_evaluation(
-                job_id=job_id,
-                match_score=score,
-                ai_notes=notes,
-                ai_status="PROCESSED"
+                job_id=job_id, match_score=score, ai_notes=notes, ai_status="PROCESSED"
             )
 
             if success:
@@ -67,8 +65,9 @@ def run_backfill_batch(
         "status": "completed",
         "total_attempted": len(jobs),
         "processed_count": processed,
-        "failed_count": failed
+        "failed_count": failed,
     }
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

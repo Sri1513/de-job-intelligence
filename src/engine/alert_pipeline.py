@@ -16,13 +16,16 @@ from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 logger = logging.getLogger("de-job-intelligence.engine")
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-DEFAULT_MASTER_RESUME_URL = "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
+DEFAULT_MASTER_RESUME_URL = (
+    "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
+)
+
 
 def process_whatsapp_job_alert(
     whatsapp_text: str,
     helper_name: str,
     helper_email: Optional[str] = None,
-    helper_company: Optional[str] = None
+    helper_company: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Optimized WhatsApp job alert pipeline:
@@ -38,7 +41,7 @@ def process_whatsapp_job_alert(
         name=helper_name,
         email=helper_email,
         company=helper_company,
-        metadata={"source": "whatsapp_alert_pipeline"}
+        metadata={"source": "whatsapp_alert_pipeline"},
     )
 
     with get_db_connection() as conn, conn.cursor() as cur:
@@ -56,7 +59,9 @@ def process_whatsapp_job_alert(
     extracted_jd = meta.get("extracted_jd", whatsapp_text)
     short_id = meta.get("short_id")  # <--- Domain-derived 4-char short ID
 
-    logger.info(f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}")
+    logger.info(
+        f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}"
+    )
 
     # 3. Conditional Resume Tailoring vs Quota Saver
     if has_jd:
@@ -67,9 +72,9 @@ def process_whatsapp_job_alert(
                 "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks, Delta Lake",
                 "languages": "Python, SQL, Bash",
                 "devops": "Apache Airflow, Docker, Git, CI/CD",
-                "databases": "Snowflake, PostgreSQL, Amazon Redshift"
+                "databases": "Snowflake, PostgreSQL, Amazon Redshift",
             },
-            "experience_bullets": {}
+            "experience_bullets": {},
         }
         document_title = f"{company_name} - Tailored Resume - Data Engineer"
         resume_url = generate_resume_from_llm_payload(llm_payload, document_title=document_title)
@@ -84,19 +89,24 @@ def process_whatsapp_job_alert(
         extracted_jd=extracted_jd,
         helper_name=helper_name,
         resume_url=resume_url,
-        recruiter_name=recruiter_name
+        recruiter_name=recruiter_name,
     )
 
     model = genai.GenerativeModel(
         model_name=settings.GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json", "temperature": 0.2}
+        generation_config={"response_mime_type": "application/json", "temperature": 0.2},
     )
-    
+
     try:
         response = model.generate_content(email_prompt)
         email_data = json.loads(response.text)
-        subject = email_data.get("subject", f"Application for {job_title} – {company_name} – Sri Omkar D")
-        body = email_data.get("body", f"Hi {recruiter_name or 'Hiring Team'},\n\nI'm interested in the {job_title} role. My resume is here:\n{resume_url}\n\nBest,\nSri Omkar D")
+        subject = email_data.get(
+            "subject", f"Application for {job_title} – {company_name} – Sri Omkar D"
+        )
+        body = email_data.get(
+            "body",
+            f"Hi {recruiter_name or 'Hiring Team'},\n\nI'm interested in the {job_title} role. My resume is here:\n{resume_url}\n\nBest,\nSri Omkar D",
+        )
     except Exception as e:
         logger.error(f"Failed to generate dynamic email: {e}")
         subject = f"Application for {job_title} – {company_name} – Sri Omkar D"
@@ -110,7 +120,7 @@ def process_whatsapp_job_alert(
         job_title=job_title,
         resume_url=resume_url,
         recipient_email=recipient_email,
-        dynamic_email_content={"subject": subject, "body": body}
+        dynamic_email_content={"subject": subject, "body": body},
     )
 
     # 6. Log Audit Record in PostgreSQL with short_id
@@ -129,11 +139,13 @@ def process_whatsapp_job_alert(
             "recipient_email": recipient_email,
             "subject": subject,
             "cc_helper": resolved_helper_email,
-            "short_id": short_id
-        }
+            "short_id": short_id,
+        },
     )
 
-    logger.info(f"✨ Successfully processed alert! Outreach DB ID: {outreach_id} | Domain Code: {short_id}")
+    logger.info(
+        f"✨ Successfully processed alert! Outreach DB ID: {outreach_id} | Domain Code: {short_id}"
+    )
 
     return {
         "status": "success",
@@ -144,5 +156,5 @@ def process_whatsapp_job_alert(
         "recruiter_name": recruiter_name,
         "has_jd": has_jd,
         "resume_url": resume_url,
-        "gmail_draft_id": draft_result["draft_id"]
+        "gmail_draft_id": draft_result["draft_id"],
     }

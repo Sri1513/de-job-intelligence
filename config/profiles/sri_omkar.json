@@ -1,0 +1,19 @@
+{
+  "first_name": "Sri Omkar",
+  "last_name": "Dumpa",
+  "email": "sri.omkar.d@gmail.com",
+  "phone": "+1-951-545-2146",
+  "location": "Youngstown, OH, United States",
+  "linkedin": "https://linkedin.com/in/sri-omkar-58r4r4r8",
+  "website": "https://sriomkar.com",
+  "github": "https://github.com/Sri1513",
+  "resume_path": "config/resumes/default_resume.pdf",
+  "work_authorization": {
+    "authorized_in_us": true,
+    "requires_sponsorship_now_or_future": false
+  },
+  "custom_answers": {
+    "notice_period": "Immediate / 2 weeks",
+    "salary_expectations": "Open to market competitive rate"
+  }
+}

@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger("de-job-intelligence.scraper")
 
+
 def fetch_and_clean_job_page(url: str, timeout: int = 10) -> str:
     """
     Fetches raw HTML from a job posting URL, removes script/style tags,

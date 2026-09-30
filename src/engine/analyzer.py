@@ -37,6 +37,7 @@ Output MUST be strict JSON matching this schema:
 Do not wrap output in markdown codeblocks. Return valid JSON only.
 """
 
+
 def _clean_and_parse_json(text_content: str) -> dict[str, Any]:
     """Cleans markdown code fences and parses JSON response."""
     text_content = text_content.strip()
@@ -44,11 +45,14 @@ def _clean_and_parse_json(text_content: str) -> dict[str, Any]:
         return json.loads(text_content)
     except json.JSONDecodeError:
         pass
-    
+
     cleaned = text_content.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     return json.loads(cleaned)
 
-def evaluate_job_fit(job_description: str, category_slug: str = "data_engineering") -> dict[str, Any]:
+
+def evaluate_job_fit(
+    job_description: str, category_slug: str = "data_engineering"
+) -> dict[str, Any]:
     """
     Evaluates job requirements using Groq API as primary, with Gemini fallback.
     """
@@ -58,7 +62,7 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
             "key_matches": [],
             "missing_skills": [],
             "role_focus": "UNKNOWN",
-            "summary_rationale": "Job description insufficient for analysis."
+            "summary_rationale": "Job description insufficient for analysis.",
         }
 
     resume = get_cached_resume(category_slug)
@@ -78,20 +82,22 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
         try:
             client = OpenAI(
                 base_url="[https://api.groq.com/openai/v1](https://api.groq.com/openai/v1)",
-                api_key=groq_api_key
+                api_key=groq_api_key,
             )
             response = client.chat.completions.create(
                 model=settings.GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content}
+                    {"role": "user", "content": user_content},
                 ],
                 temperature=0.1,
-                timeout=30.0
+                timeout=30.0,
             )
             raw_response = response.choices[0].message.content.strip()
         except Exception as groq_exc:
-            logger.warning(f"⚠️ Groq primary evaluation failed in analyzer: {groq_exc}. Falling back to Gemini...")
+            logger.warning(
+                f"⚠️ Groq primary evaluation failed in analyzer: {groq_exc}. Falling back to Gemini..."
+            )
 
     # 2. Fallback: Gemini API
     if not raw_response:
@@ -111,7 +117,7 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
                     "key_matches": [],
                     "missing_skills": [],
                     "role_focus": "ERROR",
-                    "summary_rationale": "All AI providers failed. Groq & Gemini errors encountered."
+                    "summary_rationale": "All AI providers failed. Groq & Gemini errors encountered.",
                 }
         else:
             return {
@@ -119,7 +125,7 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
                 "key_matches": [],
                 "missing_skills": [],
                 "role_focus": "ERROR",
-                "summary_rationale": "Groq failed and no Gemini fallback API key is configured."
+                "summary_rationale": "Groq failed and no Gemini fallback API key is configured.",
             }
 
     try:
@@ -131,5 +137,5 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
             "key_matches": [],
             "missing_skills": [],
             "role_focus": "ERROR",
-            "summary_rationale": f"JSON parsing failed: {parse_exc}"
+            "summary_rationale": f"JSON parsing failed: {parse_exc}",
         }

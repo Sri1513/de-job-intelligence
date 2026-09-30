@@ -14,37 +14,31 @@ logger = logging.getLogger("de-job-intelligence.synthesis")
 STATIC_PROFILE = {
     "{{NAME}}": "Sri Omkar Dumpa",
     "{{CONTACT_BAR}}": "Email: sri.omkar.d@gmail.com | Phone: (951) 545-2146 | sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8",
-
     # Job 1 - Herc Rentals
     "{{JOB1_COMPANY}}": "Herc Rentals Inc.",
     "{{JOB1_LOCATION}}": "Bonita Springs, FL",
     "{{JOB1_TITLE}}": "Senior Data Engineer",
     "{{JOB1_DATES}}": "Nov 2024 – Present",
-
     # Job 2 - Blue Yonder
     "{{JOB2_COMPANY}}": "Blue Yonder",
     "{{JOB2_LOCATION}}": "Hyderabad, India",
     "{{JOB2_TITLE}}": "Data Engineer",
     "{{JOB2_DATES}}": "June 2022 – July 2023",
-
     # Job 3 - Accenture
     "{{JOB3_COMPANY}}": "Accenture",
     "{{JOB3_LOCATION}}": "Hyderabad, India",
     "{{JOB3_TITLE}}": "Data Engineer",
     "{{JOB3_DATES}}": "Jan 2020 – June 2022",
-
     # Job 4 - Thomson Reuters
     "{{JOB4_COMPANY}}": "Thomson Reuters",
     "{{JOB4_LOCATION}}": "Hyderabad, India",
     "{{JOB4_TITLE}}": "ETL Developer",
     "{{JOB4_DATES}}": "June 2016 – Sep 2019",
-
     # Education
     "{{EDU1_DEGREE}}": "Master of Science in Information Technology",
     "{{EDU1_YEAR}}": "2024",
     "{{EDU1_INSTITUTION}}": "California Baptist University",
     "{{EDU1_LOCATION}}": "Riverside, CA",
-
     "{{EDU2_DEGREE}}": "Bachelor of Technology in Computer Science",
     "{{EDU2_YEAR}}": "2016",
     "{{EDU2_INSTITUTION}}": "JNTUK",
@@ -129,7 +123,14 @@ def parse_experience_text(raw_exp: Any) -> List[str]:
             cleaned = clean_text(line)
             if cleaned and not any(
                 h in cleaned.lower()
-                for h in ["rentals", "yonder", "accenture", "reuters", "experience", "professional experience"]
+                for h in [
+                    "rentals",
+                    "yonder",
+                    "accenture",
+                    "reuters",
+                    "experience",
+                    "professional experience",
+                ]
             ):
                 bullets.append(cleaned)
     return bullets
@@ -184,7 +185,11 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     replacements["{{SUMMARY}}"] = clean_text(summary)
 
     # 2. Technical Skills Matrix
-    raw_skills = dynamic_data.get("technical_skills") or dynamic_data.get("skills") or dynamic_data.get("skills_text")
+    raw_skills = (
+        dynamic_data.get("technical_skills")
+        or dynamic_data.get("skills")
+        or dynamic_data.get("skills_text")
+    )
     skills_map = parse_skills_text(raw_skills)
     replacements["{{SKILLS_CLOUD}}"] = skills_map["cloud"]
     replacements["{{SKILLS_BIGDATA}}"] = skills_map["bigdata"]
@@ -225,7 +230,9 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
                 j4 = v
 
     if not any([j1, j2, j3, j4]):
-        raw_list = exp_dict if isinstance(exp_dict, list) else dynamic_data.get("experience_bullets")
+        raw_list = (
+            exp_dict if isinstance(exp_dict, list) else dynamic_data.get("experience_bullets")
+        )
         all_parsed = parse_experience_text(raw_list)
         if len(all_parsed) >= 25:
             j1 = all_parsed[0:8]
@@ -233,7 +240,7 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
             j3 = all_parsed[16:25]
             j4 = all_parsed[25:33]
         elif len(all_parsed) > 0:
-            j1 = all_parsed[0:min(len(all_parsed), 8)]
+            j1 = all_parsed[0 : min(len(all_parsed), 8)]
 
     job_configs = [
         ("JOB1", parse_experience_text(j1), 8),
@@ -264,6 +271,7 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     )
 
     return replacements
+
 
 def map_resume_placeholders(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     """

@@ -17,9 +17,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
 
+
 # --- Environment & Key Discovery ---
 def _load_env_keys():
     from pathlib import Path
+
     env_file = Path(__file__).resolve().parents[2] / ".env"
     if env_file.exists():
         for line in env_file.read_text(encoding="utf-8").splitlines():
@@ -31,25 +33,27 @@ def _load_env_keys():
                 if k not in os.environ:
                     os.environ[k] = v
 
+
 _load_env_keys()
 
 
 class GeminiKeyRotator:
     """Manages a pool of Gemini API keys, automatically rotating on 429 quota exhaustion."""
+
     def __init__(self):
         _load_env_keys()
         discovered_keys = []
-        
+
         raw_keys = os.getenv("GEMINI_API_KEYS", "")
         if raw_keys:
             discovered_keys.extend([k.strip() for k in raw_keys.split(",") if k.strip()])
-            
+
         for i in range(1, 10):
             var_name = "GEMINI_API_KEY" if i == 1 else f"GEMINI_API_KEY_{i}"
             k = os.getenv(var_name)
             if k and k.strip() and k.strip() not in discovered_keys:
                 discovered_keys.append(k.strip())
-                
+
         if not discovered_keys and os.getenv("GOOGLE_API_KEY"):
             discovered_keys.append(os.getenv("GOOGLE_API_KEY").strip())
 
@@ -83,6 +87,7 @@ class GeminiKeyRotator:
         response = model.generate_content(prompt)
         return response.text.strip()
 
+
 rotator = GeminiKeyRotator()
 
 EVAL_PROMPT = """You are an executive technical recruiter evaluating Data Engineering and DevOps positions.
@@ -114,6 +119,7 @@ Return a STRICT JSON object (no markdown, no backticks):
 }}
 """
 
+
 def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[str, Any]:
     """Evaluates job via Groq first; falls back to Gemini key rotation pool if Groq fails."""
     prompt = EVAL_PROMPT.format(
@@ -121,7 +127,7 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
         job_id=job["job_id"],
         title=job.get("title", "Unknown"),
         company=job.get("company", "Unknown"),
-        description=job.get("description", "")[:4000]
+        description=job.get("description", "")[:4000],
     )
 
     groq_api_key = os.getenv("GROQ_API_KEY")
@@ -130,22 +136,21 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
     # 1. Try Primary: Groq API
     if groq_api_key:
         try:
-            client = OpenAI(
-                base_url="https://api.groq.com/openai/v1",
-                api_key=groq_api_key
-            )
+            client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_api_key)
             response = client.chat.completions.create(
                 model=settings.GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": EVAL_PROMPT},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
-                timeout=30.0
+                timeout=30.0,
             )
             raw_response = response.choices[0].message.content.strip()
         except Exception as e:
-            logger.warning(f"Groq evaluation failed for {job['job_id']}: {e}. Switching to Gemini fallback...")
+            logger.warning(
+                f"Groq evaluation failed for {job['job_id']}: {e}. Switching to Gemini fallback..."
+            )
 
     # 2. Fallback: Gemini Key Pool
     if not raw_response:
@@ -158,10 +163,14 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
             except Exception as ge:
                 err_msg = str(ge).lower()
                 if "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
-                    logger.warning(f"Quota exhausted on Gemini key {rotator.current_idx + 1}. Rotating...")
+                    logger.warning(
+                        f"Quota exhausted on Gemini key {rotator.current_idx + 1}. Rotating..."
+                    )
                     rotated = rotator.rotate_key()
                     if not rotated:
-                        raise RuntimeError("All Gemini API keys in pool exhausted their quota.") from ge
+                        raise RuntimeError(
+                            "All Gemini API keys in pool exhausted their quota."
+                        ) from ge
                 else:
                     logger.warning(f"Gemini fallback attempt failed: {ge}")
                     rotated = rotator.rotate_key()
@@ -176,12 +185,13 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
         raw_response = raw_response.strip("`").replace("json\n", "", 1).strip()
     return json.loads(raw_response)
 
+
 def run_backfill_batch(
     limit: int = 5,
     job_ids: Optional[List[str]] = None,
     job_category: str = "data_engineering",
     *args,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """Processes pending or failed jobs using Groq primary with Gemini fallback."""
     resume_text = get_cached_resume(job_category)
@@ -196,7 +206,7 @@ def run_backfill_batch(
                     FROM saved_jobs
                     WHERE job_id = ANY(%s);
                     """,
-                    (job_ids,)
+                    (job_ids,),
                 )
             else:
                 cur.execute(
@@ -212,16 +222,18 @@ def run_backfill_batch(
                     ORDER BY saved_at DESC NULLS LAST
                     LIMIT %s;
                     """,
-                    (limit,)
+                    (limit,),
                 )
             for r in cur.fetchall():
-                jobs_to_process.append({
-                    "job_id": r["job_id"] if isinstance(r, dict) else r[0],
-                    "title": r["title"] if isinstance(r, dict) else r[1],
-                    "company": r["company"] if isinstance(r, dict) else r[2],
-                    "description": r["description"] if isinstance(r, dict) else r[3],
-                    "metadata": (r["metadata"] if isinstance(r, dict) else r[4]) or {}
-                })
+                jobs_to_process.append(
+                    {
+                        "job_id": r["job_id"] if isinstance(r, dict) else r[0],
+                        "title": r["title"] if isinstance(r, dict) else r[1],
+                        "company": r["company"] if isinstance(r, dict) else r[2],
+                        "description": r["description"] if isinstance(r, dict) else r[3],
+                        "metadata": (r["metadata"] if isinstance(r, dict) else r[4]) or {},
+                    }
+                )
 
     if not jobs_to_process:
         return {"status": "success", "message": "No pending jobs found.", "processed": 0}
@@ -242,18 +254,20 @@ def run_backfill_batch(
                 job_description=job.get("description", ""),
                 job_title=job.get("title", ""),
                 job_category=job_category,
-                ai_extracted_skills=tech_stack
+                ai_extracted_skills=tech_stack,
             )
 
             metadata = job["metadata"]
-            metadata.update({
-                "matched_skills": score_data.get("matched_skills", []),
-                "missing_skills": score_data.get("missing_skills", []),
-                "semantic_match": score_data.get("semantic_match", 0),
-                "skill_match": score_data.get("skill_match", 0),
-                "ai_extracted_skills": tech_stack,
-                "tailoring_signals": tailoring_signals
-            })
+            metadata.update(
+                {
+                    "matched_skills": score_data.get("matched_skills", []),
+                    "missing_skills": score_data.get("missing_skills", []),
+                    "semantic_match": score_data.get("semantic_match", 0),
+                    "skill_match": score_data.get("skill_match", 0),
+                    "ai_extracted_skills": tech_stack,
+                    "tailoring_signals": tailoring_signals,
+                }
+            )
 
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
@@ -275,8 +289,8 @@ def run_backfill_batch(
                             ai_data.get("employment_type", "Unknown"),
                             ai_data.get("sponsorship", "Not Mentioned"),
                             json.dumps(metadata),
-                            job_id
-                        )
+                            job_id,
+                        ),
                     )
                     conn.commit()
 
@@ -294,7 +308,7 @@ def run_backfill_batch(
                 with conn.cursor() as cur:
                     cur.execute(
                         "UPDATE saved_jobs SET ai_status = 'FAILED', ai_error = %s WHERE job_id = %s;",
-                        (str(e), job_id)
+                        (str(e), job_id),
                     )
                     conn.commit()
             results.append({"job_id": job_id, "status": "FAILED", "error": str(e)})
@@ -304,5 +318,5 @@ def run_backfill_batch(
         "attempted": len(jobs_to_process),
         "successful": successful,
         "failed": failed,
-        "results": results
+        "results": results,
     }

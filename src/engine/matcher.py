@@ -17,9 +17,18 @@ _SKILLS_CACHE: dict[str, dict] = {}
 _RESUME_CACHE: dict[str, str] = {}
 
 SOFT_SKILLS_BLACKLIST = {
-    "communication", "teamwork", "leadership", "problem solving",
-    "problem-solving", "analytical skills", "interpersonal skills",
-    "agile", "scrum", "fast-paced", "detail-oriented", "self-starter"
+    "communication",
+    "teamwork",
+    "leadership",
+    "problem solving",
+    "problem-solving",
+    "analytical skills",
+    "interpersonal skills",
+    "agile",
+    "scrum",
+    "fast-paced",
+    "detail-oriented",
+    "self-starter",
 }
 
 
@@ -100,7 +109,7 @@ def load_skills_registry(job_category: str = "data_engineering") -> dict:
                 "role_keywords": ["engineer", "developer", "architect"],
                 "core_techs": ["python", "sql", "spark", "pyspark", "databricks"],
                 "supporting_tools": ["aws", "azure", "docker", "airflow", "snowflake", "dbt"],
-                "experience_keywords": ["5+", "6+", "7+", "8+"]
+                "experience_keywords": ["5+", "6+", "7+", "8+"],
             }
 
     return _SKILLS_CACHE[slug]
@@ -115,7 +124,7 @@ def calculate_local_fit_score(
     job_description: str = "",
     job_title: str = "",
     job_category: str = "data_engineering",
-    ai_extracted_skills: Optional[List[str]] = None
+    ai_extracted_skills: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Computes a hybrid fit score:
@@ -144,7 +153,7 @@ def calculate_local_fit_score(
             "missing_skills": all_tracked_skills,
             "matched_core": [],
             "matched_supporting": [],
-            "missing_core": core_techs
+            "missing_core": core_techs,
         }
 
     job_lower = (job_description or "").lower()
@@ -161,12 +170,14 @@ def calculate_local_fit_score(
 
     # 2. Skill gap extraction (strip soft-skills noise)
     clean_ai_skills = [
-        s.lower().strip() for s in (ai_extracted_skills or [])
+        s.lower().strip()
+        for s in (ai_extracted_skills or [])
         if s.lower().strip() not in SOFT_SKILLS_BLACKLIST
     ]
 
     regex_matched_tracked = [
-        skill for skill in all_tracked_skills
+        skill
+        for skill in all_tracked_skills
         if re.search(rf"\b{re.escape(skill)}\b", job_lower, re.IGNORECASE)
     ]
 
@@ -175,14 +186,12 @@ def calculate_local_fit_score(
         job_demanded_skills = all_tracked_skills[:5]
 
     matched_skills = [
-        skill for skill in job_demanded_skills
+        skill
+        for skill in job_demanded_skills
         if re.search(rf"\b{re.escape(skill)}\b", resume_lower, re.IGNORECASE)
     ]
 
-    missing_skills = [
-        skill for skill in job_demanded_skills
-        if skill not in matched_skills
-    ]
+    missing_skills = [skill for skill in job_demanded_skills if skill not in matched_skills]
 
     skill_coverage = len(matched_skills) / len(job_demanded_skills) if job_demanded_skills else 0.6
     tech_score = skill_coverage * 65
@@ -215,7 +224,7 @@ def calculate_local_fit_score(
         "missing_skills": missing_skills,
         "matched_core": [t for t in core_techs if t.lower() in matched_skills],
         "matched_supporting": [s for s in supporting_tools if s.lower() in matched_skills],
-        "missing_core": [t for t in core_techs if t.lower() not in matched_skills]
+        "missing_core": [t for t in core_techs if t.lower() not in matched_skills],
     }
 
 
@@ -223,12 +232,12 @@ def calculate_match_score(
     job_description: str,
     category_slug: str = "data_engineering",
     job_title: str = "",
-    resume_text: str = ""
+    resume_text: str = "",
 ) -> Dict[str, Any]:
     """Compatibility wrapper exposing the newer signature while utilizing the full engine."""
     return calculate_local_fit_score(
         resume_text=resume_text,
         job_description=job_description,
         job_title=job_title,
-        job_category=category_slug
+        job_category=category_slug,
     )

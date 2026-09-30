@@ -13,49 +13,65 @@ TARGET_KEYWORDS = [
     "snowflake",
     "analytics engineer",
     "big data",
-    "python developer"
+    "python developer",
 ]
+
 
 def parse_linkedin_plain_text_email(body_text: str) -> list:
     """Parses LinkedIn alert blocks separated by dashed lines into structured job records."""
     extracted_jobs = []
     chunks = body_text.split("---------------------------------------------------------")
-    
+
     for chunk in chunks:
-        lines = [line.strip() for line in chunk.split('\n') if line.strip()]
+        lines = [line.strip() for line in chunk.split("\n") if line.strip()]
         if len(lines) < 3:
             continue
-            
+
         title = lines[0]
         company = lines[1]
         location = "United States"
         job_url = "https://www.linkedin.com"
-        
-        if any(bad in title.lower() for bad in ["your job alert", "new jobs", "see all jobs", "unsubscribe", "this email was"]):
+
+        if any(
+            bad in title.lower()
+            for bad in [
+                "your job alert",
+                "new jobs",
+                "see all jobs",
+                "unsubscribe",
+                "this email was",
+            ]
+        ):
             continue
-            
+
         for line in lines[2:]:
             if line.startswith("View job:"):
                 url_parts = line.split("View job:")
                 if len(url_parts) > 1:
                     job_url = url_parts[1].strip()
-            elif not any(badge in line.lower() for badge in ["company alum", "actively hiring", "apply with", "view job"]):
+            elif not any(
+                badge in line.lower()
+                for badge in ["company alum", "actively hiring", "apply with", "view job"]
+            ):
                 if location == "United States":
                     location = line
 
-        extracted_jobs.append({
-            "title": title,
-            "company": company if company else "Unknown",
-            "location": location if location else "United States",
-            "job_url": job_url,
-            "description": f"Extracted via email alert for {title} at {company}",
-            "employment_type": "Unknown",
-            "sponsorship": "Not Mentioned",
-            "source": "Email Alert",
-            "date_posted": datetime.now().strftime("%Y-%m-%d")
-        })
-        
+        extracted_jobs.append(
+            {
+                "title": title,
+                "company": company if company else "Unknown",
+                "location": location if location else "United States",
+                "job_url": job_url,
+                "description": f"Extracted via email alert for {title} at {company}",
+                "employment_type": "Unknown",
+                "sponsorship": "Not Mentioned",
+                "source": "Email Alert",
+                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+            }
+        )
+
     return extracted_jobs
+
 
 def fetch_jobs_from_email(limit: int = 10) -> list:
     """Connects to Gmail securely, pulls LinkedIn job alerts from multiple senders, and filters locally."""
@@ -67,10 +83,7 @@ def fetch_jobs_from_email(limit: int = 10) -> list:
         return []
 
     all_jobs = []
-    target_senders = [
-        "jobalerts-noreply@linkedin.com",
-        "jobs-noreply@linkedin.com"
-    ]
+    target_senders = ["jobalerts-noreply@linkedin.com", "jobs-noreply@linkedin.com"]
 
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
@@ -105,7 +118,7 @@ def fetch_jobs_from_email(limit: int = 10) -> list:
                     subject = subject_header[0]
                     if isinstance(subject, bytes):
                         subject = subject.decode(subject_header[1] or "utf-8", errors="ignore")
-                    
+
                     if not any(kw in subject.lower() for kw in TARGET_KEYWORDS):
                         continue
 

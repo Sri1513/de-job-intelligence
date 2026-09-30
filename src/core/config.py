@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+
 class Settings(BaseSettings):
     # Database
     DB_HOST: str = "localhost"
@@ -31,13 +32,22 @@ class Settings(BaseSettings):
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"
 
+    # Active profile selection
+    PROFILE_NAME: str = "sri_omkar"
+    PROFILE_PATH: Path | None = None
+
+    @property
+    def active_profile_path(self) -> Path:
+        if self.PROFILE_PATH:
+            return Path(self.PROFILE_PATH)
+        return BASE_DIR / "config" / "profiles" / f"{self.PROFILE_NAME}.json"
+
     model_config = SettingsConfigDict(
-        env_file=str(BASE_DIR / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore"
+        env_file=str(BASE_DIR / ".env"), env_file_encoding="utf-8", extra="ignore"
     )
 
     def get_template_id(self) -> str:
         return self.RESUME_TEMPLATE_DOC_ID or self.GOOGLE_DOCS_TEMPLATE_ID
+
 
 settings = Settings()

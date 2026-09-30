@@ -14,10 +14,11 @@ from src.engine.pipeline_utils import generate_domain_short_id  # <--- Imported 
 logger = logging.getLogger("de-job-intelligence.engine")
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
+
 def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
     """
     Parses a raw WhatsApp message to extract company, role, recipient email,
-    clean recruiter first name, whether a Job Description is present, 
+    clean recruiter first name, whether a Job Description is present,
     and appends the domain-derived short ID.
     """
     prompt = f"""
@@ -47,11 +48,11 @@ def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
             generation_config={
                 "response_mime_type": "application/json",
                 "temperature": 0.1,
-            }
+            },
         )
         response = model.generate_content(prompt)
         data = json.loads(response.text)
-        
+
         # Python safeguard: ensure recruiter_name is strictly the first name
         raw_name = data.get("recruiter_name")
         if raw_name:
@@ -60,8 +61,7 @@ def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
 
         # Automatically call the imported short ID generator using the email domain
         data["short_id"] = generate_domain_short_id(
-            data.get("recipient_email"), 
-            data.get("company_name")
+            data.get("recipient_email"), data.get("company_name")
         )
 
         return data
@@ -75,5 +75,5 @@ def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
             "recipient_email": None,
             "recruiter_name": None,
             "extracted_jd": whatsapp_text,
-            "short_id": generate_domain_short_id(None, fallback_company)
+            "short_id": generate_domain_short_id(None, fallback_company),
         }

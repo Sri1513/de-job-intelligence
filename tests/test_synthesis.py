@@ -11,9 +11,7 @@ def test_resume_mapper_fallback_resilience():
             "bigdata": "Apache Spark, Kafka",
         },
         "experience": {
-            "herc": [
-                "Built **high-throughput** telemetry pipelines using Databricks Streaming."
-            ]
+            "herc": ["Built **high-throughput** telemetry pipelines using Databricks Streaming."]
             # blue_yonder, accenture, thomson_reuters completely omitted
         },
     }

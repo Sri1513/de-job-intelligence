@@ -6,6 +6,7 @@ from src.core.database import get_db_connection
 
 logger = logging.getLogger("de-job-intelligence.pipeline_utils")
 
+
 def get_unprocessed_jobs(limit: int = 10) -> list[dict[str, Any]]:
     """
     Fetches records needing evaluation (PENDING or FAILED status).
@@ -27,11 +28,9 @@ def get_unprocessed_jobs(limit: int = 10) -> list[dict[str, Any]]:
         cur.execute(query, (limit,))
         return [dict(row) for row in cur.fetchall()]
 
+
 def update_job_evaluation(
-    job_id: str,
-    match_score: int,
-    ai_notes: str,
-    ai_status: str = "PROCESSED"
+    job_id: str, match_score: int, ai_notes: str, ai_status: str = "PROCESSED"
 ) -> bool:
     """
     Commits LLM evaluation scores and notes back to PostgreSQL.
@@ -53,11 +52,12 @@ def update_job_evaluation(
         logger.error(f"Failed to update job {job_id}: {exc}")
         return False
 
+
 def mark_job_failed(job_id: str, error_message: str) -> None:
     """Marks a job as FAILED to prevent worker deadlocks."""
     update_job_evaluation(
         job_id=job_id,
         match_score=0,
         ai_notes=f"Evaluation Error: {error_message}",
-        ai_status="FAILED"
+        ai_status="FAILED",
     )

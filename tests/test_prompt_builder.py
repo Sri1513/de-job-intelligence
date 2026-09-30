@@ -13,12 +13,14 @@ def test_configurations_load():
     assert "role_title" in role_config
     assert "skills_schema" in role_config
 
+
 def test_resume_caching():
     resume_text = get_cached_resume("data_engineering")
     assert len(resume_text) > 500
     assert "Candidate Profile & Matching Criteria" in resume_text
     assert "Core Technical Skills" in resume_text
     assert "California Baptist University" in resume_text
+
 
 def test_skill_matcher():
     sample_jd = "Looking for a Senior Data Engineer with strong Python, Apache Spark, and Snowflake experience."

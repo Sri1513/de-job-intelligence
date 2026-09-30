@@ -21,17 +21,19 @@ def test_get_unprocessed_jobs(mock_get_db):
     assert results[0]["job_id"] == "job_1"
     assert results[0]["ai_status"] == "PENDING"
 
+
 @patch("src.workers.backfill_worker.get_unprocessed_jobs")
 @patch("src.workers.backfill_worker.evaluate_job_fit")
 @patch("src.workers.backfill_worker.update_job_evaluation")
 def test_run_backfill_batch_flow(mock_update, mock_eval, mock_get_jobs):
     mock_get_jobs.return_value = [
-        {"job_id": "job_101", "description": "Senior Data Engineer with Spark", "job_category": "data_engineering"}
+        {
+            "job_id": "job_101",
+            "description": "Senior Data Engineer with Spark",
+            "job_category": "data_engineering",
+        }
     ]
-    mock_eval.return_value = {
-        "match_score": 90,
-        "summary_rationale": "High relevance match."
-    }
+    mock_eval.return_value = {"match_score": 90, "summary_rationale": "High relevance match."}
     mock_update.return_value = True
 
     summary = run_backfill_batch(batch_size=1, delay_seconds=0.0)
@@ -40,8 +42,5 @@ def test_run_backfill_batch_flow(mock_update, mock_eval, mock_get_jobs):
     assert summary["processed_count"] == 1
     assert summary["failed_count"] == 0
     mock_update.assert_called_once_with(
-        job_id="job_101",
-        match_score=90,
-        ai_notes="High relevance match.",
-        ai_status="PROCESSED"
+        job_id="job_101", match_score=90, ai_notes="High relevance match.", ai_status="PROCESSED"
     )

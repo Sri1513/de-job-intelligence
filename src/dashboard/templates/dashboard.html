@@ -30,6 +30,11 @@
                 </button>
             </div>
             <div class="flex items-center gap-2">
+                <!-- 🛡️ Autonomous Application Review Gate Link with Dynamic Badge -->
+                <a href="/applications" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-cyan-600 text-white shadow-sm hover:bg-cyan-500 flex items-center gap-2">
+                    🛡️ Review Gate
+                    <span id="review-gate-badge" class="hidden px-2 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 animate-pulse">0</span>
+                </a>
                 <a href="/whatsapp-alerts" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-amber-600 text-white shadow-sm hover:bg-amber-500 flex items-center gap-2">
                     📱 WhatsApp Alerts
                 </a>
@@ -414,7 +419,7 @@
                     </td>
                     <td class="p-4 align-top">
                         <div class="flex flex-col gap-2">
-                            <!-- Multi-location buttons -->
+                            <!-- Multi-location / Direct Link button -->
                             ${(job.metadata && job.metadata.locations && job.metadata.locations.length > 0) 
                                 ? job.metadata.locations.map(loc => `
                                     <a href="${loc.url}" target="_blank" 
@@ -424,21 +429,24 @@
                                 `).join('')
                                 : `
                                     <a href="${job.job_url || '#'}" target="_blank" 
-                                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm text-center">
-                                    Apply ↗
+                                        class="bg-blue-600/80 hover:bg-blue-500 text-white font-medium px-2.5 py-1 rounded-md text-xs transition-colors shadow-sm inline-flex items-center gap-1 justify-center">
+                                    📍 Link ↗
                                     </a>
                                 `
                             }
                             
-                            <!-- Mark Applied / Revert Status Button with Guard -->
+                            <!-- Autonomous Apply Trigger / Status Button -->
+                            ${getAutoApplyButtonHtml(job)}
+
+                            <!-- Manual Applied Fallback Button with Guard -->
                             ${!isApplied ? `
                                 <button onclick="updateJobStatus('${job.job_id}', 'applied')" 
-                                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm text-center">
+                                    class="bg-indigo-600/40 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-200 hover:text-white font-medium px-3 py-1 rounded-lg text-xs transition-colors text-center">
                                     ✓ Mark Applied
                                 </button>
                             ` : `
                                 <button onclick="confirmRevert('${job.job_id}')" 
-                                    class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium px-3 py-1.5 rounded-lg text-xs transition-colors text-center">
+                                    class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium px-3 py-1 rounded-lg text-xs transition-colors text-center">
                                     ↺ Revert Status
                                 </button>
                             `}
@@ -457,8 +465,103 @@
             }
         }
 
+        function getAutoApplyButtonHtml(job) {
+            const status = (job.apply_status || '').toUpperCase();
+            if (status === 'QUEUED') {
+                return `
+                    <span class="bg-amber-950/70 border border-amber-500/50 text-amber-300 font-semibold px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 animate-pulse">
+                        ⏳ Queued
+                    </span>
+                `;
+            } else if (status === 'PENDING_REVIEW') {
+                return `
+                    <a href="/applications" class="bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-300 font-semibold px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm">
+                        🛡️ In Review ↗
+                    </a>
+                `;
+            } else if (status === 'SUBMITTED') {
+                return `
+                    <span class="bg-emerald-950/60 border border-emerald-600/40 text-emerald-300 font-medium px-2.5 py-1 rounded-lg text-xs flex items-center justify-center gap-1">
+                        ✓ Auto-Applied
+                    </span>
+                `;
+            } else if (status === 'FAILED') {
+                return `
+                    <button onclick="triggerAutoApply('${job.job_id}', this)" 
+                        class="bg-rose-950/60 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-medium px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
+                        title="Application failed. Click to re-queue.">
+                        ⚠️ Retry Apply
+                    </button>
+                `;
+            } else {
+                return `
+                    <button onclick="triggerAutoApply('${job.job_id}', this)" 
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg text-xs transition-all shadow-sm flex items-center justify-center gap-1.5">
+                        ⚡ Auto-Apply
+                    </button>
+                `;
+            }
+        }
+
+        async function triggerAutoApply(jobId, btnElement) {
+            btnElement.disabled = true;
+            const originalContent = btnElement.innerHTML;
+            btnElement.innerHTML = `
+                <span class="inline-flex items-center gap-1">
+                    <svg class="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    Queuing...
+                </span>
+            `;
+            try {
+                const res = await fetch('/api/applications/queue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_id: jobId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const job = allJobs.find(j => j.job_id === jobId);
+                    if (job) job.apply_status = 'QUEUED';
+                    filterAndRenderJobs();
+                    updateReviewGateCount();
+                } else {
+                    alert('Failed to queue application: ' + (data.error || 'Unknown error'));
+                    btnElement.disabled = false;
+                    btnElement.innerHTML = originalContent;
+                }
+            } catch (err) {
+                console.error('Error queueing application:', err);
+                alert('Network error while queueing application.');
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalContent;
+            }
+        }
+
+        async function updateReviewGateCount() {
+            try {
+                const res = await fetch('/api/applications?status=ALL');
+                const data = await res.json();
+                const badge = document.getElementById('review-gate-badge');
+                const pendingCount = (data.stats && data.stats.pending) || 0;
+                if (badge) {
+                    if (pendingCount > 0) {
+                        badge.innerText = pendingCount;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch review gate count:', err);
+            }
+        }
+
         document.addEventListener("DOMContentLoaded", () => {
             fetchJobs('data_engineering');
+            updateReviewGateCount();
         });
     </script>
 </body>

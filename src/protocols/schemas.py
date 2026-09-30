@@ -52,10 +52,26 @@ MCP_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "category": {"type": "string", "description": "e.g., data_engineering, devops", "default": "data_engineering"},
-                "min_score": {"type": "integer", "description": "Minimum heuristic or AI fit score", "default": 0},
-                "status": {"type": "string", "description": "PENDING, PROCESSED, or FAILED", "default": "ALL"},
-                "limit": {"type": "integer", "description": "Maximum records to return", "default": 10},
+                "category": {
+                    "type": "string",
+                    "description": "e.g., data_engineering, devops",
+                    "default": "data_engineering",
+                },
+                "min_score": {
+                    "type": "integer",
+                    "description": "Minimum heuristic or AI fit score",
+                    "default": 0,
+                },
+                "status": {
+                    "type": "string",
+                    "description": "PENDING, PROCESSED, or FAILED",
+                    "default": "ALL",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum records to return",
+                    "default": 10,
+                },
             },
         },
     },
@@ -74,51 +90,95 @@ MCP_TOOLS = [
         },
     },
     {
-    "name": "run_batch_ingestion",
-    "description": "Scrapes and stages new jobs from LinkedIn/Indeed, prevents duplicates, computes zero-cost local TF-IDF match scores, and saves to PostgreSQL.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "search_term": {"type": "string", "default": "Data Engineer Spark"},
-            "location": {"type": "string", "default": "Remote"},
-            "results_wanted": {"type": "integer", "default": 5},
-            "hours_old": {"type": "integer", "default": 48},
-            "job_category": {"type": "string", "default": "data_engineering"}
-        }
-    }
-},
-{
-    "name": "process_job_alert_draft",
-    "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, tailors/generates the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer', creates a dynamic Gmail draft with the helper in CC, and logs everything to PostgreSQL.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "whatsapp_text": {"type": "string", "description": "The raw text snippet copied from WhatsApp."},
-            "helper_name": {"type": "string", "description": "The name of the helper or referrer."},
-            "helper_email": {"type": "string", "description": "Email of the helper (required if new helper)."},
-            "helper_company": {"type": "string", "description": "Company where the helper works."}
-        },
-        "required": ["whatsapp_text", "helper_name"]
-    }
-},
-# src/protocols/schemas.py (Add this entry to MCP_TOOLS)
-{
-    "name": "run_email_pipeline",
-    "description": "Pulls recent LinkedIn job alerts from Gmail, widens metadata via JobSpy scraper, stages raw jobs with deduplication, and triggers Gemini AI evaluation.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of email alerts to fetch from inbox.",
-                "default": 5
+        "name": "run_batch_ingestion",
+        "description": "Scrapes and stages new jobs from LinkedIn/Indeed, prevents duplicates, computes zero-cost local TF-IDF match scores, and saves to PostgreSQL.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "search_term": {"type": "string", "default": "Data Engineer Spark"},
+                "location": {"type": "string", "default": "Remote"},
+                "results_wanted": {"type": "integer", "default": 5},
+                "hours_old": {"type": "integer", "default": 48},
+                "job_category": {"type": "string", "default": "data_engineering"},
             },
-            "job_category": {
-                "type": "string",
-                "description": "Target job category (e.g., data_engineering, devops).",
-                "default": "data_engineering"
-            }
-        }
-    }
-}
+        },
+    },
+    {
+        "name": "process_job_alert_draft",
+        "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, tailors/generates the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer', creates a dynamic Gmail draft with the helper in CC, and logs everything to PostgreSQL.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "whatsapp_text": {
+                    "type": "string",
+                    "description": "The raw text snippet copied from WhatsApp.",
+                },
+                "helper_name": {
+                    "type": "string",
+                    "description": "The name of the helper or referrer.",
+                },
+                "helper_email": {
+                    "type": "string",
+                    "description": "Email of the helper (required if new helper).",
+                },
+                "helper_company": {
+                    "type": "string",
+                    "description": "Company where the helper works.",
+                },
+            },
+            "required": ["whatsapp_text", "helper_name"],
+        },
+    },
+    # src/protocols/schemas.py (Add this entry to MCP_TOOLS)
+    {
+        "name": "run_email_pipeline",
+        "description": "Pulls recent LinkedIn job alerts from Gmail, widens metadata via JobSpy scraper, stages raw jobs with deduplication, and triggers Gemini AI evaluation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of email alerts to fetch from inbox.",
+                    "default": 5,
+                },
+                "job_category": {
+                    "type": "string",
+                    "description": "Target job category (e.g., data_engineering, devops).",
+                    "default": "data_engineering",
+                },
+            },
+        },
+    },
+    # Add to the tools manifest list in src/protocols/schemas.py:
+    {
+        "name": "queue_job_for_application",
+        "description": "Flags a saved job as QUEUED for autonomous browser-based autofill.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The unique identifier of the job in saved_jobs.",
+                }
+            },
+            "required": ["job_id"],
+        },
+    },
+    {
+        "name": "run_application_worker",
+        "description": "Executes the browser agent to autofill queued job applications and gate them for human review.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of queued jobs to process in this batch (default: 3).",
+                },
+                "headless": {
+                    "type": "boolean",
+                    "description": "Whether to run browser in headless mode (default: true).",
+                },
+            },
+        },
+    },
 ]

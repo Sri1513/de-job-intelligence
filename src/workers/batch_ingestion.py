@@ -8,6 +8,7 @@ from src.ingestion.dice_client import DiceJobClient
 
 logger = logging.getLogger("de-job-intelligence.batch_ingestion")
 
+
 def persist_jobs(jobs: list[dict[str, Any]], category_slug: str = "data_engineering") -> int:
     """
     Inserts raw job records into saved_jobs.
@@ -43,13 +44,14 @@ def persist_jobs(jobs: list[dict[str, Any]], category_slug: str = "data_engineer
                     "job_url": job["job_url"],
                     "description": description,
                     "job_category": category_slug,
-                    "fit_score": str(scoring["score"])
+                    "fit_score": str(scoring["score"]),
                 }
                 cur.execute(insert_query, params)
                 inserted_count += 1
         conn.commit()
 
     return inserted_count
+
 
 def run_dice_ingestion(query: str = "Data Engineer", pages: int = 1) -> dict[str, Any]:
     """Runs a batch ingestion cycle from Dice."""
@@ -67,8 +69,9 @@ def run_dice_ingestion(query: str = "Data Engineer", pages: int = 1) -> dict[str
         "status": "completed",
         "query": query,
         "total_fetched": total_found,
-        "total_persisted": total_persisted
+        "total_persisted": total_persisted,
     }
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

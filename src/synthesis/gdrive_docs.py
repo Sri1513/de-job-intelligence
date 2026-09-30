@@ -18,7 +18,7 @@ logger = logging.getLogger("de-job-intelligence.synthesis")
 DEFAULT_SCOPES = [
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/gmail.compose"
+    "https://www.googleapis.com/auth/gmail.compose",
 ]
 
 
@@ -28,28 +28,41 @@ def get_google_credentials(scopes: List[str] = None) -> Credentials:
         scopes = DEFAULT_SCOPES
 
     creds = None
-    token_path = Path(settings.BASE_DIR) / "token.json" if hasattr(settings, "BASE_DIR") else Path("token.json")
-    creds_path = Path(settings.BASE_DIR) / "credentials.json" if hasattr(settings, "BASE_DIR") else Path("credentials.json")
+    token_path = (
+        Path(settings.BASE_DIR) / "token.json"
+        if hasattr(settings, "BASE_DIR")
+        else Path("token.json")
+    )
+    creds_path = (
+        Path(settings.BASE_DIR) / "credentials.json"
+        if hasattr(settings, "BASE_DIR")
+        else Path("credentials.json")
+    )
 
     if token_path.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(token_path), scopes)
         except Exception as e:
-            logger.warning(f"Existing token.json scope mismatch or invalid: {e}. Re-authenticating...")
+            logger.warning(
+                f"Existing token.json scope mismatch or invalid: {e}. Re-authenticating..."
+            )
             creds = None
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             from google.auth.transport.requests import Request
+
             try:
                 creds.refresh(Request())
             except Exception as e:
                 logger.warning(f"Failed to refresh token: {e}. Starting fresh auth flow...")
                 creds = None
-        
+
         if not creds:
             if not creds_path.exists():
-                raise FileNotFoundError(f"Missing {creds_path}. Place credentials.json in the project root.")
+                raise FileNotFoundError(
+                    f"Missing {creds_path}. Place credentials.json in the project root."
+                )
             flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), scopes)
             creds = flow.run_local_server(port=0)
 
@@ -64,22 +77,21 @@ def get_or_create_folder(drive_service, folder_name: str, parent_id: str = None)
     query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
-    
-    response = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-    files = response.get('files', [])
-    
+
+    response = (
+        drive_service.files().list(q=query, spaces="drive", fields="files(id, name)").execute()
+    )
+    files = response.get("files", [])
+
     if files:
-        return files[0]['id']
-    
-    folder_metadata = {
-        'name': folder_name,
-        'mimeType': 'application/vnd.google-apps.folder'
-    }
+        return files[0]["id"]
+
+    folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
-        folder_metadata['parents'] = [parent_id]
-        
-    folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
-    return folder.get('id')
+        folder_metadata["parents"] = [parent_id]
+
+    folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+    return folder.get("id")
 
 
 def parse_and_strip_markdown(raw_text: str) -> Tuple[str, List[str]]:
@@ -88,12 +100,12 @@ def parse_and_strip_markdown(raw_text: str) -> Tuple[str, List[str]]:
         return str(raw_text or ""), []
 
     bold_terms = []
-    for match in re.finditer(r'\*\*([^*]+)\*\*', raw_text):
+    for match in re.finditer(r"\*\*([^*]+)\*\*", raw_text):
         clean_match = match.group(1).strip()
         if len(clean_match) >= 2:
             bold_terms.append(clean_match)
 
-    cleaned_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', raw_text)
+    cleaned_text = re.sub(r"\*\*([^*]+)\*\*", r"\1", raw_text)
     return cleaned_text, bold_terms
 
 
@@ -158,26 +170,27 @@ def apply_semantic_bolding(
             occupied_ranges: List[Tuple[int, int]] = []
 
             for term in active_terms:
-                pattern = rf'(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])'
+                pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
                 for match in re.finditer(pattern, content_str, re.IGNORECASE):
                     s, e = match.start(), match.end()
                     if any(os <= s < oe or os < e <= oe for os, oe in occupied_ranges):
                         continue
 
                     occupied_ranges.append((s, e))
-                    requests.append({
-                        "updateTextStyle": {
-                            "range": {"startIndex": base_idx + s, "endIndex": base_idx + e},
-                            "textStyle": {"bold": True},
-                            "fields": "bold"
+                    requests.append(
+                        {
+                            "updateTextStyle": {
+                                "range": {"startIndex": base_idx + s, "endIndex": base_idx + e},
+                                "textStyle": {"bold": True},
+                                "fields": "bold",
+                            }
                         }
-                    })
+                    )
                     log_summary.append(f"[{current_section.upper()}] '{term}'")
 
     if requests:
         docs_service.documents().batchUpdate(
-            documentId=document_id,
-            body={"requests": requests}
+            documentId=document_id, body={"requests": requests}
         ).execute()
         print(f"[Purposeful Bolder] Successfully styled {len(requests)} entities.")
     else:
@@ -192,9 +205,15 @@ def create_tailored_document(
     bullet_terms: Dict[str, List[str]] = None,
 ) -> str:
     """Clones template, organizes into Drive folder structure, executes replacements, and bolds text."""
-    target_template = template_id or getattr(settings, "RESUME_TEMPLATE_DOC_ID", None) or getattr(settings, "GOOGLE_DOCS_TEMPLATE_ID", None)
+    target_template = (
+        template_id
+        or getattr(settings, "RESUME_TEMPLATE_DOC_ID", None)
+        or getattr(settings, "GOOGLE_DOCS_TEMPLATE_ID", None)
+    )
     if not target_template:
-        raise ValueError("Neither RESUME_TEMPLATE_DOC_ID nor GOOGLE_DOCS_TEMPLATE_ID is configured.")
+        raise ValueError(
+            "Neither RESUME_TEMPLATE_DOC_ID nor GOOGLE_DOCS_TEMPLATE_ID is configured."
+        )
 
     creds = get_google_credentials()
     drive_service = build("drive", "v3", credentials=creds)
@@ -207,27 +226,32 @@ def create_tailored_document(
     clean_file_name = "Sri Omkar - Data Engineer"
 
     master_folder_id = get_or_create_folder(drive_service, "Resumes and Cover Letters")
-    company_folder_id = get_or_create_folder(drive_service, company_name, parent_id=master_folder_id)
+    company_folder_id = get_or_create_folder(
+        drive_service, company_name, parent_id=master_folder_id
+    )
 
-    copied_file = drive_service.files().copy(
-        fileId=target_template,
-        body={
-            "name": clean_file_name,
-            "parents": [company_folder_id]
-        },
-    ).execute()
+    copied_file = (
+        drive_service.files()
+        .copy(
+            fileId=target_template,
+            body={"name": clean_file_name, "parents": [company_folder_id]},
+        )
+        .execute()
+    )
     new_doc_id = copied_file.get("id")
 
     print(f"[Drive] Placed resume in 'Resumes and Cover Letters/{company_name}/{clean_file_name}'")
 
     requests: List[Dict[str, Any]] = []
     for placeholder, text in replacements.items():
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": placeholder, "matchCase": True},
-                "replaceText": text or "",
+        requests.append(
+            {
+                "replaceAllText": {
+                    "containsText": {"text": placeholder, "matchCase": True},
+                    "replaceText": text or "",
+                }
             }
-        })
+        )
 
     docs_service.documents().batchUpdate(
         documentId=new_doc_id,
@@ -252,8 +276,7 @@ def generate_resume_from_llm_payload(llm_payload: Dict[str, Any], document_title
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
     (logs_dir / "last_tailoring_payload.json").write_text(
-        json.dumps(llm_payload, indent=2, default=str),
-        encoding="utf-8"
+        json.dumps(llm_payload, indent=2, default=str), encoding="utf-8"
     )
 
     raw_summary = llm_payload.get("summary") or llm_payload.get("professional_summary") or ""
@@ -262,11 +285,7 @@ def generate_resume_from_llm_payload(llm_payload: Dict[str, Any], document_title
     bullet_terms: Dict[str, List[str]] = {}
     cleaned_exp: Dict[str, List[str]] = {}
 
-    raw_exp = (
-        llm_payload.get("experience_bullets")
-        or llm_payload.get("experience")
-        or {}
-    )
+    raw_exp = llm_payload.get("experience_bullets") or llm_payload.get("experience") or {}
 
     if isinstance(raw_exp, dict):
         for role_key, b_list in raw_exp.items():
@@ -288,11 +307,8 @@ def generate_resume_from_llm_payload(llm_payload: Dict[str, Any], document_title
     replacements = build_replacement_payload(cleaned_payload)
 
     (logs_dir / "last_styling_terms.json").write_text(
-        json.dumps({
-            "summary_terms": summary_terms,
-            "bullet_terms": bullet_terms
-        }, indent=2),
-        encoding="utf-8"
+        json.dumps({"summary_terms": summary_terms, "bullet_terms": bullet_terms}, indent=2),
+        encoding="utf-8",
     )
 
     return create_tailored_document(

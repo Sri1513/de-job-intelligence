@@ -25,10 +25,10 @@ def build_whatsapp_outreach_prompt(
     extracted_jd: str,
     helper_name: str,
     resume_url: str,
-    recruiter_name: str = None
+    recruiter_name: str = None,
 ) -> str:
     """
-    Builds a precise, structured prompt for Gemini to draft a human-like email 
+    Builds a precise, structured prompt for Gemini to draft a human-like email
     matching Sri Omkar's exact format from the reference screenshot.
     """
     salutation_target = f"Hi {recruiter_name}," if recruiter_name else "Hi Hiring Team,"
@@ -39,7 +39,7 @@ def build_whatsapp_outreach_prompt(
     TARGET CONTEXT:
     - Company: {company_name}
     - Job Title: {job_title}
-    - Recruiter First Name: {recruiter_name or 'Unknown'}
+    - Recruiter First Name: {recruiter_name or "Unknown"}
     - Details/Requirements: {extracted_jd}
     - Resume Link: {resume_url}
 
@@ -169,8 +169,14 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
     category = (job.get("job_category") or "").lower()
     title_lower = (job.get("title") or "").lower()
     devops_keywords = [
-        "devops", "cloud", "infrastructure", "platform",
-        "sre", "reliability", "kubernetes", "terraform",
+        "devops",
+        "cloud",
+        "infrastructure",
+        "platform",
+        "sre",
+        "reliability",
+        "kubernetes",
+        "terraform",
     ]
 
     if "devops" in category or any(kw in title_lower for kw in devops_keywords):
