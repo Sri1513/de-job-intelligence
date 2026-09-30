@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    name: Run Linters & Test Suite
     runs-on: ubuntu-latest
 
     env:
@@ -41,3 +42,31 @@ jobs:
       - name: Run Test Suite (Pytest)
         run: |
           pytest tests/ -v
+
+  deploy:
+    name: Deploy to Oracle Cloud VM
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into VM and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/projects/de-job-intelligence
+            
+            echo "Pulling latest code from main..."
+            git pull origin main
+            
+            echo "Rebuilding and restarting updated containers..."
+            docker compose up -d --build
+            
+            echo "Cleaning dangling images..."
+            docker image prune -f
+            
+            echo "Deployment finished successfully!"
