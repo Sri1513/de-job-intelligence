@@ -7,32 +7,55 @@ name = "de-job-intelligence"
 version = "1.0.0"
 description = "Autonomous Job Intelligence & Agentic Document Synthesis Engine via Model Context Protocol (MCP)"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
+    # Scraping & Ingestion
     "beautifulsoup4",
+    "python-jobspy",
+    "requests",
+
+    # AI & MCP Protocols
     "fastmcp",
     "google-generativeai",
     "google-api-python-client",
     "google-auth",
     "google-auth-oauthlib",
-    "jinja2",
+    "langchain-google-genai>=2.0.0",
     "openai",
+
+    # Protobuf / gRPC Resolver Anchor (Prevents Protobuf 6 conflict between gRPC and google-generativeai)
+    "protobuf<6.0.0,>=4.25.0",
+    "grpcio-status<1.75.0",
+
+    # Scoring & Data
     "pandas",
-    "psycopg[binary,pool]",
+    "scikit-learn",
+
+    # Browser Automation
+    "browser-use>=0.13.10",
+    "playwright>=1.49.0",
+
+    # Database & Connection Pooling
+    "psycopg[binary,pool]>=3.2.0",
+    "psycopg-pool>=3.2.0",
+
+    # Web Dashboard & APIs
+    "starlette>=0.45.0",
+    "uvicorn[standard]>=0.34.0",
+    "jinja2>=3.1.5",
+
+    # Config & Validation
+    "pydantic>=2.10.0",
     "pydantic-settings",
     "python-dotenv",
-    "python-jobspy",
-    "requests",
-    "scikit-learn",
-    "starlette",
-    "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.1.0",
     "pytest-asyncio>=0.23.0",
-    "ruff>=0.3.0"
+    "ruff>=0.3.0",
+    "deptry>=0.25.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -42,19 +65,18 @@ include = ["src*"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+exclude = [
+    ".git",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "venv",
+    "__pycache__",
+]
 
 [tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes (unused imports, undefined vars)
-    "I",    # isort (import sorting)
-]
-ignore = [
-    "E501", # Line too long
-    "W291", # Trailing whitespace (common in multiline SQL queries)
-    "W293", # Blank line contains whitespace
-]
+select = ["E", "W", "F", "I"]
+ignore = ["E501", "W291", "W293"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
@@ -64,3 +86,18 @@ ignore = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# Deptry Configuration: Suppress CLI commands, test tools, and dynamic libs
+[tool.deptry.per_rule_ignores]
+DEP002 = [
+    "uvicorn",
+    "jinja2",
+    "pandas",
+    "langchain-google-genai",
+    "protobuf",
+    "grpcio-status",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "deptry",
+]

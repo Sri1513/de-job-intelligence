@@ -25,3 +25,19 @@ logs/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Authentication & Credentials
+config/auth_states/*
+!config/auth_states/.gitkeep
+token.json
+credentials.json
+
+# Local runtime data & screenshots
+data/*
+!data/.gitkeep
+!data/screenshots/.gitkeep
+
+
+build/
+dist/
+*.egg-info/
