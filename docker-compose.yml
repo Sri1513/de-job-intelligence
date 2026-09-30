@@ -26,6 +26,8 @@ services:
     volumes:
       - ./credentials.json:/app/credentials.json:ro
       - ./token.json:/app/token.json:rw
+      - ./data/screenshots:/app/data/screenshots
+      - ./config:/app/config
     restart: unless-stopped
 
   dashboard:
@@ -37,6 +39,26 @@ services:
       - "5001:5001"
     depends_on:
       - postgres
+    volumes:
+      - ./data/screenshots:/app/data/screenshots:ro
+      - ./config:/app/config:ro
+    restart: unless-stopped
+  
+  apply-worker:
+    build: .
+    container_name: de-job-apply-worker
+    command: python -m src.workers.apply_worker
+    shm_size: "2gb"
+    env_file: .env
+    environment:
+      - DB_HOST=de-job-db
+      - HEADLESS=true
+      - CHROME_PATH=/usr/bin/chromium
+    depends_on:
+      - postgres
+    volumes:
+      - ./data/screenshots:/app/data/screenshots:rw
+      - ./config:/app/config:rw
     restart: unless-stopped
 
 volumes:
