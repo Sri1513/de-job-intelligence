@@ -9,7 +9,7 @@ from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_job_tailoring_prompt
-from src.workers.apply_worker import process_apply_queue
+#from src.workers.apply_worker import process_apply_queue
 from src.workers.backfill_worker import run_backfill_batch
 from src.workers.email_pipeline import run_email_pipeline
 
@@ -135,6 +135,8 @@ async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
         return await asyncio.to_thread(_queue_job_for_apply, job_id)
 
     elif tool_name == "run_application_worker":
+        # Lazy import so protocol tests and basic MCP health endpoints don't require browser-use
+        from src.workers.apply_worker import process_apply_queue
         limit = int(arguments.get("limit", arguments.get("max_jobs", 3)))
         headless = arguments.get("headless", True)
         if isinstance(headless, str):
