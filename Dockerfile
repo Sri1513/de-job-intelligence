@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 1. Install build tools, native ARM64 Chromium, and all required GUI/X11 rendering libraries
+# 1. Install build tools, native ARM64 Chromium, and system libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -31,15 +31,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Symlink chromium to google-chrome so browser-use's watchdog picks it up on step 1
+# 2. Symlink chromium to google-chrome for browser-use autodetection
 RUN ln -s /usr/bin/chromium /usr/bin/google-chrome
 
-# 3. Install project dependencies
-COPY requirements.txt pyproject.toml ./
+# 3. Install project dependencies directly from pyproject.toml
+COPY pyproject.toml README.md* ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir .
 
-# 4. Initialize Playwright dependencies for Chromium
+# 4. Initialize Playwright Chromium browser
 RUN playwright install chromium
 
 # 5. Copy project source

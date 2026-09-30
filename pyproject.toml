@@ -13,6 +13,7 @@ dependencies = [
     "beautifulsoup4",
     "python-jobspy",
     "requests",
+    "numpy<2.0.0,>=1.26.3",          # Anchors numpy for python-jobspy
 
     # AI & MCP Protocols
     "fastmcp",
@@ -22,9 +23,7 @@ dependencies = [
     "google-auth-oauthlib",
     "langchain-google-genai>=2.0.0",
     "openai",
-
-    # Protobuf / gRPC Resolver Anchor (Prevents Protobuf 6 conflict between gRPC and google-generativeai)
-    "protobuf<6.0.0,>=4.25.0",
+    "protobuf<6.0.0,>=4.25.0",       # Prevents Protobuf 6 conflict with google-generativeai
     "grpcio-status<1.75.0",
 
     # Scoring & Data
@@ -43,6 +42,7 @@ dependencies = [
     "starlette>=0.45.0",
     "uvicorn[standard]>=0.34.0",
     "jinja2>=3.1.5",
+    "python-multipart>=0.0.9",
 
     # Config & Validation
     "pydantic>=2.10.0",
@@ -65,14 +65,6 @@ include = ["src*"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-exclude = [
-    ".git",
-    ".pytest_cache",
-    "build",
-    "dist",
-    "venv",
-    "__pycache__",
-]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
@@ -87,7 +79,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
 
-# Deptry Configuration: Suppress CLI commands, test tools, and dynamic libs
 [tool.deptry.per_rule_ignores]
 DEP002 = [
     "uvicorn",
@@ -100,4 +91,5 @@ DEP002 = [
     "pytest-asyncio",
     "ruff",
     "deptry",
+    "numpy",
 ]
