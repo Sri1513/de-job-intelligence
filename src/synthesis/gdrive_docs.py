@@ -3,10 +3,12 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Tuple
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+
 from src.core.config import settings
 from src.synthesis.resume_mapper import build_replacement_payload
 

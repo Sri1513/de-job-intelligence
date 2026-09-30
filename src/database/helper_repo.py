@@ -1,6 +1,7 @@
 # src/database/helper_repo.py
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from src.core.database import get_db_connection
 
 logger = logging.getLogger("de-job-intelligence.database")

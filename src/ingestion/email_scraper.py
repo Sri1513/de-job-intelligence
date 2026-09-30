@@ -1,10 +1,9 @@
 # src/ingestion/email_scraper.py
-import imaplib
 import email
-from email.header import decode_header
+import imaplib
 import os
-import re
 from datetime import datetime
+from email.header import decode_header
 
 TARGET_KEYWORDS = [
     "data engineer",
@@ -23,7 +22,7 @@ def parse_linkedin_plain_text_email(body_text: str) -> list:
     chunks = body_text.split("---------------------------------------------------------")
     
     for chunk in chunks:
-        lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+        lines = [line.strip() for line in chunk.split('\n') if line.strip()]
         if len(lines) < 3:
             continue
             

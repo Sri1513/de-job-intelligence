@@ -115,8 +115,10 @@ async def api_update_job_notes(request: Request) -> JSONResponse:
 
             meta = row.get("metadata") if isinstance(row, dict) else row[0]
             if isinstance(meta, str):
-                try: meta = json.loads(meta)
-                except Exception: meta = {}
+                try: 
+                    meta = json.loads(meta)
+                except Exception: 
+                    meta = {}
             elif not isinstance(meta, dict):
                 meta = {}
 
@@ -344,8 +346,10 @@ async def api_skills_demographics(request: Request) -> JSONResponse:
             for row in rows:
                 meta = row.get("metadata") or {}
                 if isinstance(meta, str):
-                    try: meta = json.loads(meta)
-                    except Exception: meta = {}
+                    try: 
+                        meta = json.loads(meta)
+                    except Exception: 
+                        meta = {}
                 
                 skills = meta.get("ai_extracted_skills") or []
                 for skill in skills:

@@ -2,13 +2,13 @@
 import asyncio
 import logging
 from typing import Any, Dict
+
 from src.core.database import get_db_connection, get_job_by_id
-from src.synthesis.prompt_builder import build_job_tailoring_prompt
-from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
-from src.workers.backfill_worker import run_backfill_batch
-from src.engine.ingestion import run_batch_ingestion_workflow
-from src.synthesis.prompt_builder import build_tailoring_prompt
 from src.engine.alert_pipeline import process_whatsapp_job_alert
+from src.engine.ingestion import run_batch_ingestion_workflow
+from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
+from src.synthesis.prompt_builder import build_job_tailoring_prompt, build_tailoring_prompt
+from src.workers.backfill_worker import run_backfill_batch
 from src.workers.email_pipeline import run_email_pipeline
 
 logger = logging.getLogger("de-job-intelligence.dispatcher")

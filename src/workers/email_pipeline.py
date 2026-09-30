@@ -1,13 +1,14 @@
 # src/workers/email_pipeline.py
 import logging
 from datetime import datetime
+
 from dotenv import load_dotenv
 
-from src.ingestion.email_scraper import fetch_jobs_from_email
-from src.engine.scraper import fetch_scraped_jobs
 from src.core.database import get_db_connection
-from src.engine.pipeline_utils import stage_raw_jobs
 from src.engine.evaluator import run_backfill_batch
+from src.engine.pipeline_utils import stage_raw_jobs
+from src.engine.scraper import fetch_scraped_jobs
+from src.ingestion.email_scraper import fetch_jobs_from_email
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
     enriched_jobs = []
     retrieval_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    logger.info(f"\n🌉 Step 2: Widening JobSpy search results and filtering sponsored/unqualified noise...")
+    logger.info("\n🌉 Step 2: Widening JobSpy search results and filtering sponsored/unqualified noise...")
     for item in email_jobs:
         title = item.get("title", "Data Engineer")
         company = item.get("company", "Unknown")
@@ -76,7 +77,7 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
             qualified_job["retrieved_at"] = retrieval_timestamp
             enriched_jobs.append(qualified_job)
         else:
-            logger.info(f"   -> ⚠️ No clean match in widened pool. Preserving email alert metadata & direct URL.")
+            logger.info("   -> ⚠️ No clean match in widened pool. Preserving email alert metadata & direct URL.")
             item["retrieved_at"] = retrieval_timestamp
             enriched_jobs.append(item)
             

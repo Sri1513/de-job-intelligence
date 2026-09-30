@@ -1,11 +1,13 @@
 # src/engine/pipeline_utils.py
-import re
-import json
 import hashlib
+import json
+import re
 from datetime import datetime
 from typing import Optional
-from src.engine.matcher import calculate_local_fit_score
+
 from src.core.utils import get_cached_resume
+from src.engine.matcher import calculate_local_fit_score
+
 
 def generate_domain_short_id(email: Optional[str], company_name: Optional[str] = None) -> str:
     """

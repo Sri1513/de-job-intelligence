@@ -1,10 +1,11 @@
 # src/engine/ingestion.py
 import logging
+
 from src.core.database import get_db_connection
+from src.engine.evaluator import run_backfill_batch
+from src.engine.pipeline_utils import stage_raw_jobs
 from src.engine.scraper import fetch_scraped_jobs
 from src.ingestion.dice_client import DiceJobClient
-from src.engine.pipeline_utils import stage_raw_jobs
-from src.engine.evaluator import run_backfill_batch
 
 logger = logging.getLogger(__name__)
 

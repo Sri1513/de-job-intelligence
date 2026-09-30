@@ -1,7 +1,6 @@
 # src/engine/scraper.py
-import json
 import logging
-import pandas as pd
+
 from jobspy import scrape_jobs
 
 logger = logging.getLogger(__name__)

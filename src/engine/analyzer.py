@@ -2,15 +2,16 @@
 import json
 import logging
 import os
-from typing import Any
 import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
+from typing import Any
 
-from openai import OpenAI
 import google.generativeai as genai
+from openai import OpenAI
 
 from src.core.config import settings
 from src.core.utils import get_cached_resume
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 logger = logging.getLogger("de-job-intelligence.analyzer")
 
@@ -110,7 +111,7 @@ def evaluate_job_fit(job_description: str, category_slug: str = "data_engineerin
                     "key_matches": [],
                     "missing_skills": [],
                     "role_focus": "ERROR",
-                    "summary_rationale": f"All AI providers failed. Groq & Gemini errors encountered."
+                    "summary_rationale": "All AI providers failed. Groq & Gemini errors encountered."
                 }
         else:
             return {

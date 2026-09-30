@@ -1,18 +1,19 @@
 # src/engine/evaluator.py
-import os
-import time
 import json
 import logging
-from typing import List, Dict, Any, Optional
+import os
+import time
 import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
+from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
 import google.generativeai as genai
-from src.core.config import settings
+from openai import OpenAI
 
+from src.core.config import settings
 from src.core.database import get_db_connection
 from src.engine.matcher import calculate_local_fit_score, get_cached_resume
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
 

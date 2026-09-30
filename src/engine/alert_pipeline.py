@@ -1,15 +1,17 @@
 # src/engine/alert_pipeline.py
-import logging
 import json
+import logging
+from typing import Any, Dict, Optional
+
 import google.generativeai as genai
-from typing import Dict, Any, Optional
+
+from src.core.config import settings
+from src.core.database import get_db_connection
 from src.database.helper_repo import get_or_create_helper, log_outreach_event
 from src.engine.email_analyzer import parse_whatsapp_alert_metadata
-from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.gmail_client import create_gmail_draft
-from src.core.database import get_db_connection
-from src.core.config import settings
+from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 
 logger = logging.getLogger("de-job-intelligence.engine")
 genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -60,7 +62,7 @@ def process_whatsapp_job_alert(
     if has_jd:
         logger.info("✨ Rich JD detected: Triggering custom RAG resume tailoring pipeline...")
         llm_payload = {
-            "professional_summary": f"Senior Data Engineer with 7+ years of experience designing scalable data platforms and lakehouse architectures across AWS and PySpark.",
+            "professional_summary": "Senior Data Engineer with 7+ years of experience designing scalable data platforms and lakehouse architectures across AWS and PySpark.",
             "technical_skills": {
                 "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks, Delta Lake",
                 "languages": "Python, SQL, Bash",

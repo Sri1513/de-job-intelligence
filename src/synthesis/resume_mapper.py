@@ -5,8 +5,8 @@ Parses granular schemas, company-keyed dictionaries, and monolithic text blocks.
 Guarantees all 66 Google Doc template placeholders are resolved without leaving unrendered tokens.
 """
 
-import re
 import logging
+import re
 from typing import Any, Dict, List
 
 logger = logging.getLogger("de-job-intelligence.synthesis")

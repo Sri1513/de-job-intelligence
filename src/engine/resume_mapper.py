@@ -5,7 +5,6 @@ guaranteeing that template placeholders are always populated.
 """
 
 import re
-import json
 
 STATIC_PROFILE = {
     "{{NAME}}": "Sri Omkar Dumpa",

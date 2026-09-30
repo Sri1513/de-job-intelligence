@@ -2,10 +2,12 @@
 import base64
 import logging
 import re
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any
+from email.mime.text import MIMEText
+from typing import Any, Dict, Optional
+
 from googleapiclient.discovery import build
+
 from src.synthesis.gdrive_docs import get_google_credentials
 
 logger = logging.getLogger("de-job-intelligence.synthesis")

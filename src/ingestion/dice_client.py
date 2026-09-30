@@ -2,6 +2,7 @@
 import json
 import logging
 from typing import Any
+
 from fastmcp import Client
 
 logger = logging.getLogger("de-job-intelligence.dice_client")

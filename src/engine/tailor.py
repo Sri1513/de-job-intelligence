@@ -1,7 +1,6 @@
-from pathlib import Path
 import json
 import logging
-from typing import Any, Dict
+from pathlib import Path
 
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_tailoring_prompt

@@ -2,7 +2,7 @@
 import json
 import logging
 import warnings
-from typing import Dict, Any
+from typing import Any, Dict
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
