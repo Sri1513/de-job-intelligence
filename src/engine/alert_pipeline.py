@@ -3,7 +3,8 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from src.core.config import settings
 from src.core.database import get_db_connection
@@ -14,7 +15,9 @@ from src.synthesis.gmail_client import create_gmail_draft
 from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 
 logger = logging.getLogger("de-job-intelligence.engine")
-genai.configure(api_key=settings.GEMINI_API_KEY)
+
+# Initialize official google-genai client
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 DEFAULT_MASTER_RESUME_URL = (
     "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
@@ -67,7 +70,10 @@ def process_whatsapp_job_alert(
     if has_jd:
         logger.info("✨ Rich JD detected: Triggering custom RAG resume tailoring pipeline...")
         llm_payload = {
-            "professional_summary": "Senior Data Engineer with 7+ years of experience designing scalable data platforms and lakehouse architectures across AWS and PySpark.",
+            "professional_summary": (
+                "Senior Data Engineer with 7+ years of experience designing scalable "
+                "data platforms and lakehouse architectures across AWS and PySpark."
+            ),
             "technical_skills": {
                 "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks, Delta Lake",
                 "languages": "Python, SQL, Bash",
@@ -92,13 +98,15 @@ def process_whatsapp_job_alert(
         recruiter_name=recruiter_name,
     )
 
-    model = genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json", "temperature": 0.2},
-    )
-
     try:
-        response = model.generate_content(email_prompt)
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=email_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+            ),
+        )
         email_data = json.loads(response.text)
         subject = email_data.get(
             "subject", f"Application for {job_title} – {company_name} – Sri Omkar D"
@@ -110,7 +118,11 @@ def process_whatsapp_job_alert(
     except Exception as e:
         logger.error(f"Failed to generate dynamic email: {e}")
         subject = f"Application for {job_title} – {company_name} – Sri Omkar D"
-        body = f"Hi {recruiter_name or 'Hiring Team'},\n\nI am writing to express my interest in the {job_title} position. You can review my background here:\n{resume_url}\n\nBest regards,\nSri Omkar D"
+        body = (
+            f"Hi {recruiter_name or 'Hiring Team'},\n\n"
+            f"I am writing to express my interest in the {job_title} position. "
+            f"You can review my background here:\n{resume_url}\n\nBest regards,\nSri Omkar D"
+        )
 
     # 5. Create Gmail Draft (Helper in CC, absent from body)
     draft_result = create_gmail_draft(
@@ -132,7 +144,7 @@ def process_whatsapp_job_alert(
         resume_doc_url=resume_url,
         gmail_draft_id=draft_result["draft_id"],
         recruiter_name=recruiter_name,
-        short_id=short_id,  # <--- Passed into repository storage
+        short_id=short_id,
         metadata={
             "whatsapp_raw": whatsapp_text,
             "has_jd": has_jd,
