@@ -50,7 +50,6 @@ def fetch_scraped_jobs(
             location=location,
             results_wanted=results_wanted,
             is_remote=is_remote,
-            linkedin_fetch_description=True,
         )
 
         if df is not None and not df.empty:
@@ -63,7 +62,6 @@ def fetch_scraped_jobs(
                     parsed_dates = pd.to_datetime(
                         df["date_posted"], errors="coerce", utc=True
                     ).dt.date
-                    # Keep rows matching cutoff or rows without a parsed date
                     df = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
                 except Exception as filter_err:
                     logger.warning(f"Could not apply date filter: {filter_err}")
