@@ -37,42 +37,49 @@ def fetch_scraped_jobs(
     is_remote: bool = True,
     site_name: list = None,
 ) -> list:
-    """Scrapes job listings from LinkedIn, Indeed, and Google Jobs."""
+    """
+    Scrapes job listings site-by-site to isolate datacenter IP 401/403 blocks.
+    Defaults to cloud-resilient providers first.
+    """
     if site_name is None:
-        site_name = ["linkedin", "indeed"]
+        # Resilient platforms first; linkedin last
+        site_name = ["indeed", "glassdoor", "zip_recruiter", "linkedin"]
 
-    logger.info(f"🌐 Scraping {results_wanted} listings for '{search_term}' in '{location}'...")
+    collected_jobs = []
 
-    try:
-        df = scrape_jobs(
-            site_name=site_name,
-            search_term=search_term,
-            location=location,
-            results_wanted=results_wanted,
-            is_remote=is_remote,
-        )
+    for site in site_name:
+        logger.info(f"🌐 Scraping {results_wanted} listings from '{site}' for '{search_term}'...")
+        try:
+            df = scrape_jobs(
+                site_name=[site],
+                search_term=search_term,
+                location=location,
+                results_wanted=results_wanted,
+                is_remote=is_remote,
+            )
 
-        if df is not None and not df.empty:
+            if df is None or df.empty:
+                logger.info(f"No listings returned from '{site}'.")
+                continue
+
             # Post-filter by hours_old if date_posted exists in DataFrame
             if hours_old and "date_posted" in df.columns:
                 try:
-                    cutoff_date = (
-                        datetime.now(timezone.utc) - timedelta(hours=hours_old)
-                    ).date()
+                    cutoff_date = (datetime.now(timezone.utc) - timedelta(hours=hours_old)).date()
                     parsed_dates = pd.to_datetime(
                         df["date_posted"], errors="coerce", utc=True
                     ).dt.date
                     df = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
                 except Exception as filter_err:
-                    logger.warning(f"Could not apply date filter: {filter_err}")
+                    logger.warning(f"Could not apply date filter for '{site}': {filter_err}")
 
             records = df.fillna("N/A").to_dict(orient="records")
-            clean_records = [
-                j for j in records if not is_unwanted_job(str(j.get("title", "")))
-            ]
-            return clean_records
+            clean_records = [j for j in records if not is_unwanted_job(str(j.get("title", "")))]
+            collected_jobs.extend(clean_records)
+            logger.info(f"✅ Extracted {len(clean_records)} jobs from '{site}'.")
 
-    except Exception as e:
-        logger.error(f"Scraper encountered an error: {e}")
+        except Exception as site_err:
+            # 401/403 errors are captured per provider without halting ingestion
+            logger.warning(f"⚠️ Provider '{site}' failed ({site_err}). Proceeding to next source.")
 
-    return []
+    return collected_jobs
