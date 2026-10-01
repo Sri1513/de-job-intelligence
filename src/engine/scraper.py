@@ -1,6 +1,8 @@
 # src/engine/scraper.py
 import logging
+from datetime import datetime, timedelta, timezone
 
+import pandas as pd
 from jobspy import scrape_jobs
 
 logger = logging.getLogger(__name__)
@@ -47,15 +49,31 @@ def fetch_scraped_jobs(
             search_term=search_term,
             location=location,
             results_wanted=results_wanted,
-            hours_old=hours_old,
             is_remote=is_remote,
             linkedin_fetch_description=True,
         )
+
         if df is not None and not df.empty:
+            # Post-filter by hours_old if date_posted exists in DataFrame
+            if hours_old and "date_posted" in df.columns:
+                try:
+                    cutoff_date = (
+                        datetime.now(timezone.utc) - timedelta(hours=hours_old)
+                    ).date()
+                    parsed_dates = pd.to_datetime(
+                        df["date_posted"], errors="coerce", utc=True
+                    ).dt.date
+                    # Keep rows matching cutoff or rows without a parsed date
+                    df = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
+                except Exception as filter_err:
+                    logger.warning(f"Could not apply date filter: {filter_err}")
+
             records = df.fillna("N/A").to_dict(orient="records")
-            # Filter out blacklisted non-engineering roles
-            clean_records = [j for j in records if not is_unwanted_job(str(j.get("title", "")))]
+            clean_records = [
+                j for j in records if not is_unwanted_job(str(j.get("title", "")))
+            ]
             return clean_records
+
     except Exception as e:
         logger.error(f"Scraper encountered an error: {e}")
 
