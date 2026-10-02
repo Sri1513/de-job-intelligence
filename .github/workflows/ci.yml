@@ -61,8 +61,11 @@ jobs:
             set -e
             cd /opt/projects/de-job-intelligence
             
-            echo "Pulling latest code from main..."
-            git pull origin main
+            echo "Fetching and syncing with origin/main..."
+            git fetch origin main
+            # Overwrite tracked files with origin/main while preserving untracked files/env
+            git checkout -f origin/main
+            git merge origin/main
             
             echo "Rebuilding and restarting updated containers..."
             docker compose up -d --build
