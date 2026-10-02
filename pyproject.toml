@@ -11,7 +11,9 @@ requires-python = ">=3.11"
 dependencies = [
     # Scraping & Ingestion
     "beautifulsoup4",
-    "python-jobspy>=1.1.82",
+    # Pulls directly from GitHub main where markdownify is compatible with browser-use
+    "python-jobspy @ https://github.com/speedyapply/JobSpy/archive/refs/heads/main.tar.gz",
+    "browser-use>=0.13.10",
     "requests",
     "numpy<2.0.0,>=1.26.3",          # Anchors numpy for python-jobspy
 
