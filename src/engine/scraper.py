@@ -44,7 +44,7 @@ def fetch_scraped_jobs(
                 location=location,
                 results_wanted=results_wanted,
                 is_remote=is_remote,
-                country_indeed="usa" if site == "indeed" else None,
+                country_indeed="usa",  # Always pass 'usa' so JobSpy never encounters None.strip()
             )
 
             if df is None or df.empty:
@@ -79,7 +79,8 @@ def fetch_scraped_jobs(
 
         except Exception as site_err:
             logger.warning(
-                f"⚠️ Provider '{site}' failed: {site_err}. Proceeding to next source."
+                f"⚠️ Provider '{site}' failed: {site_err}. Proceeding to next source.",
+                exc_info=True,
             )
 
     return collected_jobs
