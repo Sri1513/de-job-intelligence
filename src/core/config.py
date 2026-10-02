@@ -1,6 +1,7 @@
 # src/core/config.py
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -14,13 +15,20 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"
     DB_PASSWORD: str = ""
 
-    # AI Engine
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    # AI Engine (accepts either GEMINI_API_KEY or GOOGLE_API_KEY from .env)
+    GEMINI_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    )
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
 
-    # Google Workspace Template IDs (dual-aliased for backwards compatibility)
+    # Browser Automation Engine
+    HEADLESS: bool = True
+    CHROME_PATH: str = "/usr/bin/chromium"
+
+    # Google Workspace Template IDs
     RESUME_TEMPLATE_DOC_ID: str = ""
     GOOGLE_DOCS_TEMPLATE_ID: str = ""
 
@@ -31,6 +39,10 @@ class Settings(BaseSettings):
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"
+    DATA_DIR: Path = BASE_DIR / "data"
+    AUTH_STATES_DIR: Path = BASE_DIR / "config" / "auth_states"
+    RESUMES_DIR: Path = BASE_DIR / "config" / "resumes"
+    SCREENSHOTS_DIR: Path = BASE_DIR / "data" / "screenshots"
 
     # Active profile selection
     PROFILE_NAME: str = "sri_omkar"
@@ -43,7 +55,9 @@ class Settings(BaseSettings):
         return BASE_DIR / "config" / "profiles" / f"{self.PROFILE_NAME}.json"
 
     model_config = SettingsConfigDict(
-        env_file=str(BASE_DIR / ".env"), env_file_encoding="utf-8", extra="ignore"
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     def get_template_id(self) -> str:
