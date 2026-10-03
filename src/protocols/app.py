@@ -19,6 +19,7 @@ from starlette.routing import Route
 from src.core.config import settings
 from src.protocols.auth import BearerAuthMiddleware
 from src.protocols.dispatcher import dispatch_tool_call
+from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
 
 logger = logging.getLogger("de-job-intelligence.mcp")
@@ -137,6 +138,7 @@ routes = [
     Route("/health", health_check, methods=["GET"]),
     Route("/", handle_rpc, methods=["POST"]),
     Route("/rpc", handle_rpc, methods=["POST"]),
+    *oauth_routes,
 ]
 
 
