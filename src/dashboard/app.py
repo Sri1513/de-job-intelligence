@@ -265,7 +265,12 @@ async def api_update_job_notes(request: Request) -> JSONResponse:
 
 
 async def api_update_job_status(request: Request) -> JSONResponse:
-    """Updates job status to 'applied' and records current timestamp in applied_at."""
+    """Marks a job applied (or another status) from the dashboard.
+
+    Writes BOTH the legacy display column `status` (read by dashboard UI) and
+    the worker state-machine column `apply_status` so the two can never
+    disagree. See MIGRATION_NOTES.md.
+    """
     try:
         data = await request.json()
         job_id = data.get("job_id")
@@ -274,13 +279,15 @@ async def api_update_job_status(request: Request) -> JSONResponse:
         with get_db_connection() as conn, conn.cursor() as cur:
             if new_status.lower() == "applied":
                 cur.execute(
-                    "UPDATE saved_jobs SET status = %s, applied_at = CURRENT_TIMESTAMP WHERE job_id = %s;",
+                    "UPDATE saved_jobs SET status = %s, apply_status = 'SUBMITTED', "
+                    "applied_at = CURRENT_TIMESTAMP WHERE job_id = %s;",
                     (new_status, job_id),
                 )
             else:
                 cur.execute(
-                    "UPDATE saved_jobs SET status = %s, applied_at = NULL WHERE job_id = %s;",
-                    (new_status, job_id),
+                    "UPDATE saved_jobs SET status = %s, apply_status = %s, "
+                    "applied_at = NULL WHERE job_id = %s;",
+                    (new_status, new_status.upper(), job_id),
                 )
             conn.commit()
         return JSONResponse(
@@ -515,6 +522,21 @@ async def api_queue_application(request: Request) -> JSONResponse:
 
         if not job_id:
             return JSONResponse({"success": False, "error": "job_id is required"}, status_code=400)
+
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT apply_status FROM saved_jobs WHERE job_id = %s;", (job_id,))
+            row = cur.fetchone()
+            current = row.get("apply_status") if row else None
+
+        if current == "SUBMITTED":
+            return JSONResponse(
+                {"success": False, "error": "Job already submitted; refusing to re-queue."},
+                status_code=409,
+            )
+        if current in ("QUEUED", "IN_PROGRESS"):
+            return JSONResponse(
+                {"success": True, "message": f"Job {job_id} is already queued."}
+            )
 
         query = """
             UPDATE saved_jobs 
