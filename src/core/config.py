@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     MCP_SERVER_PORT: int = 8000
     DASHBOARD_PORT: int = 5001
 
+    # MCP server authentication (RFC 6750 bearer token). The MCP server
+    # refuses to start when this is empty -- set a strong random value
+    # in .env, e.g. the output of `openssl rand -hex 32`.
+    MCP_AUTH_TOKEN: str = ""
+
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"
