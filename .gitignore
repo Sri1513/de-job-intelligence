@@ -37,6 +37,12 @@ data/*
 !data/.gitkeep
 !data/screenshots/.gitkeep
 
+# Persistent browser profiles (live session cookies — never commit)
+!data/browser_profiles/
+data/browser_profiles/*
+!data/browser_profiles/.gitkeep
+!data/browser_profiles/README.md
+
 
 build/
 dist/

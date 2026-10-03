@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
 
+    # LLM provider for the browser agent: "gemini" (default) or "muse"
+    # ("muse" = Meta Model API, OpenAI-compatible; requires MODEL_API_KEY)
+    LLM_PROVIDER: str = "gemini"
+    META_MODEL_API_BASE_URL: str = "https://api.meta.ai/v1"
+    MUSE_SPARK_MODEL: str = "muse-spark-1.3"
+
     # Browser Automation Engine
     HEADLESS: bool = True
     CHROME_PATH: str = "/usr/bin/chromium"

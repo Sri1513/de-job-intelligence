@@ -59,7 +59,11 @@ services:
     volumes:
       - ./data/screenshots:/app/data/screenshots:rw
       - ./config:/app/config:rw
+      # Persistent browser profiles (LinkedIn/Indeed sessions). Named volume so
+      # sessions survive `docker compose down` and redeploys; never baked into images.
+      - browser_profiles:/app/data/browser_profiles:rw
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  browser_profiles:
