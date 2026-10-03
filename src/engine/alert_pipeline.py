@@ -16,8 +16,17 @@ from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 
 logger = logging.getLogger("de-job-intelligence.engine")
 
-# Initialize official google-genai client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+# Lazily-initialized google-genai client. Created on first use, never at import,
+# so importing this module does not require an API key to be configured.
+_genai_client = None
+
+
+def get_genai_client():
+    """Returns the shared genai client, creating it on first use."""
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _genai_client
 
 DEFAULT_MASTER_RESUME_URL = (
     "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
@@ -99,7 +108,7 @@ def process_whatsapp_job_alert(
     )
 
     try:
-        response = client.models.generate_content(
+        response = get_genai_client().models.generate_content(
             model=settings.GEMINI_MODEL,
             contents=email_prompt,
             config=types.GenerateContentConfig(

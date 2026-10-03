@@ -82,7 +82,7 @@ Standard LLM resume customization frequently invents metrics, hallucinates tool 
 
 ### 2. Model Context Protocol (MCP) Integration
 
-Implements a Starlette JSON-RPC 2.0 server adhering to open Model Context Protocol standards. Exposes operational primitives directly to AI agents:
+Production-grade MCP server built as a layered JSON-RPC 2.0 service (see [MCP Server Architecture](#-mcp-server-architecture)): bearer-token auth middleware, declarative tool registry, spec-correct lifecycle handling. Exposes operational primitives directly to AI agents:
 
 * `prepare_job_tailoring_prompt`: Ingests PostgreSQL job context, executes heuristic scoring, applies dynamic phase suppression, and packages full prompt context.
 * `export_tailored_resume`: Consumes structured JSON from the reasoning model, validates profile invariant truths, executes Google Docs API batch updates, and returns a verified document link.
@@ -102,6 +102,61 @@ Implements a Starlette JSON-RPC 2.0 server adhering to open Model Context Protoc
 * **Database Connection Pooling**: PostgreSQL connections managed through `psycopg_pool.ConnectionPool` (`min_size=1, max_size=10`), eliminating connection overhead and memory exhaustion.
 * **Non-Blocking Thread Delegation**: Heavy external network calls (Google Docs API batch calls, database cursors, file I/O) are systematically offloaded via `asyncio.to_thread`, keeping Starlette’s event loop available for inbound RPC traffic.
 * **Rate-Paced Worker Queues**: LLM backfill workers utilize deterministic pacing delays and state-machine transitions (`PENDING` $\rightarrow$ `PROCESSED` $\rightarrow$ `FAILED`) to stay within Google Gemini API quota limits without stalling pipelines.
+
+---
+
+## 🏛 MCP Server Architecture
+
+The MCP server (`src/protocols/`) is a layered, production-grade JSON-RPC 2.0 service following the patterns used by production remote MCP deployments (bearer-token middleware in front of the ASGI app, declarative tool registry, spec-correct protocol lifecycle):
+
+```
+Client (AI agent / IDE / automation)
+        │  Authorization: Bearer <MCP_AUTH_TOKEN>
+        ▼
+┌──────────────────────────┐
+│ BearerAuthMiddleware     │  RFC 6750 bearer tokens, constant-time compare
+│ (src/protocols/auth.py)  │  Fail-closed: no token → server refuses to start
+└────────────┬─────────────┘  GET /health exempt (load-balancer probes)
+             ▼
+┌──────────────────────────┐
+│ Starlette ASGI app       │  JSON-RPC 2.0 transport (protocolVersion 2024-11-05)
+│ (src/protocols/app.py)   │  initialize · notifications/initialized ·
+└────────────┬─────────────┘  tools/list · tools/call
+             ▼
+┌──────────────────────────┐
+│ Tool registry            │  TOOL_HANDLERS: tool name → async handler
+│ (dispatcher.py)          │  No if/elif chains; JSON Schema manifests in
+└────────────┬─────────────┘  schemas.py describe every tool's inputs
+             ▼
+┌───────────────────────────────────────────────────┐
+│ Business logic: engine/ · workers/ · synthesis/    │
+│ PostgreSQL (pooled) · Gemini · Google Workspace   │
+└───────────────────────────────────────────────────┘
+```
+
+### Protocol compliance
+
+| Concern | Implementation |
+| --- | --- |
+| Handshake | `initialize` negotiates `protocolVersion` and advertises capabilities |
+| Lifecycle | `notifications/initialized` answered with `202 Accepted` (spec-correct: notifications carry no response body) |
+| Discovery | `tools/list` serves versioned JSON Schema manifests for every tool |
+| Execution | `tools/call` returns MCP content blocks; results are JSON-serialized (never Python `str()`) so agents receive parseable payloads |
+| Errors | Standard JSON-RPC codes: `-32700` parse, `-32601` method not found, `-32602` invalid params, `-32603` internal |
+
+### Security model
+
+* **Authentication**: RFC 6750 bearer tokens via `MCP_AUTH_TOKEN`, compared in constant time (`hmac.compare_digest`) to resist timing attacks.
+* **Fail-closed startup**: the process exits instead of serving an open endpoint when no token is configured.
+* **Health checks**: `GET /health` is intentionally unauthenticated so load balancers and uptime monitors keep working.
+* **Secret hygiene**: tokens live in the environment / `.env`, never in git; rotate with `openssl rand -hex 32`.
+* **No import-time clients**: heavyweight SDK clients (Gemini, Google Workspace) initialize lazily on first use, so a missing key degrades one tool instead of crashing the server at import.
+
+### Concurrency
+
+* **Async-first**: blocking I/O (DB cursors, Google API calls, file reads) is offloaded via `asyncio.to_thread`, keeping the event loop free for inbound RPC traffic.
+* **Pooled persistence**: PostgreSQL connections via `psycopg_pool` (`min_size=1, max_size=10`).
+* **Atomic queue claims**: the apply worker claims jobs with `SELECT … FOR UPDATE SKIP LOCKED`, so the MCP-triggered worker and the daemon worker can never double-process a job.
 
 ---
 
@@ -156,8 +211,9 @@ de-job-intelligence/
 │   │   ├── dice_client.py       # REST API client for job search normalization
 │   │   └── scraper.py           # HTML sanitization & DOM text extraction
 │   ├── protocols/
-│   │   ├── app.py               # MCP JSON-RPC 2.0 server (tools/list, tools/call)
-│   │   ├── dispatcher.py        # Asynchronous tool router (asyncio.to_thread)
+│   │   ├── app.py               # MCP JSON-RPC 2.0 server: app factory (tools/list, tools/call)
+│   │   ├── auth.py              # BearerAuthMiddleware: RFC 6750 token gate, fail-closed
+│   │   ├── dispatcher.py        # TOOL_HANDLERS registry: tool name → async handler
 │   │   └── schemas.py           # JSON Schema manifests for all MCP tools
 │   ├── synthesis/
 │   │   ├── gdrive_docs.py       # Google Drive copy & Docs batchUpdate engine
@@ -168,7 +224,9 @@ de-job-intelligence/
 │       ├── batch_ingestion.py   # Job ingestion & heuristic upsert pipeline
 │       └── pipeline_utils.py    # Database state-machine update operations
 ├── tests/
+│   ├── conftest.py            # Test-session bootstrap (MCP_AUTH_TOKEN for fail-closed app)
 │   ├── test_ingestion.py        # Mock tests for REST client and persistence
+│   ├── test_mcp_auth.py         # Bearer-token gate: 401s, /health bypass, fail-closed
 │   ├── test_prompt_builder.py   # RAG framework and token caching validation
 │   ├── test_protocol.py         # Starlette JSON-RPC handshake & tool dispatch tests
 │   ├── test_synthesis.py        # Fallback resilience & token sanitization tests
@@ -185,7 +243,7 @@ de-job-intelligence/
 
 ## 📋 MCP Protocol Specification
 
-The MCP Server implements JSON-RPC 2.0 at `http://localhost:8000/rpc`. Below are the primary tool contracts exposed to reasoning agents:
+The MCP Server implements JSON-RPC 2.0 at `http://localhost:8000/rpc` (protocolVersion `2024-11-05`). All RPC routes require `Authorization: Bearer <MCP_AUTH_TOKEN>`; see [MCP Server Architecture](#-mcp-server-architecture). Below are the primary tool contracts exposed to reasoning agents:
 
 ### 1. `prepare_job_tailoring_prompt`
 
@@ -273,6 +331,10 @@ GEMINI_API_KEY=your_gemini_api_key
 # Google Workspace Integration
 GOOGLE_DOCS_TEMPLATE_ID=your_google_doc_template_id
 
+# MCP server authentication (required -- the server refuses to start without it)
+# Generate with: openssl rand -hex 32
+MCP_AUTH_TOKEN=your_strong_random_token
+
 # Server Ports
 MCP_SERVER_PORT=8000
 DASHBOARD_PORT=5001
@@ -302,9 +364,15 @@ The platform provides production process management via shell scripts that handl
 # Start MCP Protocol Server (Port 8000) & Observability Dashboard (Port 5001)
 ./start_server.sh
 
-# Check Service Health
+# Check Service Health (no auth required)
 curl http://localhost:8000/health
 # {"status":"healthy","service":"de-job-intelligence-mcp","version":"1.0.0"}
+
+# Call the RPC endpoint (bearer token required)
+curl -X POST http://localhost:8000/rpc \
+  -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 
 # Stop all background services cleanly
 ./stop_server.sh
@@ -325,6 +393,7 @@ The dashboard (`src/dashboard/`) provides real-time visibility into your job sea
 
 ## 🔒 Security & Data Governance
 
+* **Authenticated MCP surface**: RFC 6750 bearer-token middleware guards every JSON-RPC route; the server fails closed (refuses to start) when `MCP_AUTH_TOKEN` is unset. `GET /health` stays open for load-balancer probes.
 * **Zero Secret Leakage**: Strict `.gitignore` boundaries protect `.env`, `credentials.json`, `token.json`, and process logs from version control tracking.
 * **Deterministic Profile Invariants**: The synthesis mapper protects candidate name, email, phone number, education, and company tenures against LLM rewriting or hallucination.
 * **Idempotent Storage Patterns**: Ingestion pipelines use PostgreSQL `ON CONFLICT (job_id) DO NOTHING` constraints to prevent duplicate writes and race conditions during high-volume ingestion sweeps.
