@@ -27,6 +27,7 @@ services:
       - ./credentials.json:/app/credentials.json:ro
       - ./token.json:/app/token.json:rw
       - ./data/screenshots:/app/data/screenshots
+      - ./data/oauth:/app/data/oauth
       - ./config:/app/config
     restart: unless-stopped
 

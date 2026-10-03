@@ -111,17 +111,19 @@ The MCP server (`src/protocols/`) is a layered, production-grade JSON-RPC 2.0 se
 
 ```
 Client (AI agent / IDE / automation)
-        │  Authorization: Bearer <MCP_AUTH_TOKEN>
+        │  Authorization: Bearer <MCP_AUTH_TOKEN or OAuth access token>
         ▼
 ┌──────────────────────────┐
 │ BearerAuthMiddleware     │  RFC 6750 bearer tokens, constant-time compare
 │ (src/protocols/auth.py)  │  Fail-closed: no token → server refuses to start
 └────────────┬─────────────┘  GET /health exempt (load-balancer probes)
+             │                401s carry WWW-Authenticate (RFC 9728 discovery)
              ▼
 ┌──────────────────────────┐
 │ Starlette ASGI app       │  JSON-RPC 2.0 transport (protocolVersion 2024-11-05)
 │ (src/protocols/app.py)   │  initialize · notifications/initialized ·
 └────────────┬─────────────┘  tools/list · tools/call
+             │                + OAuth 2.1 authorization server (see below)
              ▼
 ┌──────────────────────────┐
 │ Tool registry            │  TOOL_HANDLERS: tool name → async handler
@@ -146,11 +148,23 @@ Client (AI agent / IDE / automation)
 
 ### Security model
 
-* **Authentication**: RFC 6750 bearer tokens via `MCP_AUTH_TOKEN`, compared in constant time (`hmac.compare_digest`) to resist timing attacks.
+* **Authentication**: RFC 6750 bearer tokens via `MCP_AUTH_TOKEN`, compared in constant time (`hmac.compare_digest`) to resist timing attacks. Third-party MCP clients (e.g. the Gemini app) authenticate via the built-in **OAuth 2.1** authorization server instead — see below.
 * **Fail-closed startup**: the process exits instead of serving an open endpoint when no token is configured.
 * **Health checks**: `GET /health` is intentionally unauthenticated so load balancers and uptime monitors keep working.
 * **Secret hygiene**: tokens live in the environment / `.env`, never in git; rotate with `openssl rand -hex 32`.
 * **No import-time clients**: heavyweight SDK clients (Gemini, Google Workspace) initialize lazily on first use, so a missing key degrades one tool instead of crashing the server at import.
+
+### OAuth 2.1 for third-party MCP clients
+
+App clients like Gemini only speak OAuth 2.1, so the server ships a single-user authorization server (`src/protocols/oauth.py`, token store in `src/protocols/token_store.py`):
+
+* **Discovery**: `/.well-known/oauth-authorization-server` (RFC 8414) and `/.well-known/oauth-protected-resource` (RFC 9728); 401 responses advertise the metadata URL via `WWW-Authenticate`.
+* **Dynamic client registration** (RFC 7591) with strict redirect-URI validation (https, or http loopback only).
+* **Authorization code flow with PKCE** (S256): codes are single-use, 10-minute expiry, bound to client + redirect URI. The approval page requires the owner's `MCP_AUTH_TOKEN` — no sessions, no user database.
+* **Refresh token rotation**: 1-hour access tokens, 30-day rotating refresh tokens, persisted as JSON under `data/oauth/` (gitignored, docker-mounted).
+* **Machine-to-machine callers** (your own agents/scripts) keep using the static `MCP_AUTH_TOKEN` bearer — OAuth is only needed for third-party apps.
+
+To connect from the Gemini app: add `https://mcp.sriomkar.com` as the MCP server URL, complete the browser approval with your owner token, and you're in.
 
 ### Concurrency
 
@@ -212,7 +226,9 @@ de-job-intelligence/
 │   │   └── scraper.py           # HTML sanitization & DOM text extraction
 │   ├── protocols/
 │   │   ├── app.py               # MCP JSON-RPC 2.0 server: app factory (tools/list, tools/call)
-│   │   ├── auth.py              # BearerAuthMiddleware: RFC 6750 token gate, fail-closed
+│   │   ├── auth.py              # BearerAuthMiddleware: bearer + OAuth token gate, fail-closed
+│   │   ├── oauth.py             # OAuth 2.1 authorization server (Gemini app clients)
+│   │   ├── token_store.py       # JSON-backed OAuth clients/codes/tokens store
 │   │   ├── dispatcher.py        # TOOL_HANDLERS registry: tool name → async handler
 │   │   └── schemas.py           # JSON Schema manifests for all MCP tools
 │   ├── synthesis/
@@ -227,6 +243,7 @@ de-job-intelligence/
 │   ├── conftest.py            # Test-session bootstrap (MCP_AUTH_TOKEN for fail-closed app)
 │   ├── test_ingestion.py        # Mock tests for REST client and persistence
 │   ├── test_mcp_auth.py         # Bearer-token gate: 401s, /health bypass, fail-closed
+│   ├── test_mcp_oauth.py        # OAuth 2.1: register → approve → PKCE exchange → RPC → refresh
 │   ├── test_prompt_builder.py   # RAG framework and token caching validation
 │   ├── test_protocol.py         # Starlette JSON-RPC handshake & tool dispatch tests
 │   ├── test_synthesis.py        # Fallback resilience & token sanitization tests
@@ -334,6 +351,9 @@ GOOGLE_DOCS_TEMPLATE_ID=your_google_doc_template_id
 # MCP server authentication (required -- the server refuses to start without it)
 # Generate with: openssl rand -hex 32
 MCP_AUTH_TOKEN=your_strong_random_token
+
+# Public base URL of the MCP server (OAuth 2.1 discovery metadata)
+MCP_PUBLIC_URL=https://mcp.sriomkar.com
 
 # Server Ports
 MCP_SERVER_PORT=8000

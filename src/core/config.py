@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # in .env, e.g. the output of `openssl rand -hex 32`.
     MCP_AUTH_TOKEN: str = ""
 
+    # Public base URL of the MCP server, used for OAuth 2.1 discovery
+    # metadata (RFC 8414 / RFC 9728) and redirect construction.
+    MCP_PUBLIC_URL: str = "https://mcp.sriomkar.com"
+
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"
