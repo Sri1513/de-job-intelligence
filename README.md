@@ -166,6 +166,29 @@ App clients like Gemini only speak OAuth 2.1, so the server ships a single-user 
 
 To connect from the Gemini app: add `https://mcp.sriomkar.com` as the MCP server URL, complete the browser approval with your owner token, and you're in.
 
+## 🔧 Remote Diagnostics (Admin API)
+
+The AI operator (Friday) cannot SSH into the VM, so the dashboard exposes a read-only diagnostics API over HTTPS at `/api/admin/*`:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/admin/health` | Dashboard, database, and MCP-server reachability plus apply-queue depths |
+| `GET /api/admin/logs?service=mcp&tail=200` | Tail a service log (`mcp`, `dashboard`, `apply-worker`; max 2000 lines) |
+
+**Security**: bearer-token auth via `ADMIN_API_TOKEN` (`hmac.compare_digest`). Secure by default — when the token is unset the routes return 404 as if they don't exist, so the public dashboard is unaffected. Unauthenticated callers get 404 (not 401) to avoid revealing the surface. Strictly read-only: no restarts, no shell, no writes.
+
+**How the logs get there**: in Docker Compose each service tees its stdout to `/app/logs/*.log` on a shared `./logs` volume, which the dashboard reads. For `start_server.sh` deployments the same `logs/` directory is used natively.
+
+```bash
+# Health snapshot
+curl -s https://jobs.sriomkar.com/api/admin/health \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN"
+
+# Last 200 lines of the MCP server log
+curl -s "https://jobs.sriomkar.com/api/admin/logs?service=mcp&tail=200" \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN"
+```
+
 ### Concurrency
 
 * **Async-first**: blocking I/O (DB cursors, Google API calls, file reads) is offloaded via `asyncio.to_thread`, keeping the event loop free for inbound RPC traffic.
@@ -211,6 +234,7 @@ de-job-intelligence/
 │   │   ├── database.py          # Psycopg 3 connection pool and atomic query helpers
 │   │   └── utils.py             # File system and profile cache loaders
 │   ├── dashboard/
+│   │   ├── admin.py             # Remote diagnostics API (/api/admin/*, bearer-gated)
 │   │   ├── templates/
 │   │   │   ├── dashboard.html   # Real-time job ingestion ledger and filter UI
 │   │   │   └── audit.html       # Skill matrix & gap audit interface
@@ -355,6 +379,10 @@ MCP_AUTH_TOKEN=your_strong_random_token
 # Public base URL of the MCP server (OAuth 2.1 discovery metadata)
 MCP_PUBLIC_URL=https://mcp.sriomkar.com
 
+# Admin API for remote diagnostics (unset = /api/admin/* returns 404)
+# Generate with: openssl rand -hex 32
+ADMIN_API_TOKEN=your_strong_random_token
+
 # Server Ports
 MCP_SERVER_PORT=8000
 DASHBOARD_PORT=5001
@@ -414,6 +442,7 @@ The dashboard (`src/dashboard/`) provides real-time visibility into your job sea
 ## 🔒 Security & Data Governance
 
 * **Authenticated MCP surface**: RFC 6750 bearer-token middleware guards every JSON-RPC route; the server fails closed (refuses to start) when `MCP_AUTH_TOKEN` is unset. `GET /health` stays open for load-balancer probes.
+* **Authenticated admin surface**: `/api/admin/*` (remote log/health diagnostics) requires `ADMIN_API_TOKEN` and returns 404 when unset or on bad credentials; strictly read-only.
 * **Zero Secret Leakage**: Strict `.gitignore` boundaries protect `.env`, `credentials.json`, `token.json`, and process logs from version control tracking.
 * **Deterministic Profile Invariants**: The synthesis mapper protects candidate name, email, phone number, education, and company tenures against LLM rewriting or hallucination.
 * **Idempotent Storage Patterns**: Ingestion pipelines use PostgreSQL `ON CONFLICT (job_id) DO NOTHING` constraints to prevent duplicate writes and race conditions during high-volume ingestion sweeps.

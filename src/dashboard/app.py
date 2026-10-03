@@ -13,6 +13,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from src.core.database import get_db_connection
+from src.dashboard.admin import admin_routes
 
 logger = logging.getLogger("de-job-intelligence.dashboard")
 
@@ -572,6 +573,9 @@ routes = [
     Route("/skills-analytics", skills_analytics_view, methods=["GET"]),
     Route("/api/skills-demographics", api_skills_demographics, methods=["GET"]),
     Mount("/screenshots", app=StaticFiles(directory=str(SCREENSHOTS_DIR)), name="screenshots"),
+    # Remote diagnostics for the AI operator (Friday). Disabled (404) unless
+    # ADMIN_API_TOKEN is set; strictly read-only.
+    *admin_routes,
 ]
 
 app = Starlette(debug=True, routes=routes)

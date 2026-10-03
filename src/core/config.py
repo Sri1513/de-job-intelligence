@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # metadata (RFC 8414 / RFC 9728) and redirect construction.
     MCP_PUBLIC_URL: str = "https://mcp.sriomkar.com"
 
+    # Admin API (remote diagnostics for the AI operator). When empty, the
+    # /api/admin/* routes behave as if they do not exist (404).
+    ADMIN_API_TOKEN: str = ""
+
+    # URL the dashboard's admin health check uses to probe the MCP server.
+    MCP_HEALTH_URL: str = "http://localhost:8000/health"
+
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"

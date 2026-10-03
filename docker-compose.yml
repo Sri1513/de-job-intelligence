@@ -17,7 +17,8 @@ services:
   mcp-server:
     build: .
     container_name: de-job-mcp
-    command: uvicorn src.protocols.app:app --host 0.0.0.0 --port 8000
+    # Tee stdout to a file so the dashboard's admin API can serve log tails.
+    command: ["sh", "-c", "uvicorn src.protocols.app:app --host 0.0.0.0 --port 8000 2>&1 | tee /app/logs/mcp.log"]
     env_file: .env
     ports:
       - "8000:8000"
@@ -28,27 +29,32 @@ services:
       - ./token.json:/app/token.json:rw
       - ./data/screenshots:/app/data/screenshots
       - ./data/oauth:/app/data/oauth
+      - ./logs:/app/logs
       - ./config:/app/config
     restart: unless-stopped
 
   dashboard:
     build: .
     container_name: de-job-dashboard
-    command: uvicorn src.dashboard.app:app --host 0.0.0.0 --port 5001
+    command: ["sh", "-c", "uvicorn src.dashboard.app:app --host 0.0.0.0 --port 5001 2>&1 | tee /app/logs/dashboard.log"]
     env_file: .env
+    environment:
+      # In compose the MCP server is reachable by service name.
+      - MCP_HEALTH_URL=http://mcp-server:8000/health
     ports:
       - "5001:5001"
     depends_on:
       - postgres
     volumes:
       - ./data/screenshots:/app/data/screenshots:ro
+      - ./logs:/app/logs
       - ./config:/app/config:ro
     restart: unless-stopped
   
   apply-worker:
     build: .
     container_name: de-job-apply-worker
-    command: python -m src.workers.apply_worker
+    command: ["sh", "-c", "python -m src.workers.apply_worker 2>&1 | tee /app/logs/apply-worker.log"]
     shm_size: "2gb"
     env_file: .env
     environment:
@@ -59,6 +65,7 @@ services:
       - postgres
     volumes:
       - ./data/screenshots:/app/data/screenshots:rw
+      - ./logs:/app/logs
       - ./config:/app/config:rw
       # Persistent browser profiles (LinkedIn/Indeed sessions). Named volume so
       # sessions survive `docker compose down` and redeploys; never baked into images.
