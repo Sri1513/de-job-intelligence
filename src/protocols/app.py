@@ -92,6 +92,7 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
 
         try:
             execution_result = await dispatch_tool_call(tool_name, arguments)
+            logger.info("Tool executed: %s", tool_name)
             # Serialize as JSON (not str()) so agents receive parseable content;
             # default=str keeps datetimes and other scalars safe.
             return JSONResponse(

@@ -45,7 +45,7 @@ def get_job_by_id(job_id: str) -> dict[str, Any] | None:
             description,
             fit_score AS match_score,
             ai_status,
-            ai_notes,
+            notes AS ai_notes,
             saved_at AS created_at,
             job_category,
             job_url,
