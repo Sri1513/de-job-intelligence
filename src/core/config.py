@@ -21,11 +21,19 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     )
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    # Paid-tier Gemini key pool (GEMINI_PAID_API_KEY, GEMINI_PAID_API_KEY_2..N,
+    # or comma-separated GEMINI_PAID_API_KEYS). Used ONLY as the last resort
+    # of the apply-agent failover chain (LLM_PROVIDER=auto); the analysis
+    # pipeline (fit score / sponsorship) never touches paid keys.
+    GEMINI_PAID_API_KEY: str = ""
+    GEMINI_PAID_MODEL: str = "gemini-2.5-flash"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
 
-    # LLM provider for the browser agent: "gemini" (default) or "muse"
+    # LLM provider for the browser agent: "gemini" (default), "muse", or "auto"
     # ("muse" = Meta Model API, OpenAI-compatible; requires MODEL_API_KEY)
+    # ("auto" = quota-aware failover: Groq free -> Gemini free -> Gemini paid;
+    #  set APPLY_ALLOW_PAID=false to keep the chain free-only)
     LLM_PROVIDER: str = "gemini"
     META_MODEL_API_BASE_URL: str = "https://api.meta.ai/v1"
     MUSE_SPARK_MODEL: str = "muse-spark-1.3"

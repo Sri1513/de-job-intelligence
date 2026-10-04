@@ -32,6 +32,11 @@ from browser_use import Agent, Browser
 
 from src.core.config import settings
 from src.core.profile import ApplicantProfile, applicant_profile
+from src.engine.llm_router import (
+    build_gemini_llm,
+    build_openai_compat_llm,
+    get_apply_llm,
+)
 
 logger = logging.getLogger("de-job-intelligence.browser_agent")
 
@@ -421,30 +426,6 @@ def build_browser(
 # ---------------------------------------------------------------------------
 
 
-def _import_chat_google() -> Any | None:
-    try:
-        from browser_use.llm import ChatGoogle
-
-        return ChatGoogle
-    except ImportError:
-        pass
-    try:
-        from browser_use import ChatGoogle  # type: ignore[no-redef]
-
-        return ChatGoogle
-    except ImportError:
-        return None
-
-
-def _import_openai_chat() -> Any | None:
-    try:
-        from browser_use.llm import ChatOpenAI
-
-        return ChatOpenAI
-    except ImportError:
-        return None
-
-
 def get_llm() -> Any:
     """Builds the browser-use chat model.
 
@@ -454,10 +435,17 @@ def get_llm() -> Any:
       ``META_MODEL_API_BASE_URL`` (default https://api.meta.ai/v1) with model
       ``MUSE_SPARK_MODEL`` (default ``muse-spark-1.3``). Requires
       ``MODEL_API_KEY`` in the environment.
+    - ``LLM_PROVIDER=auto``: quota-aware failover chain for applications —
+      Groq (free) -> Gemini (free) -> Gemini paid. Free tiers are exhausted
+      first; paid Gemini only engages when free quota is gone. Every failover
+      is logged. Set ``APPLY_ALLOW_PAID=false`` to keep it free-only.
     """
     provider = (
         os.getenv("LLM_PROVIDER") or getattr(settings, "LLM_PROVIDER", "gemini")
     ).lower()
+    if provider == "auto":
+        logger.info("LLM_PROVIDER=auto: building failover chain for apply agent")
+        return get_apply_llm()
     if provider == "muse":
         return _get_muse_llm()
 
@@ -469,20 +457,12 @@ def get_llm() -> Any:
         getattr(settings, "GEMINI_MODEL", None)
         or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     )
-    chat_google = _import_chat_google()
-    if chat_google is None:
-        raise ImportError(
-            "Could not import a Google chat model from browser_use "
-            "(tried browser_use.llm.ChatGoogle and browser_use.ChatGoogle)."
-        )
     logger.info("Using Gemini model %s for browser agent", model)
-    return chat_google(model=model, api_key=api_key)
+    return build_gemini_llm(api_key, model)
 
 
 def _get_muse_llm() -> Any:
     """Muse Spark via the Meta Model API (OpenAI-compatible endpoint)."""
-    # TODO: verify against https://dev.meta.ai/docs when wiring the token
-    # allocation; pricing/rate-limit docs were still in edit at launch.
     api_key = os.environ.get("MODEL_API_KEY") or os.environ.get("META_API_KEY", "")
     base_url = os.environ.get(
         "META_MODEL_API_BASE_URL",
@@ -491,16 +471,8 @@ def _get_muse_llm() -> Any:
     model = os.environ.get(
         "MUSE_SPARK_MODEL", getattr(settings, "MUSE_SPARK_MODEL", "muse-spark-1.3")
     )
-    chat_openai = _import_openai_chat()
-    if chat_openai is None:
-        raise NotImplementedError(
-            "TODO: LLM_PROVIDER=muse requires browser-use's OpenAI-compatible "
-            "chat class (browser_use.llm.ChatOpenAI), which is not importable "
-            "in the installed browser-use build. Upgrade browser-use or wire "
-            "an OpenAI-compatible client manually."
-        )
     logger.info("Using Muse Spark model %s via %s", model, base_url)
-    return chat_openai(model=model, api_key=api_key, base_url=base_url)
+    return build_openai_compat_llm(base_url, api_key, model)
 
 
 # ---------------------------------------------------------------------------
@@ -665,12 +637,29 @@ TASK RULES:
         # 3. Route status based on task execution result
         if not is_success:
             logger.warning("Agent reported task failure for job_id=%s: %s", job_id, final_summary)
+            # Best-effort: surface the agent's own step errors so the worker's
+            # failure classifier sees the real cause (e.g. a 402 billing error)
+            # instead of guessing from a generic message.
+            agent_errors = []
+            try:
+                for step in list(getattr(history, "history", []) or [])[-3:]:
+                    for action_result in getattr(step, "result", None) or []:
+                        err = getattr(action_result, "error", None)
+                        if err:
+                            agent_errors.append(str(err))
+            except Exception:
+                pass
+            detail = "; ".join(dict.fromkeys(agent_errors))[:500]
+            message = final_summary or (
+                f"Agent failed before completing the form. {detail}"
+                if detail
+                else "Agent failed before completing the form (no summary produced)."
+            )
             return {
                 "status": STATUS_FAILED,
                 "job_id": job_id,
                 "screenshot_path": verified_screenshot_path,
-                "message": final_summary
-                or "Agent was blocked by auth walls or CAPTCHAs before completing form.",
+                "message": message,
             }
 
         return {
