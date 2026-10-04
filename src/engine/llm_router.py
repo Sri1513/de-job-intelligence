@@ -173,6 +173,7 @@ class FailoverLLM:
             raise ValueError("FailoverLLM requires at least one provider.")
         # Set via object.__setattr__ to keep __getattr__ delegation safe.
         object.__setattr__(self, "_providers", providers)
+        object.__setattr__(self, "_last_serving", None)
         logger.info(
             "llm-router: failover chain ready: %s",
             " -> ".join(
@@ -207,6 +208,7 @@ class FailoverLLM:
                     messages, output_format=output_format, **kwargs
                 )
                 provider.note_success()
+                self._announce_serving(provider)
                 return result
             except Exception as exc:  # noqa: BLE001 - must catch provider errors
                 last_exc = exc
@@ -256,6 +258,7 @@ class FailoverLLM:
                     logger.info(
                         "llm-router: provider=%s recovered on retry", provider.name
                     )
+                    self._announce_serving(provider)
                     return result
                 except Exception as retry_exc:  # noqa: BLE001
                     logger.warning(
@@ -282,6 +285,21 @@ class FailoverLLM:
         return asyncio.run(self.ainvoke(messages, output_format=output_format, **kwargs))
 
     # -- internals ---------------------------------------------------------
+    def _announce_serving(self, provider: Provider) -> None:
+        """Logs whenever the serving provider changes; paid is always loud."""
+        if provider is self._last_serving:
+            return
+        object.__setattr__(self, "_last_serving", provider)
+        if provider.kind == PAID:
+            logger.warning(
+                "llm-router: now serving via %s (PAID) — usage WILL incur charges",
+                provider.name,
+            )
+        else:
+            logger.info(
+                "llm-router: now serving via %s (%s)", provider.name, provider.kind
+            )
+
     def _active(self) -> Provider:
         for p in object.__getattribute__(self, "_providers"):
             if p.available():

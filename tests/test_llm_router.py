@@ -107,6 +107,20 @@ def test_paid_provider_engaged_last_and_logged(caplog):
 
     assert result == "reply-from-gemini-2.5-flash"
     assert paid_fake.calls == 1
+    assert "now serving via gemini-paid (PAID)" in caplog.text
+    assert "WILL incur charges" in caplog.text
+
+
+def test_serving_announcement_not_repeated(caplog):
+    groq, groq_fake = make_provider("groq", FREE, "llama", ["ok"])
+    router = FailoverLLM([groq])
+
+    with caplog.at_level(logging.INFO, logger="src.engine.llm_router"):
+        run(router.ainvoke([{"role": "user", "content": "one"}]))
+        run(router.ainvoke([{"role": "user", "content": "two"}]))
+
+    assert groq_fake.calls == 2
+    assert caplog.text.count("now serving via groq") == 1
 
 
 def test_billing_error_gets_short_cooldown_not_midnight():
