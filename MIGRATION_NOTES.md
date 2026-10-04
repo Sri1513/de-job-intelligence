@@ -5,7 +5,17 @@ Date: 2026-10-02
 
 ## 1. New DB columns on `saved_jobs`
 
-Run once (uses the `scout` schema like the existing
+Run the consolidated, idempotent migration file (adds every column the branch
+expects — worker lease/retry columns plus `ai_notes`/`ai_error`/apply metadata;
+`IF NOT EXISTS` makes it safe to run repeatedly):
+
+```bash
+cd /opt/projects/de-job-intelligence
+docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" < migrations/001_catchup.sql
+```
+
+(`$DB_USER`/`$DB_NAME` come from your `.env`; defaults `postgres` / `job_scout_db`.)
+The equivalent inline SQL (uses the `scout` schema like the existing
 `scripts/migrate_apply_columns.py`):
 
 ```sql
