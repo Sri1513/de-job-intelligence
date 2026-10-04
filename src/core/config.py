@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     HEADLESS: bool = True
     CHROME_PATH: str = "/usr/bin/chromium"
 
+    # Human-like pacing for the browser agent (account protection: rapid
+    # automated navigation from a datacenter IP is what gets sessions
+    # flagged). HUMAN_PACING=false restores full speed.
+    HUMAN_PACING: bool = True
+    HUMAN_ACTION_DELAY_S: float = 2.0  # native wait between browser actions
+    HUMAN_STEP_PAUSE_MIN_S: float = 3.0  # randomized pause after each agent step
+    HUMAN_STEP_PAUSE_MAX_S: float = 7.0
+    HUMAN_MAX_ACTIONS_PER_STEP: int = 2  # fewer actions/step = more human-like
+
     # Google Workspace Template IDs
     RESUME_TEMPLATE_DOC_ID: str = ""
     GOOGLE_DOCS_TEMPLATE_ID: str = ""

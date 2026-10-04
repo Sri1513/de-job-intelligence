@@ -17,11 +17,13 @@ and log in once in the headed browser window. No credentials are ever
 handled by this module or that script.
 """
 
+import asyncio
 import base64
 import inspect
 import json
 import logging
 import os
+import random
 import shutil
 import time
 from pathlib import Path
@@ -377,11 +379,74 @@ def _config_class_with_field(field_name: str) -> Any | None:
     return None
 
 
+def _class_has_field(cls: Any, field_name: str) -> bool:
+    """True when a browser config class accepts the given constructor field."""
+    fields = getattr(cls, "model_fields", None)
+    if isinstance(fields, dict):
+        return field_name in fields
+    return hasattr(cls, field_name)
+
+
+def _pacing_config() -> dict[str, float] | None:
+    """Human-like pacing parameters, or None when HUMAN_PACING is disabled.
+
+    Slows the agent to human speed: a fixed delay between individual browser
+    actions, a randomized pause after every agent step, and fewer actions per
+    step (more LLM round-trips, each looking like one or two deliberate
+    actions). This is account protection, not just politeness — rapid
+    automated navigation from a datacenter IP is what gets sessions flagged.
+    """
+    raw = os.getenv("HUMAN_PACING")
+    if raw is None:
+        enabled = bool(getattr(settings, "HUMAN_PACING", True))
+    else:
+        enabled = raw.strip().lower() not in ("false", "0", "no", "off")
+    if not enabled:
+        return None
+
+    def _num(name: str, default: float) -> float:
+        try:
+            return float(os.getenv(name, "") or getattr(settings, name, default))
+        except (TypeError, ValueError):
+            logger.warning("Invalid %s; using default %s", name, default)
+            return default
+
+    def _int(name: str, default: int) -> int:
+        try:
+            return int(float(os.getenv(name, "") or getattr(settings, name, default)))
+        except (TypeError, ValueError):
+            logger.warning("Invalid %s; using default %s", name, default)
+            return default
+
+    pause_min = _num("HUMAN_STEP_PAUSE_MIN_S", 3.0)
+    pause_max = _num("HUMAN_STEP_PAUSE_MAX_S", 7.0)
+    if pause_max < pause_min:
+        pause_min, pause_max = pause_max, pause_min
+    return {
+        "action_delay": _num("HUMAN_ACTION_DELAY_S", 2.0),
+        "pause_min": pause_min,
+        "pause_max": pause_max,
+        "max_actions_per_step": _int("HUMAN_MAX_ACTIONS_PER_STEP", 2),
+    }
+
+
+def _make_step_pause_callback(pause_min: float, pause_max: float):
+    """Builds the Agent's per-step callback: a randomized human-like pause."""
+
+    async def _pause(browser_state_summary, agent_output, step_number) -> None:
+        delay = random.uniform(pause_min, pause_max)
+        logger.debug("human-pacing: %.1fs pause after step %s", delay, step_number)
+        await asyncio.sleep(delay)
+
+    return _pause
+
+
 def build_browser(
     *,
     headless: bool,
     profile_dir: Path | None,
     storage_state: str | None = None,
+    wait_between_actions: float | None = None,
 ) -> Browser:
     """Builds a browser-use Browser, preferring a persistent profile dir.
 
@@ -393,11 +458,20 @@ def build_browser(
          support; it re-injects seed cookies on every run, which is exactly
          the staleness bug this module fixes. Prefer 1 or 2 (upgrade
          browser-use if you land here).
+
+    ``wait_between_actions`` (human-pacing) is passed through wherever the
+    browser-use build accepts it.
     """
+    init_params = _browser_init_params()
     if profile_dir is not None:
-        if "user_data_dir" in _browser_init_params():
+        if "user_data_dir" in init_params:
             logger.info("Using persistent browser profile at %s", profile_dir)
-            return Browser(headless=headless, user_data_dir=str(profile_dir))
+            extra: dict[str, Any] = {}
+            if wait_between_actions is not None and "wait_between_actions" in init_params:
+                extra["wait_between_actions"] = wait_between_actions
+            return Browser(
+                headless=headless, user_data_dir=str(profile_dir), **extra
+            )
         config_cls = _config_class_with_field("user_data_dir")
         if config_cls is not None:
             try:
@@ -406,9 +480,15 @@ def build_browser(
                     profile_dir,
                     config_cls.__name__,
                 )
-                return Browser(
-                    config=config_cls(headless=headless, user_data_dir=str(profile_dir))
-                )
+                cfg_kwargs: dict[str, Any] = {
+                    "headless": headless,
+                    "user_data_dir": str(profile_dir),
+                }
+                if wait_between_actions is not None and _class_has_field(
+                    config_cls, "wait_between_actions"
+                ):
+                    cfg_kwargs["wait_between_actions"] = wait_between_actions
+                return Browser(config=config_cls(**cfg_kwargs))
             except Exception as exc:
                 logger.warning("Persistent-profile config failed (%s); falling back.", exc)
     if storage_state:
@@ -530,10 +610,24 @@ async def autofill_job_application(
         with open(seed_state_file, "w", encoding="utf-8") as f:
             json.dump({"cookies": seed_cookies, "origins": []}, f, indent=2)
 
+    pacing = _pacing_config()
+    if pacing is not None:
+        logger.info(
+            "human-pacing enabled: action_delay=%.1fs step_pause=%.1f-%.1fs "
+            "max_actions_per_step=%d",
+            pacing["action_delay"],
+            pacing["pause_min"],
+            pacing["pause_max"],
+            int(pacing["max_actions_per_step"]),
+        )
+    else:
+        logger.info("human-pacing disabled (HUMAN_PACING=false)")
+
     browser = build_browser(
         headless=headless,
         profile_dir=profile_dir,
         storage_state=str(seed_state_file) if seed_state_file else None,
+        wait_between_actions=pacing["action_delay"] if pacing else None,
     )
 
     # Resolve target resume path
@@ -589,11 +683,18 @@ TASK RULES:
 8. Once all inputs are filled and the resume is attached, call 'done' with the summary of filled fields.
 """
 
+    agent_kwargs: dict[str, Any] = {}
+    if pacing is not None:
+        agent_kwargs["max_actions_per_step"] = int(pacing["max_actions_per_step"])
+        agent_kwargs["register_new_step_callback"] = _make_step_pause_callback(
+            pacing["pause_min"], pacing["pause_max"]
+        )
     agent = Agent(
         task=task_instructions,
         llm=llm,
         browser=browser,
         available_file_paths=available_files,
+        **agent_kwargs,
     )
 
     logger.info("Executing browser agent for job_id=%s...", job_id)
