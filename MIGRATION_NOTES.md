@@ -73,6 +73,10 @@ leases, retries, and the failure taxonomy.
 | `GEMINI_PAID_API_KEY` | — | Paid-tier Gemini key. Last resort of the `auto` apply chain ONLY; analysis never uses it. Also accepts `GEMINI_PAID_API_KEYS` (comma-separated) / `GEMINI_PAID_API_KEY_2..9` |
 | `GEMINI_PAID_MODEL` | `gemini-2.5-flash` | Model for the paid step of `auto` |
 | `APPLY_ALLOW_PAID` | `true` | Set `false` to keep the `auto` chain free-only (paid step excluded) |
+| `HUMAN_PACING` | `true` | Human-like agent pacing (account protection); `false` restores full speed |
+| `HUMAN_ACTION_DELAY_S` | `2.0` | Native delay between browser actions |
+| `HUMAN_STEP_PAUSE_MIN_S` / `HUMAN_STEP_PAUSE_MAX_S` | `3.0` / `7.0` | Randomized pause after each agent step |
+| `HUMAN_MAX_ACTIONS_PER_STEP` | `2` | Fewer actions per step = more human-like (default browser-use is 5) |
 | `POLL_INTERVAL` / `BATCH_LIMIT` | `30` / `5` | Apply worker daemon tuning (unchanged) |
 
 ### LLM failover policy (`LLM_PROVIDER=auto`)
