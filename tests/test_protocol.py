@@ -72,3 +72,13 @@ async def test_dispatcher_unknown_tool():
     result = await dispatch_tool_call("non_existent_tool", {})
     assert "error" in result
     assert "Unknown tool" in result["error"]
+
+
+def test_mcp_logger_emits_info():
+    # Regression: the MCP logger had no level set, so it inherited WARNING
+    # from the root logger and silently dropped logger.info("Tool executed:").
+    import logging
+
+    from src.protocols.app import logger
+
+    assert logger.getEffectiveLevel() <= logging.INFO

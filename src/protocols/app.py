@@ -23,6 +23,10 @@ from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
 
 logger = logging.getLogger("de-job-intelligence.mcp")
+# Uvicorn leaves the root logger at WARNING with no explicit config for this
+# logger, which silently drops logger.info() calls (e.g. "Tool executed:").
+# Pin INFO here so operational log lines actually reach the log file.
+logger.setLevel(logging.INFO)
 
 
 async def health_check(request: Request) -> JSONResponse:
