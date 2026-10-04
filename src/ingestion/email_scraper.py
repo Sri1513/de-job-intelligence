@@ -2,6 +2,7 @@
 import email
 import imaplib
 import os
+import re
 from datetime import datetime
 from email.header import decode_header
 
@@ -16,6 +17,31 @@ TARGET_KEYWORDS = [
     "python developer",
 ]
 
+TITLE_MAX_LEN = 150
+_URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+
+
+def clean_job_title(raw_title: str) -> str | None:
+    """
+    Sanitize a title parsed from an email body.
+
+    LinkedIn sends several alert formats (job alerts, "jobs viewed" reminders,
+    "similar jobs" digests). Reminder-style bodies mash the subject line together
+    with tracking URLs, so the naive "first line = title" parse produces garbage
+    that breaks downstream display. This strips URLs/tracking params, collapses
+    whitespace, truncates, and rejects anything that isn't plausibly a job title.
+    Returns None when the chunk should be skipped entirely.
+    """
+    if not raw_title:
+        return None
+    title = _URL_RE.sub("", raw_title)
+    title = re.sub(r"\s+", " ", title).strip(" \t-–—:;,.\"'")
+    if len(title) < 8:
+        return None
+    if len(title) > TITLE_MAX_LEN:
+        title = title[:TITLE_MAX_LEN].rstrip() + "…"
+    return title
+
 
 def parse_linkedin_plain_text_email(body_text: str) -> list:
     """Parses LinkedIn alert blocks separated by dashed lines into structured job records."""
@@ -28,9 +54,6 @@ def parse_linkedin_plain_text_email(body_text: str) -> list:
             continue
 
         title = lines[0]
-        company = lines[1]
-        location = "United States"
-        job_url = "https://www.linkedin.com"
 
         if any(
             bad in title.lower()
@@ -43,6 +66,16 @@ def parse_linkedin_plain_text_email(body_text: str) -> list:
             ]
         ):
             continue
+
+        # Reminder-style emails mash subject text + tracking URLs into the
+        # "title" line; clean it and skip the chunk if nothing usable remains.
+        title = clean_job_title(title)
+        if not title:
+            continue
+
+        company = lines[1]
+        location = "United States"
+        job_url = "https://www.linkedin.com"
 
         for line in lines[2:]:
             if line.startswith("View job:"):

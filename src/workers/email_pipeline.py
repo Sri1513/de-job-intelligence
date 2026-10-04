@@ -1,5 +1,6 @@
 # src/workers/email_pipeline.py
 import logging
+import re
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -11,6 +12,74 @@ from src.engine.scraper import fetch_scraped_jobs
 from src.ingestion.email_scraper import fetch_jobs_from_email
 
 logger = logging.getLogger(__name__)
+
+_US_STATE_ABBR = frozenset(
+    s.lower()
+    for s in (
+        "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS "
+        "MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY"
+    ).split()
+)
+_US_STATE_NAMES = frozenset(
+    (
+        "alabama alaska arizona arkansas california colorado connecticut delaware "
+        "florida georgia hawaii idaho illinois indiana iowa kansas kentucky louisiana "
+        "maine maryland massachusetts michigan minnesota mississippi missouri montana "
+        "nebraska nevada hampshire jersey mexico york carolina dakota ohio oklahoma "
+        "oregon pennsylvania rhode island carolina dakota tennessee texas utah vermont "
+        "virginia washington wisconsin wyoming district of columbia"
+    ).split()
+)
+_US_MARKERS = ("united states", "usa", "u.s.a", "u.s.")
+_NON_US_MARKERS = (
+    "united kingdom",
+    "canada",
+    "india",
+    "australia",
+    "ireland",
+    "germany",
+    "france",
+    "netherlands",
+    "spain",
+    "mexico",
+    "brazil",
+    "singapore",
+    "philippines",
+    "pakistan",
+)
+_REMOTE_US_LABELS = frozenset(
+    {"remote", "remote us", "remote usa", "remote united states", "us remote", "usa remote"}
+)
+
+
+def is_us_location(job: dict) -> bool:
+    """
+    Best-effort check that a JobSpy result is a US posting.
+
+    JobSpy's location filter is fuzzy, and the same role is often reposted from
+    several offices — when duplicates match, this picks the US posting. Explicit
+    non-US markers reject first (guards ambiguous abbreviations like IN), then
+    positive US evidence (state names/abbreviations, USA markers, US remote
+    labels) accepts. Remote results with no parsable location are accepted
+    because the JobSpy query itself is US-scoped.
+    """
+    loc = (job.get("location") or "").strip()
+    low = loc.lower()
+
+    if any(m in low for m in _NON_US_MARKERS):
+        return False
+    if any(m in low for m in _US_MARKERS):
+        return True
+    if low in _REMOTE_US_LABELS:
+        return True
+    tokens = set(re.split(r"[^a-z0-9]+", low))
+    if tokens & _US_STATE_ABBR:
+        return True
+    if any(name in low for name in _US_STATE_NAMES):
+        return True
+    if not loc and job.get("is_remote"):
+        return True
+    return False
 
 
 def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -> dict:
@@ -50,14 +119,16 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
         search_query = f"{title} {company}"
         logger.info(f"🔍 Searching wider pool for -> Query: '{search_query}'")
 
-        # Uses fetch_scraped_jobs from your new scraper module which returns a list directly
+        # Uses fetch_scraped_jobs from your new scraper module which returns a list directly.
+        # Google is excluded: it returns no data from datacenter IPs (every call
+        # errors), so it only adds noise to the widening step.
         found_jobs = fetch_scraped_jobs(
             search_term=search_query,
             location="United States",
             results_wanted=15,
             hours_old=168,
             is_remote=True,
-            site_name=["linkedin", "google"],
+            site_name=["linkedin"],
         )
 
         qualified_job = None
@@ -74,8 +145,14 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
             is_relevant_role = any(
                 kw in fj_title for kw in ["data", "etl", "engineer", "developer", "analytics"]
             )
-
-            if is_company_match and is_relevant_role and not is_sponsored:
+            # The same role is often reposted from multiple offices; only accept
+            # the US posting so the pipeline never points at a foreign listing.
+            if (
+                is_company_match
+                and is_relevant_role
+                and not is_sponsored
+                and is_us_location(fj)
+            ):
                 qualified_job = fj
                 logger.info(
                     f"   -> ✅ Qualified match found: '{fj.get('title')}' at '{fj.get('company')}'"
