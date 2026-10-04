@@ -40,8 +40,21 @@ FAILURE_REASONS = (
     "field_unmapped",
     "upload_failed",
     "rate_limited",
+    "billing_error",
     "agent_error",
     "unknown",
+)
+
+# Keywords identifying a depleted/denied LLM billing account. Checked first:
+# a 402 must never be misread as a captcha or retried on a 5-minute backoff.
+_BILLING_KEYWORDS = (
+    "402",
+    "resource_exhausted",
+    "prepayment",
+    "billing",
+    "quota",
+    "credits are depleted",
+    "insufficient_quota",
 )
 
 
@@ -55,6 +68,8 @@ def classify_failure_reason(
     if exc is not None:
         text += f" {type(exc).__name__}: {exc}"
     text = text.lower()
+    if any(k in text for k in _BILLING_KEYWORDS):
+        return "billing_error"
     if any(k in text for k in ("captcha", "turnstile", "challenge")):
         return "captcha"
     if "session_expired" in text or ("session" in text and "expir" in text):
@@ -183,7 +198,18 @@ def finalize_job(
         plan = (STATUS_NEEDS_HUMAN, False, failure_reason, attempts, None)
     else:  # FAILED -> retry with backoff, then park
         attempts = attempts + 1
-        if attempts >= MAX_ATTEMPTS:
+        if failure_reason == "billing_error":
+            # A depleted billing account will not recover on a 5-minute
+            # backoff; park immediately so the dashboard shows the real cause
+            # instead of churning through pointless retries.
+            logger.warning(
+                "job_id=%s parked immediately: LLM billing exhausted (%s). "
+                "Top up billing or switch LLM_PROVIDER and re-queue from the dashboard.",
+                job_id,
+                failure_reason,
+            )
+            plan = (STATUS_FAILED, False, failure_reason, attempts, None)
+        elif attempts >= MAX_ATTEMPTS:
             logger.warning(
                 "job_id=%s exhausted %d attempts; parking as FAILED (%s)",
                 job_id,

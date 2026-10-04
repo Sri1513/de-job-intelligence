@@ -665,12 +665,29 @@ TASK RULES:
         # 3. Route status based on task execution result
         if not is_success:
             logger.warning("Agent reported task failure for job_id=%s: %s", job_id, final_summary)
+            # Best-effort: surface the agent's own step errors so the worker's
+            # failure classifier sees the real cause (e.g. a 402 billing error)
+            # instead of guessing from a generic message.
+            agent_errors = []
+            try:
+                for step in list(getattr(history, "history", []) or [])[-3:]:
+                    for action_result in getattr(step, "result", None) or []:
+                        err = getattr(action_result, "error", None)
+                        if err:
+                            agent_errors.append(str(err))
+            except Exception:
+                pass
+            detail = "; ".join(dict.fromkeys(agent_errors))[:500]
+            message = final_summary or (
+                f"Agent failed before completing the form. {detail}"
+                if detail
+                else "Agent failed before completing the form (no summary produced)."
+            )
             return {
                 "status": STATUS_FAILED,
                 "job_id": job_id,
                 "screenshot_path": verified_screenshot_path,
-                "message": final_summary
-                or "Agent was blocked by auth walls or CAPTCHAs before completing form.",
+                "message": message,
             }
 
         return {

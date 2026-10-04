@@ -44,3 +44,38 @@ def test_run_backfill_batch_flow(mock_update, mock_eval, mock_get_jobs):
     mock_update.assert_called_once_with(
         job_id="job_101", match_score=90, ai_notes="High relevance match.", ai_status="PROCESSED"
     )
+
+
+def test_classify_failure_reason_billing():
+    # browser_use is not installed in the test env; the classifier is a pure
+    # function, so stub the heavy import.
+    import sys
+    from unittest.mock import MagicMock
+
+    sys.modules.setdefault("browser_use", MagicMock())
+    from src.workers.apply_worker import classify_failure_reason
+
+    assert (
+        classify_failure_reason(
+            {"message": "402 RESOURCE_EXHAUSTED: Your prepayment credits are depleted."}
+        )
+        == "billing_error"
+    )
+    # Billing keywords win even when captcha-adjacent words are present.
+    assert (
+        classify_failure_reason(
+            {"message": "Agent was blocked by auth walls or CAPTCHAs. 402 billing error."}
+        )
+        == "billing_error"
+    )
+
+
+def test_classify_failure_reason_captcha_still_works():
+    import sys
+    from unittest.mock import MagicMock
+
+    sys.modules.setdefault("browser_use", MagicMock())
+    from src.workers.apply_worker import classify_failure_reason
+
+    assert classify_failure_reason({"message": "Blocked by a captcha challenge"}) == "captcha"
+    assert classify_failure_reason({"message": "Something went wrong"}) == "agent_error"
