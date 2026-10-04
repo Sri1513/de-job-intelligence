@@ -1,0 +1,38 @@
+# Temporary utility: install a new public key on the Oracle VM.
+# Run once manually from the Actions tab, verify SSH access, then delete this file.
+# The key itself lives in the TABLET_SSH_PUBKEY repository secret and never
+# enters the repo. Application code is untouched by this workflow.
+name: Add tablet SSH key to VM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  add-key:
+    name: Append public key to VM authorized_keys
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into VM and install key
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+            AUTH_KEYS="$HOME/.ssh/authorized_keys"
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            touch "$AUTH_KEYS"
+            chmod 600 "$AUTH_KEYS"
+            KEY='${{ secrets.TABLET_SSH_PUBKEY }}'
+            if [ -z "$KEY" ]; then
+              echo "TABLET_SSH_PUBKEY secret is empty or missing."; exit 1
+            fi
+            if grep -qxF "$KEY" "$AUTH_KEYS"; then
+              echo "Key already present in authorized_keys."
+            else
+              printf '%s\n' "$KEY" >> "$AUTH_KEYS"
+              echo "Key added to authorized_keys."
+            fi
