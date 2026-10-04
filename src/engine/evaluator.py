@@ -4,6 +4,7 @@ import logging
 import os
 import time
 import warnings
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
@@ -11,6 +12,7 @@ from openai import OpenAI
 
 from src.core.config import settings
 from src.core.database import get_db_connection
+from src.engine.llm_router import classify_llm_error
 from src.engine.matcher import calculate_local_fit_score, get_cached_resume
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -38,31 +40,42 @@ _load_env_keys()
 
 
 class GeminiKeyRotator:
-    """Manages a pool of Gemini API keys, automatically rotating on 429 quota exhaustion."""
+    """Manages a pool of Gemini API keys, automatically rotating on 429 quota exhaustion.
 
-    def __init__(self):
+    Two pools exist: the FREE pool (``GEMINI_API_KEY``, ``GEMINI_API_KEY_2``…
+    or comma-separated ``GEMINI_API_KEYS``) used by the analysis pipeline, and
+    the PAID pool (``GEMINI_PAID_API_KEY``, ``GEMINI_PAID_API_KEY_2``… or
+    ``GEMINI_PAID_API_KEYS``) used only as the last resort of the apply-agent
+    failover chain. The analysis pipeline never touches paid keys.
+    """
+
+    def __init__(self, paid: bool = False):
         _load_env_keys()
+        self.paid = paid
+        prefix = "GEMINI_PAID_API_KEY" if paid else "GEMINI_API_KEY"
+        list_var = "GEMINI_PAID_API_KEYS" if paid else "GEMINI_API_KEYS"
         discovered_keys = []
 
-        raw_keys = os.getenv("GEMINI_API_KEYS", "")
+        raw_keys = os.getenv(list_var, "")
         if raw_keys:
             discovered_keys.extend([k.strip() for k in raw_keys.split(",") if k.strip()])
 
         for i in range(1, 10):
-            var_name = "GEMINI_API_KEY" if i == 1 else f"GEMINI_API_KEY_{i}"
+            var_name = prefix if i == 1 else f"{prefix}_{i}"
             k = os.getenv(var_name)
             if k and k.strip() and k.strip() not in discovered_keys:
                 discovered_keys.append(k.strip())
 
-        if not discovered_keys and os.getenv("GOOGLE_API_KEY"):
+        if not paid and not discovered_keys and os.getenv("GOOGLE_API_KEY"):
             discovered_keys.append(os.getenv("GOOGLE_API_KEY").strip())
 
         self.keys = discovered_keys
         self.current_idx = 0
+        pool = "paid" if paid else "free"
         if not self.keys:
-            logger.error("No Gemini API keys found in environment variables.")
+            logger.warning(f"No Gemini {pool} API keys found in environment variables.")
         else:
-            logger.info(f"Loaded {len(self.keys)} Gemini API key(s) into rotation pool.")
+            logger.info(f"Loaded {len(self.keys)} Gemini {pool} API key(s) into rotation pool.")
             self._configure_active_key()
 
     def _configure_active_key(self):
@@ -81,14 +94,39 @@ class GeminiKeyRotator:
 
     def evaluate_with_gemini(self, prompt: str) -> str:
         if not self.keys:
-            raise RuntimeError("No Gemini API keys available for fallback.")
+            pool = "paid" if self.paid else "free"
+            raise RuntimeError(f"No Gemini {pool} API keys available for fallback.")
         self._configure_active_key()
         model = genai.GenerativeModel(settings.GEMINI_MODEL)
         response = model.generate_content(prompt)
         return response.text.strip()
 
 
-rotator = GeminiKeyRotator()
+# Free pool: used by the analysis pipeline (fit score / sponsorship / skills).
+# Paid pool: reserved for the apply-agent failover chain's last resort.
+free_rotator = GeminiKeyRotator(paid=False)
+paid_rotator = GeminiKeyRotator(paid=True)
+
+# In-process short-circuit: once Groq's free quota is hit during a batch run,
+# skip it for the rest of the day instead of failing every job loudly.
+_groq_exhausted_until: Optional[datetime] = None
+
+
+def _groq_exhausted() -> bool:
+    return _groq_exhausted_until is not None and datetime.now(timezone.utc) < _groq_exhausted_until
+
+
+def _mark_groq_exhausted(reason: str) -> None:
+    global _groq_exhausted_until
+    _groq_exhausted_until = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    logger.warning(
+        "evaluator: Groq free quota exhausted (%s); skipping Groq for remaining "
+        "jobs until %s",
+        reason,
+        _groq_exhausted_until.isoformat(),
+    )
 
 EVAL_PROMPT = """You are an executive technical recruiter evaluating Data Engineering and DevOps positions.
 Analyze the target job against the candidate profile.
@@ -121,7 +159,11 @@ Return a STRICT JSON object (no markdown, no backticks):
 
 
 def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[str, Any]:
-    """Evaluates job via Groq first; falls back to Gemini key rotation pool if Groq fails."""
+    """Evaluates a job via Groq (free) first, then the Gemini FREE key pool.
+
+    The paid Gemini pool is never used here — analysis stays on free tiers by
+    policy. Every provider decision is logged with the job id.
+    """
     prompt = EVAL_PROMPT.format(
         resume_text=resume_text[:4000],
         job_id=job["job_id"],
@@ -132,9 +174,10 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
 
     groq_api_key = os.getenv("GROQ_API_KEY")
     raw_response = None
+    serving_provider = "none"
 
-    # 1. Try Primary: Groq API
-    if groq_api_key:
+    # 1. Try Primary: Groq API (free tier)
+    if groq_api_key and not _groq_exhausted():
         try:
             client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_api_key)
             response = client.chat.completions.create(
@@ -147,38 +190,62 @@ def evaluate_job_with_fallback(job: Dict[str, Any], resume_text: str) -> Dict[st
                 timeout=30.0,
             )
             raw_response = response.choices[0].message.content.strip()
+            serving_provider = f"groq({settings.GROQ_MODEL})"
         except Exception as e:
+            kind = classify_llm_error(e)
             logger.warning(
-                f"Groq evaluation failed for {job['job_id']}: {e}. Switching to Gemini fallback..."
+                "evaluator: Groq evaluation failed for %s [%s]: %s. Failing over to Gemini free pool...",
+                job["job_id"],
+                kind,
+                str(e)[:200],
             )
+            if kind in ("quota", "billing"):
+                _mark_groq_exhausted(str(e)[:120])
+    elif groq_api_key and _groq_exhausted():
+        logger.debug(
+            "evaluator: skipping Groq for %s (quota exhausted earlier this run)",
+            job["job_id"],
+        )
 
-    # 2. Fallback: Gemini Key Pool
+    # 2. Fallback: Gemini FREE key pool (never paid)
     if not raw_response:
         attempts = 0
-        max_gemini_retries = len(rotator.keys) + 1 if rotator.keys else 1
+        max_gemini_retries = len(free_rotator.keys) + 1 if free_rotator.keys else 1
         while attempts < max_gemini_retries:
             try:
-                raw_response = rotator.evaluate_with_gemini(prompt)
+                raw_response = free_rotator.evaluate_with_gemini(prompt)
+                serving_provider = f"gemini-free(key {free_rotator.current_idx + 1}/{len(free_rotator.keys)})"
                 break
             except Exception as ge:
-                err_msg = str(ge).lower()
-                if "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
+                kind = classify_llm_error(ge)
+                if kind in ("quota", "billing"):
                     logger.warning(
-                        f"Quota exhausted on Gemini key {rotator.current_idx + 1}. Rotating..."
+                        "evaluator: quota exhausted on Gemini free key %d/%d [%s]. Rotating...",
+                        free_rotator.current_idx + 1,
+                        len(free_rotator.keys),
+                        kind,
                     )
-                    rotated = rotator.rotate_key()
+                    rotated = free_rotator.rotate_key()
                     if not rotated:
                         raise RuntimeError(
-                            "All Gemini API keys in pool exhausted their quota."
+                            "All Gemini free API keys in pool exhausted their quota."
                         ) from ge
                 else:
-                    logger.warning(f"Gemini fallback attempt failed: {ge}")
-                    rotated = rotator.rotate_key()
+                    logger.warning(
+                        "evaluator: Gemini free fallback attempt failed [%s]: %s",
+                        kind,
+                        str(ge)[:200],
+                    )
+                    free_rotator.rotate_key()
                 attempts += 1
                 time.sleep(2)
 
         if not raw_response:
             raise RuntimeError(f"All evaluation providers failed for job {job['job_id']}.")
+
+    logger.info(
+        "evaluator: job %s evaluated via %s", job["job_id"], serving_provider
+    )
 
     # Clean response formatting
     if raw_response.startswith("```"):

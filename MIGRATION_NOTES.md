@@ -63,12 +63,30 @@ leases, retries, and the failure taxonomy.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LLM_PROVIDER` | `gemini` | `gemini` or `muse` (Meta Model API) for the browser agent |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Overrides `settings.GEMINI_MODEL` (fixes hardcoded nonexistent `gemini-3.8-flash`) |
+| `LLM_PROVIDER` | `gemini` | `gemini`, `muse` (Meta Model API), or `auto` (failover: Groq free → Gemini free → Gemini paid) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Model for `LLM_PROVIDER=gemini` and the free step of `auto` |
 | `MODEL_API_KEY` | — | Required when `LLM_PROVIDER=muse` |
 | `META_MODEL_API_BASE_URL` | `https://api.meta.ai/v1` | Meta Model API endpoint |
 | `MUSE_SPARK_MODEL` | `muse-spark-1.3` | Model id for `LLM_PROVIDER=muse` |
+| `GROQ_API_KEY` | — | Groq key (free tier, no card). First in `auto` chain and analysis pipeline |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model id (e.g. `llama-3.3-70b-versatile`) |
+| `GEMINI_PAID_API_KEY` | — | Paid-tier Gemini key. Last resort of the `auto` apply chain ONLY; analysis never uses it. Also accepts `GEMINI_PAID_API_KEYS` (comma-separated) / `GEMINI_PAID_API_KEY_2..9` |
+| `GEMINI_PAID_MODEL` | `gemini-2.5-flash` | Model for the paid step of `auto` |
+| `APPLY_ALLOW_PAID` | `true` | Set `false` to keep the `auto` chain free-only (paid step excluded) |
 | `POLL_INTERVAL` / `BATCH_LIMIT` | `30` / `5` | Apply worker daemon tuning (unchanged) |
+
+### LLM failover policy (`LLM_PROVIDER=auto`)
+
+- **Analysis** (fit score, sponsorship, skill extraction): Groq free → Gemini free pool
+  (`GEMINI_API_KEY[_N]`). Paid keys are never used. Every evaluation logs which
+  provider served it; Groq quota exhaustion is skipped for the rest of the day.
+- **Apply** (browser agent): Groq free → Gemini free → Gemini paid
+  (`GEMINI_PAID_API_KEY[_N]`). Paid Gemini engages only after free quotas are
+  exhausted, and the engagement is logged loudly. Quota errors park a free
+  provider until ~midnight UTC; billing errors park for 30 min so a mid-day
+  top-up recovers.
+- All failovers, exhaustion markings, and paid engagements are logged and
+  visible via `job-admin logs --service apply-worker`.
 
 ## 5. Internal API changes
 
