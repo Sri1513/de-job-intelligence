@@ -4,11 +4,9 @@ import logging
 import os
 import time
 import warnings
-from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
-from openai import OpenAI
 
 from src.core.config import settings
 from src.core.database import get_db_connection
