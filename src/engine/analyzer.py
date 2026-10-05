@@ -1,15 +1,11 @@
 # src/engine/analyzer.py
 import json
 import logging
-import os
 import warnings
 from typing import Any
 
-import google.generativeai as genai
-from openai import OpenAI
-
-from src.core.config import settings
 from src.core.utils import get_cached_resume
+from src.engine.llm_text import generate_text
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -74,59 +70,24 @@ def evaluate_job_fit(
 {job_description}
 """
 
-    groq_api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY")
-    raw_response = None
-
-    # 1. Try Primary: Groq API
-    if groq_api_key:
-        try:
-            client = OpenAI(
-                base_url="[https://api.groq.com/openai/v1](https://api.groq.com/openai/v1)",
-                api_key=groq_api_key,
-            )
-            response = client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                temperature=0.1,
-                timeout=30.0,
-            )
-            raw_response = response.choices[0].message.content.strip()
-        except Exception as groq_exc:
-            logger.warning(
-                f"⚠️ Groq primary evaluation failed in analyzer: {groq_exc}. Falling back to Gemini..."
-            )
-
-    # 2. Fallback: Gemini API
-    if not raw_response:
-        gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            try:
-                genai.configure(api_key=gemini_key)
-                model_name = settings.GEMINI_MODEL or "gemini-1.5-flash"
-                model = genai.GenerativeModel(model_name)
-                gemini_prompt = f"{ANALYSIS_SYSTEM_PROMPT}\n\n{user_content}"
-                gemini_resp = model.generate_content(gemini_prompt)
-                raw_response = gemini_resp.text.strip()
-            except Exception as gemini_exc:
-                logger.error(f"❌ Gemini fallback also failed in analyzer: {gemini_exc}")
-                return {
-                    "match_score": 0,
-                    "key_matches": [],
-                    "missing_skills": [],
-                    "role_focus": "ERROR",
-                    "summary_rationale": "All AI providers failed. Groq & Gemini errors encountered.",
-                }
-        else:
-            return {
-                "match_score": 0,
-                "key_matches": [],
-                "missing_skills": [],
-                "role_focus": "ERROR",
-                "summary_rationale": "Groq failed and no Gemini fallback API key is configured.",
-            }
+    # Config-driven failover chain (config/llm.yaml): tries providers in order,
+    # sidelining any that hit quota/errors, with WhatsApp alerts on failover.
+    try:
+        raw_response = generate_text(
+            f"{ANALYSIS_SYSTEM_PROMPT}\n\n{user_content}",
+            json_mode=True,
+            temperature=0.1,
+            task="job-analysis",
+        )
+    except Exception as exc:
+        logger.error(f"❌ All LLM providers failed in analyzer: {exc}")
+        return {
+            "match_score": 0,
+            "key_matches": [],
+            "missing_skills": [],
+            "role_focus": "ERROR",
+            "summary_rationale": "All AI providers failed. See logs for details.",
+        }
 
     try:
         return _clean_and_parse_json(raw_response)

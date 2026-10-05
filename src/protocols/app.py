@@ -23,10 +23,21 @@ from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
 
 logger = logging.getLogger("de-job-intelligence.mcp")
-# Uvicorn leaves the root logger at WARNING with no explicit config for this
-# logger, which silently drops logger.info() calls (e.g. "Tool executed:").
-# Pin INFO here so operational log lines actually reach the log file.
+# The MCP server process never configures a handler for this logger (no
+# basicConfig here; uvicorn only configures its own loggers). Without one,
+# Python's lastResort handler (WARNING) silently drops logger.info() calls
+# even when the level allows them -- which is why "Tool executed:" never
+# reached mcp.log. Attach a dedicated stderr handler (captured by tee into
+# mcp.log) and stop propagation so records can't double-emit via root.
 logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setLevel(logging.INFO)
+    _handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+    )
+    logger.addHandler(_handler)
+logger.propagate = False
 
 
 async def health_check(request: Request) -> JSONResponse:

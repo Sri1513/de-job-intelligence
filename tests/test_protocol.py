@@ -75,10 +75,19 @@ async def test_dispatcher_unknown_tool():
 
 
 def test_mcp_logger_emits_info():
-    # Regression: the MCP logger had no level set, so it inherited WARNING
-    # from the root logger and silently dropped logger.info("Tool executed:").
+    # Regression: "Tool executed:" (logger.info) never reached mcp.log.
+    # Root cause, in two parts:
+    #   1. the logger had no level set -> inherited WARNING from root;
+    #   2. the MCP server process configures no handler for this logger,
+    #      so even with level fixed, Python's lastResort (WARNING) dropped
+    #      INFO records.
+    # The logger must therefore own an INFO-capable handler of its own.
     import logging
 
     from src.protocols.app import logger
 
     assert logger.getEffectiveLevel() <= logging.INFO
+    assert any(
+        h.level <= logging.INFO for h in logger.handlers
+    ), "mcp logger needs its own INFO handler (process configures no root handler)"
+    assert logger.propagate is False  # our handler emits; don't double-emit via root

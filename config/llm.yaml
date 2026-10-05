@@ -1,0 +1,60 @@
+# config/llm.yaml — LLM provider chain for text generation
+# (job analysis, outreach email drafting, metadata extraction, evaluation).
+#
+# HOW IT WORKS
+# - Providers are tried IN ORDER: the first available provider serves each call.
+# - If a provider hits quota/rate limits, it is sidelined until ~midnight UTC
+#   (free-tier daily reset) and the next provider takes over automatically.
+# - On transient errors (e.g. HTTP 503 "high demand"), the call is retried once,
+#   then fails over to the next provider.
+# - Every failover is logged, and quota-exhaustion / all-providers-down events
+#   trigger a WhatsApp alert (see src/engine/notifier.py).
+#
+# TO CHANGE THE CHAIN — edit this file only, no code changes needed:
+# - Reorder providers to change failover priority.
+# - Set `enabled: false` to take a provider out of the chain.
+# - Add a provider block to add one (needs a builder in llm_text.py;
+#   any OpenAI-compatible endpoint works via `base_url`).
+#
+# SECRETS ARE NEVER STORED HERE — only the *names* of the environment
+# variables that hold the API keys. Add keys to .env / the VM environment.
+
+providers:
+  - name: gemini
+    kind: free
+    enabled: true
+    model: gemini-2.5-flash-lite
+    # Multiple keys are tried in order within the provider before failing over.
+    api_key_envs:
+      - GEMINI_API_KEY
+      - GEMINI_API_KEY_2
+      - GEMINI_API_KEY_3
+      - GOOGLE_API_KEY
+
+  - name: groq
+    kind: free
+    enabled: true
+    model: openai/gpt-oss-120b
+    base_url: https://api.groq.com/openai/v1
+    api_key_envs:
+      - GROQ_API_KEY
+
+  # --- Future providers -------------------------------------------------
+  # Example: Muse API (dev/muse.ai) — uncomment if a free quota becomes
+  # available. Any OpenAI-compatible endpoint works via `base_url`.
+  # - name: muse-api
+  #   kind: free
+  #   enabled: false
+  #   model: muse-spark
+  #   base_url: https://api.muse.ai/v1
+  #   api_key_envs:
+  #     - MUSE_API_KEY
+
+settings:
+  # Seconds to wait before the single automatic retry on a transient error.
+  transient_retry_delay_s: 2
+  # How long a provider stays sidelined after a transient failure (seconds).
+  transient_cooldown_s: 120
+  # Paid-tier providers engage only as a last resort. Engagement is always
+  # logged loudly and triggers a WhatsApp alert.
+  allow_paid: true
