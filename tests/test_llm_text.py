@@ -146,3 +146,24 @@ def test_repo_config_loads_with_fake_keys(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "fake")
     providers = load_text_providers(Path("config/llm.yaml"))
     assert [p.name for p in providers] == ["gemini", "groq"]
+
+
+def test_paid_excluded_by_default_included_when_opted_in(tmp_path, monkeypatch):
+    cfg = {
+        "providers": [
+            {"name": "gemini", "kind": "free", "enabled": True,
+             "model": "m1", "api_key_envs": ["TEST_KEY_A"]},
+            {"name": "gemini-paid", "kind": "paid", "enabled": True,
+             "model": "m2", "api_key_envs": ["TEST_KEY_P"]},
+        ],
+        "settings": {},
+    }
+    path = tmp_path / "llm.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    monkeypatch.setenv("TEST_KEY_A", "a")
+    monkeypatch.setenv("TEST_KEY_P", "p")
+
+    free_only = load_text_providers(path)
+    assert [p.name for p in free_only] == ["gemini"]
+    with_opt_in = load_text_providers(path, allow_paid=True)
+    assert [p.name for p in with_opt_in] == ["gemini", "gemini-paid"]

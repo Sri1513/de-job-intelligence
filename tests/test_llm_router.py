@@ -176,21 +176,43 @@ def test_empty_chain_rejected():
 
 # --- chain construction ---------------------------------------------------
 
-def test_get_apply_providers_skips_missing_keys(monkeypatch):
+def _write_test_llm_yaml(tmp_path, monkeypatch):
+    """Writes a temp config/llm.yaml mirroring the classic test chain."""
+    import yaml
+
+    cfg = {
+        "providers": [
+            {"name": "groq", "kind": "free", "enabled": True,
+             "model": "llama-3.3-70b-versatile",
+             "base_url": "https://api.groq.com/openai/v1",
+             "api_key_envs": ["GROQ_API_KEY"]},
+            {"name": "gemini", "kind": "free", "enabled": True,
+             "model": "gemini-2.5-flash-lite",
+             "api_key_envs": ["GEMINI_API_KEY"]},
+            {"name": "gemini-paid", "kind": "paid", "enabled": True,
+             "model": "gemini-2.5-flash",
+             "api_key_envs": ["GEMINI_PAID_API_KEY"]},
+        ],
+        "settings": {},
+    }
+    path = tmp_path / "llm.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    monkeypatch.setenv("LLM_CONFIG_PATH", str(path))
+    return path
+
+
+def test_get_apply_providers_skips_missing_keys(monkeypatch, tmp_path):
+    _write_test_llm_yaml(tmp_path, monkeypatch)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_PAID_API_KEY", raising=False)
-    # settings defaults are empty in the test env; ensure no .env leaks in.
-    monkeypatch.setattr("src.core.config.settings.GROQ_API_KEY", "")
-    monkeypatch.setattr("src.core.config.settings.GEMINI_API_KEY", "")
-    monkeypatch.setattr("src.core.config.settings.GEMINI_PAID_API_KEY", "")
-    with pytest.raises(RuntimeError, match="no apply providers"):
+    with pytest.raises(RuntimeError, match="no providers usable"):
         get_apply_providers()
 
 
-def test_get_apply_providers_builds_chain_in_order(monkeypatch):
+def test_get_apply_providers_builds_chain_in_order(monkeypatch, tmp_path):
+    _write_test_llm_yaml(tmp_path, monkeypatch)
     monkeypatch.setenv("GROQ_API_KEY", "gq-test")
-    monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     monkeypatch.setenv("GEMINI_API_KEY", "gm-test")
     monkeypatch.setenv("GEMINI_PAID_API_KEY", "gm-paid-test")
     providers = get_apply_providers()
@@ -198,13 +220,33 @@ def test_get_apply_providers_builds_chain_in_order(monkeypatch):
     assert [p.kind for p in providers] == [FREE, FREE, PAID]
 
 
-def test_apply_allow_paid_false_excludes_paid(monkeypatch):
+def test_apply_allow_paid_false_excludes_paid(monkeypatch, tmp_path):
+    _write_test_llm_yaml(tmp_path, monkeypatch)
     monkeypatch.setenv("GROQ_API_KEY", "gq-test")
     monkeypatch.setenv("GEMINI_API_KEY", "gm-test")
     monkeypatch.setenv("GEMINI_PAID_API_KEY", "gm-paid-test")
     monkeypatch.setenv("APPLY_ALLOW_PAID", "false")
     providers = get_apply_providers()
     assert [p.name for p in providers] == ["groq", "gemini"]
+
+
+def test_get_apply_providers_expands_multiple_keys(monkeypatch, tmp_path):
+    import yaml
+
+    cfg = {
+        "providers": [
+            {"name": "gemini", "kind": "free", "enabled": True,
+             "model": "m", "api_key_envs": ["GEMINI_API_KEY", "GEMINI_API_KEY_2"]},
+        ],
+        "settings": {},
+    }
+    path = tmp_path / "llm.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    monkeypatch.setenv("LLM_CONFIG_PATH", str(path))
+    monkeypatch.setenv("GEMINI_API_KEY", "k1")
+    monkeypatch.setenv("GEMINI_API_KEY_2", "k2")
+    providers = get_apply_providers()
+    assert [p.name for p in providers] == ["gemini", "gemini (key 2)"]
 
 
 # --- evaluator pools ------------------------------------------------------
