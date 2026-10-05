@@ -1,18 +1,12 @@
 # src/engine/email_analyzer.py
 import json
 import logging
-import warnings
 from typing import Any, Dict
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    import google.generativeai as genai
-
-from src.core.config import settings
+from src.engine.llm_text import generate_text
 from src.engine.pipeline_utils import generate_domain_short_id  # <--- Imported from pipeline_utils
 
 logger = logging.getLogger("de-job-intelligence.engine")
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
 def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
@@ -43,15 +37,11 @@ def parse_whatsapp_alert_metadata(whatsapp_text: str) -> Dict[str, Any]:
     """
 
     try:
-        model = genai.GenerativeModel(
-            model_name=settings.GEMINI_MODEL,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.1,
-            },
+        raw_json = generate_text(
+            prompt, json_mode=True, temperature=0.1,
+            task="whatsapp-metadata",
         )
-        response = model.generate_content(prompt)
-        data = json.loads(response.text)
+        data = json.loads(raw_json)
 
         # Python safeguard: ensure recruiter_name is strictly the first name
         raw_name = data.get("recruiter_name")

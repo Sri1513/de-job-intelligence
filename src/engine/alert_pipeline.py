@@ -3,30 +3,15 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from google import genai
-from google.genai import types
-
-from src.core.config import settings
 from src.core.database import get_db_connection
 from src.database.helper_repo import get_or_create_helper, log_outreach_event
 from src.engine.email_analyzer import parse_whatsapp_alert_metadata
+from src.engine.llm_text import generate_text
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.gmail_client import create_gmail_draft
 from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
 
 logger = logging.getLogger("de-job-intelligence.engine")
-
-# Lazily-initialized google-genai client. Created on first use, never at import,
-# so importing this module does not require an API key to be configured.
-_genai_client = None
-
-
-def get_genai_client():
-    """Returns the shared genai client, creating it on first use."""
-    global _genai_client
-    if _genai_client is None:
-        _genai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    return _genai_client
 
 DEFAULT_MASTER_RESUME_URL = (
     "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
@@ -108,15 +93,15 @@ def process_whatsapp_job_alert(
     )
 
     try:
-        response = get_genai_client().models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=email_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.2,
-            ),
+        # Config-driven failover chain (config/llm.yaml): tries providers in
+        # order, sidelining any that hit quota/errors, with WhatsApp alerts.
+        email_json = generate_text(
+            email_prompt,
+            json_mode=True,
+            temperature=0.2,
+            task="whatsapp-outreach-email",
         )
-        email_data = json.loads(response.text)
+        email_data = json.loads(email_json)
         subject = email_data.get(
             "subject", f"Application for {job_title} – {company_name} – Sri Omkar D"
         )
