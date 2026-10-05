@@ -1,13 +1,17 @@
 # src/engine/llm_router.py
 """Resilient multi-provider LLM routing with quota-aware failover.
 
+The provider chain itself lives in config/llm.yaml (shared with
+src/engine/llm_text.py); this module maps each (provider, key) onto a
+browser-use chat model for the apply agent.
+
 User policy (2026-10-03):
-- ANALYSIS (fit score, sponsorship, skill extraction): Groq free -> Gemini free.
-  Paid keys are NEVER used here.
-- APPLY (browser-use agent): Groq free -> Gemini free -> Gemini paid.
-  Free tiers are exhausted first; paid Gemini only engages when free quota is
-  gone, so the pipeline keeps running instead of stopping. Paid engagement is
-  always logged loudly. Set APPLY_ALLOW_PAID=false to disable the paid step.
+- ANALYSIS (fit score, sponsorship, skill extraction): free tiers only,
+  via llm_text.generate_text (paid never engaged there).
+- APPLY (browser-use agent): free providers first, then paid — paid engages
+  only when free quota is gone, so the pipeline keeps running instead of
+  stopping. Paid engagement is always logged loudly. Set APPLY_ALLOW_PAID=false
+  to disable the paid step.
 
 Everything is logged: chain construction, per-call provider (DEBUG), every
 failover with its reason (WARNING), quota-exhaustion markings (WARNING), and
@@ -21,14 +25,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
-from src.core.config import settings
-
 logger = logging.getLogger(__name__)
 
 FREE = "free"
 PAID = "paid"
-
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Substrings (lowercased) identifying quota/rate-limit exhaustion.
 _QUOTA_KEYWORDS = (
@@ -312,7 +312,9 @@ class FailoverLLM:
 
 
 # ---------------------------------------------------------------------------
-# Chain factories
+# Chain factories — the provider chain itself lives in config/llm.yaml and is
+# shared with src/engine/llm_text.py. This module maps each (provider, key)
+# onto a browser-use chat model for the apply agent.
 # ---------------------------------------------------------------------------
 
 def _env(name: str, default: str = "") -> str:
@@ -320,66 +322,52 @@ def _env(name: str, default: str = "") -> str:
 
 
 def get_apply_providers() -> list[Provider]:
-    """Builds the APPLY chain: Groq free -> Gemini free -> Gemini paid.
+    """Builds the APPLY chain from config/llm.yaml (order = failover order).
 
-    Providers whose keys are missing are skipped (logged). Paid Gemini is only
-    included when APPLY_ALLOW_PAID is not 'false'.
+    One chat-model Provider is created per configured API key, so multi-key
+    providers rotate through their keys before the chain moves on. Paid-kind
+    providers are included only when APPLY_ALLOW_PAID is not 'false'; paid
+    engagement is always logged loudly (and WhatsApp-alerted by llm_text
+    when the text path serves through paid).
     """
-    providers: list[Provider] = []
-
-    groq_key = _env("GROQ_API_KEY", getattr(settings, "GROQ_API_KEY", ""))
-    if groq_key:
-        groq_model = _env("GROQ_MODEL", getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile"))
-        providers.append(
-            Provider(
-                name="groq",
-                kind=FREE,
-                model=groq_model,
-                build=lambda: build_openai_compat_llm(GROQ_BASE_URL, groq_key, groq_model),
-            )
-        )
-    else:
-        logger.info("llm-router: GROQ_API_KEY not set; groq skipped in apply chain")
-
-    gemini_key = _env("GEMINI_API_KEY", getattr(settings, "GEMINI_API_KEY", ""))
-    if gemini_key:
-        gemini_model = _env("GEMINI_MODEL", getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash-lite"))
-        providers.append(
-            Provider(
-                name="gemini",
-                kind=FREE,
-                model=gemini_model,
-                build=lambda: build_gemini_llm(gemini_key, gemini_model),
-            )
-        )
-    else:
-        logger.info("llm-router: GEMINI_API_KEY not set; gemini(free) skipped in apply chain")
+    from src.engine.llm_text import load_text_providers
 
     allow_paid = _env("APPLY_ALLOW_PAID", "true").lower() != "false"
-    paid_key = _env("GEMINI_PAID_API_KEY", getattr(settings, "GEMINI_PAID_API_KEY", ""))
-    if paid_key and allow_paid:
-        paid_model = _env("GEMINI_PAID_MODEL", getattr(settings, "GEMINI_PAID_MODEL", "gemini-2.5-flash"))
-        providers.append(
-            Provider(
-                name="gemini-paid",
-                kind=PAID,
-                model=paid_model,
-                build=lambda: build_gemini_llm(paid_key, paid_model),
-            )
-        )
-        logger.warning(
-            "llm-router: gemini-paid is ARMED in the apply chain — it engages only "
-            "after free quotas are exhausted, and usage WILL incur charges."
-        )
-    elif paid_key and not allow_paid:
-        logger.info("llm-router: APPLY_ALLOW_PAID=false; gemini-paid excluded from apply chain")
-    else:
-        logger.info("llm-router: GEMINI_PAID_API_KEY not set; gemini-paid skipped in apply chain")
+    text_providers = load_text_providers(allow_paid=allow_paid)
 
-    if not providers:
-        raise RuntimeError(
-            "llm-router: no apply providers configured. Set GROQ_API_KEY and/or "
-            "GEMINI_API_KEY and/or GEMINI_PAID_API_KEY."
+    providers: list[Provider] = []
+    for tp in text_providers:
+        for idx, key in enumerate(tp.api_keys):
+            label = tp.name if idx == 0 else f"{tp.name} (key {idx + 1})"
+            if tp.name.startswith("gemini"):
+                providers.append(
+                    Provider(
+                        name=label,
+                        kind=tp.kind,
+                        model=tp.model,
+                        build=lambda k=key, m=tp.model: build_gemini_llm(k, m),
+                    )
+                )
+            elif tp.base_url:
+                providers.append(
+                    Provider(
+                        name=label,
+                        kind=tp.kind,
+                        model=tp.model,
+                        build=lambda k=key, m=tp.model, u=tp.base_url: (
+                            build_openai_compat_llm(u, k, m)
+                        ),
+                    )
+                )
+            else:
+                raise RuntimeError(
+                    f"llm-router: provider '{tp.name}' has no builder "
+                    f"(needs name starting with 'gemini' or a base_url)"
+                )
+    if allow_paid and any(p.kind == PAID for p in providers):
+        logger.warning(
+            "llm-router: paid provider(s) ARMED in the apply chain — they engage "
+            "only after free quotas are exhausted, and usage WILL incur charges."
         )
     return providers
 

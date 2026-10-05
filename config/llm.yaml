@@ -1,5 +1,10 @@
-# config/llm.yaml — LLM provider chain for text generation
-# (job analysis, outreach email drafting, metadata extraction, evaluation).
+# config/llm.yaml — THE single source of truth for the LLM provider chain.
+#
+# This file defines every LLM provider the platform may use: the order they
+# are tried in (= failover order), the model per provider, and which
+# environment variables hold the API keys. Both consumers read it:
+#   - src/engine/llm_text.py  (analysis, outreach email, metadata, evaluation)
+#   - src/engine/llm_router.py (browser-use apply agent, via get_apply_llm())
 #
 # HOW IT WORKS
 # - Providers are tried IN ORDER: the first available provider serves each call.
@@ -7,14 +12,19 @@
 #   (free-tier daily reset) and the next provider takes over automatically.
 # - On transient errors (e.g. HTTP 503 "high demand"), the call is retried once,
 #   then fails over to the next provider.
-# - Every failover is logged, and quota-exhaustion / all-providers-down events
+# - Every failover is logged; quota-exhaustion / all-providers-down events
 #   trigger a WhatsApp alert (see src/engine/notifier.py).
 #
 # TO CHANGE THE CHAIN — edit this file only, no code changes needed:
 # - Reorder providers to change failover priority.
 # - Set `enabled: false` to take a provider out of the chain.
-# - Add a provider block to add one (needs a builder in llm_text.py;
-#   any OpenAI-compatible endpoint works via `base_url`).
+# - Add a provider block to add one (any OpenAI-compatible endpoint works
+#   via `base_url`; `gemini` uses the Google GenAI SDK).
+#
+# PAID POLICY — providers with `kind: paid` engage only when the caller opts
+# in. The analysis paths (llm_text) stay free-only; only the apply agent
+# (llm_router, gated by APPLY_ALLOW_PAID) may use paid. Paid engagement is
+# always logged loudly and triggers a WhatsApp alert.
 #
 # SECRETS ARE NEVER STORED HERE — only the *names* of the environment
 # variables that hold the API keys. Add keys to .env / the VM environment.
@@ -23,7 +33,7 @@ providers:
   - name: gemini
     kind: free
     enabled: true
-    model: gemini-2.5-flash-lite
+    model: gemini-3.5-flash-lite
     # Multiple keys are tried in order within the provider before failing over.
     api_key_envs:
       - GEMINI_API_KEY
@@ -38,6 +48,13 @@ providers:
     base_url: https://api.groq.com/openai/v1
     api_key_envs:
       - GROQ_API_KEY
+
+  - name: gemini-paid
+    kind: paid
+    enabled: true
+    model: gemini-2.5-flash
+    api_key_envs:
+      - GEMINI_PAID_API_KEY
 
   # --- Future providers -------------------------------------------------
   # Example: Muse API (dev/muse.ai) — uncomment if a free quota becomes
@@ -55,6 +72,3 @@ settings:
   transient_retry_delay_s: 2
   # How long a provider stays sidelined after a transient failure (seconds).
   transient_cooldown_s: 120
-  # Paid-tier providers engage only as a last resort. Engagement is always
-  # logged loudly and triggers a WhatsApp alert.
-  allow_paid: true

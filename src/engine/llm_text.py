@@ -169,18 +169,23 @@ class TextProvider:
 # Config loading
 # ---------------------------------------------------------------------------
 
-def load_text_providers(config_path: Optional[Path] = None) -> List[TextProvider]:
+def load_text_providers(
+    config_path: Optional[Path] = None,
+    *,
+    allow_paid: bool = False,
+) -> List[TextProvider]:
     """Builds the provider chain from config/llm.yaml.
 
     Providers that are disabled or have no API key configured are skipped
-    (logged). Raises RuntimeError when nothing is usable.
+    (logged). Paid-kind providers are included only when ``allow_paid`` is
+    true — the analysis paths stay free-only; only the apply agent opts in.
+    Raises RuntimeError when nothing is usable.
     """
     path = Path(config_path) if config_path else Path(
         os.getenv("LLM_CONFIG_PATH", str(DEFAULT_CONFIG_PATH))
     )
     with open(path, "r", encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh) or {}
-    settings_cfg = cfg.get("settings", {}) or {}
 
     providers: List[TextProvider] = []
     for entry in cfg.get("providers", []) or []:
@@ -196,8 +201,8 @@ def load_text_providers(config_path: Optional[Path] = None) -> List[TextProvider
             )
             continue
         kind = entry.get("kind", FREE)
-        if kind == PAID and not settings_cfg.get("allow_paid", True):
-            logger.info("llm-text: provider=%s is paid and allow_paid=false; skipped", name)
+        if kind == PAID and not allow_paid:
+            logger.info("llm-text: provider=%s is paid and not opted in; skipped", name)
             continue
         providers.append(
             TextProvider(
@@ -210,7 +215,7 @@ def load_text_providers(config_path: Optional[Path] = None) -> List[TextProvider
         )
     if not providers:
         raise RuntimeError(
-            f"llm-text: no providers usable from {path}. "
+            f"llm-text: no providers usable from {path} (allow_paid={allow_paid}). "
             "Set the API key env vars named in config/llm.yaml."
         )
     logger.info(
@@ -220,25 +225,27 @@ def load_text_providers(config_path: Optional[Path] = None) -> List[TextProvider
     return providers
 
 
-# Module-level chain (built lazily so imports never require API keys).
-_chain: Optional[List[TextProvider]] = None
+# Module-level chains (built lazily so imports never require API keys),
+# keyed by the allow_paid flag since free-only and paid-inclusive callers
+# need different chains.
+_chains: Dict[bool, List[TextProvider]] = {}
 _chain_settings: Dict[str, Any] = {}
 
 
-def _get_chain() -> List[TextProvider]:
-    global _chain, _chain_settings
-    if _chain is None:
+def _get_chain(allow_paid: bool = False) -> List[TextProvider]:
+    global _chain_settings
+    if allow_paid not in _chains:
         path = Path(os.getenv("LLM_CONFIG_PATH", str(DEFAULT_CONFIG_PATH)))
         with open(path, "r", encoding="utf-8") as fh:
             _chain_settings = (yaml.safe_load(fh) or {}).get("settings", {}) or {}
-        _chain = load_text_providers(path)
-    return _chain
+        _chains[allow_paid] = load_text_providers(path, allow_paid=allow_paid)
+    return _chains[allow_paid]
 
 
 def reset_chain() -> None:
-    """Clears the cached chain (used by tests)."""
-    global _chain, _chain_settings
-    _chain = None
+    """Clears the cached chains (used by tests)."""
+    global _chain_settings
+    _chains.clear()
     _chain_settings = {}
 
 
@@ -252,14 +259,17 @@ def generate_text(
     json_mode: bool = False,
     temperature: float = 0.2,
     task: str = "llm",
+    allow_paid: bool = False,
     providers: Optional[List[TextProvider]] = None,
 ) -> str:
     """Generates text via the first available provider, failing over on errors.
 
+    Paid-kind providers are used only when ``allow_paid`` is true (the
+    analysis paths stay free-only; only the apply agent opts in).
     Raises RuntimeError when every provider is exhausted/failed (after a
     WhatsApp alert). Callers should keep graceful fallbacks for that case.
     """
-    chain = providers if providers is not None else _get_chain()
+    chain = providers if providers is not None else _get_chain(allow_paid)
     retry_delay = float(_chain_settings.get("transient_retry_delay_s", 2))
     cooldown_s = float(_chain_settings.get("transient_cooldown_s", 120))
     last_exc: Optional[BaseException] = None
