@@ -51,7 +51,10 @@ def fetch_scraped_jobs(
                 logger.info(f"No listings returned from '{site}'.")
                 continue
 
-            # Recency post-filter
+            # Recency post-filter. If every row is older than the cutoff (LinkedIn
+            # frequently returns stale-dated rows), fall back to the most recent
+            # rows instead of silently returning zero — a stale job the user can
+            # still apply to beats an empty pipeline nobody notices.
             if hours_old and "date_posted" in df.columns:
                 try:
                     cutoff_date = (
@@ -60,7 +63,29 @@ def fetch_scraped_jobs(
                     parsed_dates = pd.to_datetime(
                         df["date_posted"], errors="coerce", utc=True
                     ).dt.date
-                    df = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
+                    fresh = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
+                    dropped = len(df) - len(fresh)
+                    if dropped:
+                        logger.info(
+                            "Recency filter (%dh) dropped %d stale row(s) from '%s' "
+                            "(newest seen: %s).",
+                            hours_old, dropped, site, parsed_dates.max(),
+                        )
+                    if fresh.empty and not df.empty:
+                        ranked = (
+                            df.assign(_parsed_date=parsed_dates)
+                            .sort_values("_parsed_date", ascending=False, na_position="first")
+                            .drop(columns=["_parsed_date"])
+                            .head(results_wanted)
+                        )
+                        logger.warning(
+                            "⚠️ All '%s' rows were older than %dh; keeping %d most "
+                            "recent instead of returning zero.",
+                            site, hours_old, len(ranked),
+                        )
+                        df = ranked
+                    else:
+                        df = fresh
                 except Exception as filter_err:
                     logger.warning(
                         f"Could not apply date filter for '{site}': {filter_err}"
