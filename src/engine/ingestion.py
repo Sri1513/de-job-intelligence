@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def run_batch_ingestion_workflow(
     search_term: str = "Data Engineer",
-    location: str = "Remote",
+    location: str = "United States",
     results_wanted: int = 10,
     hours_old: int = 48,
     job_category: str = "data_engineering",
