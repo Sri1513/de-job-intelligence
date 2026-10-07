@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Canonical skill taxonomy for the Perfect Resume Engine. Every skill has one canonical id; aliases capture JD spelling variants, acronyms, and vendor names. The normalizer resolves any surface form to its canonical id before matching, so 'PySpark' vs 'pyspark' vs 'Spark (Python)' all score as one skill.",
-    "version": 2
+    "version": 3
   },
   "skills": [
     {
@@ -979,6 +979,118 @@
       "aliases": [
         "stakeholder management",
         "cross-functional collaboration"
+      ]
+    },
+    {
+      "id": "flink",
+      "name": "Apache Flink",
+      "category": "bigdata",
+      "aliases": []
+    },
+    {
+      "id": "nifi",
+      "name": "Apache NiFi",
+      "category": "etl_tools",
+      "aliases": []
+    },
+    {
+      "id": "sqoop",
+      "name": "Apache Sqoop",
+      "category": "etl_tools",
+      "aliases": []
+    },
+    {
+      "id": "presto",
+      "name": "Presto",
+      "category": "bigdata",
+      "aliases": [
+        "trino"
+      ]
+    },
+    {
+      "id": "clickhouse",
+      "name": "ClickHouse",
+      "category": "databases",
+      "aliases": []
+    },
+    {
+      "id": "redshift_spectrum",
+      "name": "Redshift Spectrum",
+      "category": "cloud",
+      "aliases": []
+    },
+    {
+      "id": "eventbridge",
+      "name": "EventBridge",
+      "category": "cloud",
+      "aliases": [
+        "amazon eventbridge"
+      ]
+    },
+    {
+      "id": "step_functions",
+      "name": "Step Functions",
+      "category": "cloud",
+      "aliases": [
+        "aws step functions"
+      ]
+    },
+    {
+      "id": "sagemaker",
+      "name": "SageMaker",
+      "category": "cloud",
+      "aliases": [
+        "aws sagemaker"
+      ]
+    },
+    {
+      "id": "bedrock",
+      "name": "Bedrock",
+      "category": "cloud",
+      "aliases": [
+        "aws bedrock"
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "category": "concepts",
+      "aliases": [
+        "openai api",
+        "gpt",
+        "llm",
+        "large language models",
+        "genai",
+        "generative ai"
+      ]
+    },
+    {
+      "id": "langchain",
+      "name": "LangChain",
+      "category": "concepts",
+      "aliases": []
+    },
+    {
+      "id": "great_expectations",
+      "name": "Great Expectations",
+      "category": "governance",
+      "aliases": [
+        "gx"
+      ]
+    },
+    {
+      "id": "monte_carlo",
+      "name": "Monte Carlo",
+      "category": "governance",
+      "aliases": []
+    },
+    {
+      "id": "atlassian",
+      "name": "Atlassian",
+      "category": "process",
+      "aliases": [
+        "jira",
+        "confluence"
       ]
     }
   ]
