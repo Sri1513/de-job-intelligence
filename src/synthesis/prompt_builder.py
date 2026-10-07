@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from src.core.config import settings
 from src.core.database import get_db_connection
+from src.engine.framework_selector import load_framework, select_framework
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +196,21 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
     target_signals = meta.get("tailoring_signals") or []
 
     role_config = load_role_config(role_slug)
-    company_frameworks = load_company_frameworks()
     base_resume = load_target_resume(role_slug)
+
+    # Single shared framework decision (LLM-judged): replaces the old
+    # "dump every company framework into the prompt" behavior. The selected
+    # framework alone is injected below.
+    framework_selection = select_framework(
+        job.get("description") or "", job.get("title") or ""
+    )
+    selected_framework = load_framework(framework_selection["framework_id"])
+    logger.info(
+        "tailoring: job %s -> framework %s (%s)",
+        job.get("job_id"),
+        framework_selection["framework_id"],
+        framework_selection["rationale"],
+    )
 
     formatting_rules = (
         "PURPOSEFUL RECRUITER HIGHLIGHTING RULES (MANDATORY **term** FORMATTING):\n"
@@ -230,6 +244,8 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
         },
         "job_description": job.get("description"),
         "base_resume": base_resume,
+        "framework_selection": framework_selection,
+        "selected_framework_id": framework_selection["framework_id"],
         "tailoring_guidelines": {
             "core_architectural_boundaries": role_config.get("boundaries", ""),
             "static_bridging_rules": role_config.get("bridging_rules", ""),
@@ -249,12 +265,29 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
                 "instruction": (
                     "1. Extract required tools from the Job Description missing from the base resume.\n"
                     "2. Evaluate the functional category of the missing tool (e.g., Kafka = Streaming, dbt = Modeling/Transformation, Atlan = Governance).\n"
-                    "3. Look up the corresponding phase in 'company_architectural_frameworks' below.\n"
+                    "3. Look up the corresponding phase in 'selected_framework' below.\n"
                     "4. Conceptually replace the candidate's native tool with the JD's required tool strictly within that daily activity phase to generate the bullet.\n"
                     "5. Do NOT invent new architectural phases. If a tool contradicts the framework (e.g., frontend frameworks for data platform roles), ignore it."
                 ),
-                "company_architectural_frameworks": company_frameworks,
+                "selected_framework": selected_framework,
             },
+            "bullet_selection_contract": (
+                "BULLET SELECTION CONTRACT (MANDATORY — you are a SELECTOR, not an inventor):\n"
+                "Every experience bullet you output MUST be traceable to the selected framework's "
+                "'bullet_bank' below. \n"
+                "1. EXTRACT the JD's required skills, responsibilities, and domain signals.\n"
+                "2. RANK each bullet_bank entry by skill/signal overlap with those requirements.\n"
+                "3. SELECT the top bullets per 'bullet_distribution'; the set must cover the JD's top "
+                "requirements with no two bullets proving the same thing.\n"
+                "4. BRIDGE: where the JD names a tool in the same phase family (see the framework's "
+                "'swappable_categories'), you may swap it into the bullet's 'bridging_slots'. Keep the "
+                "candidate's wording and metrics EXACT — never alter a number or invent a new one.\n"
+                "5. FORBID: no new achievements, no new metrics, no tools outside (bullet_bank UNION JD). "
+                "If a JD requirement matches nothing in the bank, leave it unmatched and note it as a gap — "
+                "do NOT invent coverage.\n"
+                "6. SUMMARY: write the professional summary from the framework's 'summary_angle' plus the "
+                "top matched skills. It MUST open with '7+ years'. Never copy a hardcoded summary."
+            ),
         },
         "next_action": "Execute the 'export_tailored_resume' tool using the tailored content, then return the Google Doc URL, a Cover Letter (<300 words), and a Recruiter Outreach message.",
     }
