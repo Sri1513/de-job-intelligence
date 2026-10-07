@@ -31,6 +31,21 @@ BULLET_DISTRIBUTION = {
     "job4": 8,
 }
 
+# Tool translation: the ETL workflow is the same, only the tools vary.
+# When the JD names a tool with no bank coverage, the engine highlights the
+# candidate's REAL equivalent skill instead of omitting or fabricating.
+TOOL_TRANSLATION_POLICY = (
+    "TOOL TRANSLATION (MANDATORY — the workflow is the same, only the tools vary):\n"
+    "1. When the JD names a tool with no bank coverage, look it up in 'skill_equivalences'.\n"
+    "2. Highlight the candidate's EQUIVALENT real skill as the answer — e.g. JD asks 'Scala' → "
+    "the resume showcases **PySpark / Apache Spark**, because Spark is the engine and PySpark is the "
+    "candidate's interface to it. Same for warehousing (JD 'BigQuery' → Redshift) and ELT (JD 'Matillion' → dbt/Glue).\n"
+    "3. The JD's keyword appears in Technical Skills for ATS, always paired with the real equivalent "
+    "(e.g. 'Scala (via PySpark / Apache Spark)') — never as a standalone claimed proficiency.\n"
+    "4. Experience bullets describe ONLY the real equivalent work. Never write 'built X in Scala' when the "
+    "work was PySpark. The bullet proves the equivalent; the keyword match lives in the skills matrix.\n"
+)
+
 # Identity fidelity: facts that must be copied EXACTLY from the base resume.
 FIDELITY_RULES = (
     "IDENTITY FIDELITY RULES (MANDATORY — violating these is a failure):\n"
@@ -39,10 +54,13 @@ FIDELITY_RULES = (
     "framework 'resume_slot' block EXACTLY (it carries the verified headers). "
     "Never substitute one employer for another, never invent headers.\n"
     "3. Education: degree names, schools, years EXACTLY as in BASE RESUME.\n"
-    "4. Technical Skills: ONLY skills listed in BASE RESUME. Never add tools the resume "
-    "does not list (e.g. no dbt, no Hadoop unless present).\n"
+    "4. Technical Skills: lead with the candidate's REAL tools from BASE RESUME. A JD-requested tool "
+    "with no resume coverage still appears via TOOL TRANSLATION — the JD keyword is listed for ATS, always "
+    "paired with the equivalent real skill, never as a standalone proficiency.\n"
     "5. Every experience bullet MUST be traceable to the selected framework's bullet_bank. "
-    "If a JD requirement matches nothing in the bank, OMIT it — do not write a new bullet.\n"
+    "If a JD requirement matches nothing in the bank, TRANSLATE it: consult 'skill_equivalences' and select "
+    "the bullet proving the equivalent REAL skill (e.g. JD 'Scala' → the PySpark/Spark bullet). Never claim "
+    "hands-on experience with the JD's tool itself.\n"
     "6. No duplicate bullets. Bold whole terms only (**Redshift**), never bare numbers "
     "mid-sentence."
 )
@@ -208,6 +226,22 @@ def load_target_resume(role_slug: str) -> str:
     return _RESUME_CACHE[resume_file_suffix]
 
 
+_EQUIV_CACHE: dict | None = None
+
+
+def load_skill_equivalences() -> dict:
+    """Load the JD-tool -> candidate-equivalent-skill map (v1). Cached."""
+    global _EQUIV_CACHE
+    if _EQUIV_CACHE is None:
+        eq_file = CONFIG_DIR / "skill_equivalences.json"
+        try:
+            with open(eq_file, encoding="utf-8") as f:
+                _EQUIV_CACHE = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            _EQUIV_CACHE = {"version": 0, "equivalences": {}}
+    return _EQUIV_CACHE
+
+
 def build_job_tailoring_prompt(
     job_id: str,
     slot_frameworks: dict | None = None,
@@ -360,6 +394,8 @@ def build_job_tailoring_prompt(
             "bullet_distribution": BULLET_DISTRIBUTION,
             "deterministic_bullet_ranking": deterministic_ranking,
             "fidelity_rules": FIDELITY_RULES,
+            "tool_translation_policy": TOOL_TRANSLATION_POLICY,
+            "skill_equivalences": load_skill_equivalences().get("equivalences", {}),
             "formula": "Google XYZ (Accomplished [X] as measured by [Y], by doing [Z]). Each bullet must address a distinct responsibility.",
             "skills_schema": role_config.get("skills_schema", {}),
             "formatting_rules": formatting_rules,

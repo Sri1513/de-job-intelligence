@@ -64,3 +64,30 @@ def test_build_tailoring_prompt_job_override_skips_db():
     assert bundle["job_metadata"]["title"] == "Data Engineer"
     assert bundle["slot_frameworks"]["job1"] == "optum"
     assert "Healthcare" in bundle["job_description"] or "healthcare" in bundle["job_description"].lower()
+
+
+def test_skill_equivalences_load():
+    from src.synthesis.prompt_builder import load_skill_equivalences
+
+    eq = load_skill_equivalences()
+    assert eq["version"] >= 1
+    m = eq["equivalences"]
+    assert "scala" in m
+    assert "PySpark" in m["scala"]["equivalent"]
+    assert "databricks" in m
+    assert "matillion" in m
+    # every equivalent must be a non-empty list of real skill names
+    for tool, entry in m.items():
+        assert entry["equivalent"], f"{tool} has empty equivalent list"
+        assert entry.get("why"), f"{tool} missing rationale"
+
+
+def test_translation_policy_in_prompt():
+    from src.synthesis.prompt_builder import TOOL_TRANSLATION_POLICY, FIDELITY_RULES
+
+    assert "skill_equivalences" in TOOL_TRANSLATION_POLICY
+    assert "PySpark" in TOOL_TRANSLATION_POLICY
+    # the old hard-omit rules are gone
+    assert "OMIT it" not in FIDELITY_RULES
+    assert "ONLY skills listed in BASE RESUME" not in FIDELITY_RULES
+    assert "TRANSLATE" in FIDELITY_RULES
