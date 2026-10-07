@@ -93,10 +93,12 @@ def profile_dir_for(platform: str) -> Path:
 
 def playwright_launch_args() -> list[str]:
     # --no-sandbox / --disable-gpu: required on GPU-less Linux servers & Docker.
+    # --disable-dev-shm-usage: /dev/shm is tiny in Docker; Chrome crashes without this.
     # --disable-blink-features=AutomationControlled: reduces headless detection.
     return [
         "--no-sandbox",
         "--disable-gpu",
+        "--disable-dev-shm-usage",
         "--disable-blink-features=AutomationControlled",
     ]
 
@@ -463,12 +465,15 @@ def build_browser(
     browser-use build accepts it.
     """
     init_params = _browser_init_params()
+    launch_args = playwright_launch_args()
     if profile_dir is not None:
         if "user_data_dir" in init_params:
             logger.info("Using persistent browser profile at %s", profile_dir)
             extra: dict[str, Any] = {}
             if wait_between_actions is not None and "wait_between_actions" in init_params:
                 extra["wait_between_actions"] = wait_between_actions
+            if "args" in init_params:
+                extra["args"] = launch_args
             return Browser(
                 headless=headless, user_data_dir=str(profile_dir), **extra
             )
@@ -488,6 +493,8 @@ def build_browser(
                     config_cls, "wait_between_actions"
                 ):
                     cfg_kwargs["wait_between_actions"] = wait_between_actions
+                if _class_has_field(config_cls, "args"):
+                    cfg_kwargs["args"] = launch_args
                 return Browser(config=config_cls(**cfg_kwargs))
             except Exception as exc:
                 logger.warning("Persistent-profile config failed (%s); falling back.", exc)
@@ -497,7 +504,12 @@ def build_browser(
             "storage_state seed file %s. Sessions may go stale — upgrade browser-use.",
             storage_state,
         )
+        if "args" in init_params:
+            return Browser(headless=headless, storage_state=str(storage_state),
+                           args=launch_args)
         return Browser(headless=headless, storage_state=str(storage_state))
+    if "args" in init_params:
+        return Browser(headless=headless, args=launch_args)
     return Browser(headless=headless)
 
 
