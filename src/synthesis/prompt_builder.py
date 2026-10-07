@@ -209,7 +209,9 @@ def load_target_resume(role_slug: str) -> str:
 
 
 def build_job_tailoring_prompt(
-    job_id: str, slot_frameworks: dict | None = None
+    job_id: str,
+    slot_frameworks: dict | None = None,
+    job_override: dict | None = None,
 ) -> Dict[str, Any]:
     """Builds the tailoring prompt bundle for a job.
 
@@ -218,19 +220,27 @@ def build_job_tailoring_prompt(
     WhatsApp path so one decision drives both resume and email). When omitted,
     the selector runs here. Slot 1 switches on the JD (healthcare -> optum,
     else herc_rentals); slots 2-4 are fixed.
+
+    job_override: optional pre-parsed job dict (same shape as a saved_jobs
+    row). When given, the saved_jobs DB lookup is skipped — used by the
+    WhatsApp path, whose leads live in scout.whatsapp_messages, not
+    saved_jobs.
     """
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT job_id, title, company, location, is_remote, job_url,
-                       description, job_category, metadata, notes
-                FROM saved_jobs
-                WHERE job_id = %s;
-                """,
-                (job_id,),
-            )
-            job = cur.fetchone()
+    if job_override is not None:
+        job = job_override
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT job_id, title, company, location, is_remote, job_url,
+                           description, job_category, metadata, notes
+                    FROM saved_jobs
+                    WHERE job_id = %s;
+                    """,
+                    (job_id,),
+                )
+                job = cur.fetchone()
 
     if not job:
         return {"error": f"No job found in the database for job_id '{job_id}'."}
@@ -292,6 +302,22 @@ def build_job_tailoring_prompt(
         {s: slot_data[s]["framework_id"] for s in slot_data},
     )
 
+    # Deterministic bullet ranking (Perfect Resume Engine, Phase 2):
+    # each slot's bank pre-ranked by weighted canonical-skill overlap with
+    # the JD, so the LLM selects from computed scores instead of vibes.
+    from src.engine.bullet_ranker import rank_all_slots
+
+    jd_text = job.get("description") or ""
+    ranked_banks = rank_all_slots(slot_data, jd_text)
+    deterministic_ranking = {
+        slot: [
+            {"id": b.get("id"), "score": b["_overlap_score"],
+             "matched": b["_matched_skills"]}
+            for b in ranked[:8]
+        ]
+        for slot, ranked in ranked_banks.items()
+    }
+
     formatting_rules = (
         "PURPOSEFUL RECRUITER HIGHLIGHTING RULES (MANDATORY **term** FORMATTING):\n"
         "1. IN 'professional_summary' (CRITICAL): You MUST wrap 3 to 4 core platforms matching this specific Job Description in markdown asterisks (e.g., '...pipelines using **PySpark**, **Apache Kafka**, and **Google Cloud Platform** (GCP), orchestrated via **Apache Airflow**...'). NEVER return a summary without asterisks.\n"
@@ -332,6 +358,7 @@ def build_job_tailoring_prompt(
             "domain_adaptation": "Adapt terminology to target employer (e.g., High Volume = self-healing, low-latency streaming; Financial = audit trails, KMS).",
             "tenure_enforcement": "The candidate has 7+ years of cumulative professional experience. The summary MUST explicitly open with this.",
             "bullet_distribution": BULLET_DISTRIBUTION,
+            "deterministic_bullet_ranking": deterministic_ranking,
             "fidelity_rules": FIDELITY_RULES,
             "formula": "Google XYZ (Accomplished [X] as measured by [Y], by doing [Z]). Each bullet must address a distinct responsibility.",
             "skills_schema": role_config.get("skills_schema", {}),
@@ -353,7 +380,10 @@ def build_job_tailoring_prompt(
                 "Work EACH slot independently (job1..job4), using ONLY that slot's 'bullet_bank'. \n"
                 "1. EXTRACT the JD's required skills, responsibilities, and domain signals.\n"
                 "2. RANK that slot's bank entries by JD keyword overlap (skills first, then signals/phases) — "
-                "points must be chosen by what the JD asks for, per that slot's company framework.\n"
+                "points must be chosen by what the JD asks for, per that slot's company framework. "
+                "A deterministic pre-ranking is provided in 'deterministic_bullet_ranking' below (computed "
+                "from exact canonical-skill overlap with the JD, highest score first) — PREFER this order; "
+                "it is ground truth for skill coverage, not a suggestion.\n"
                 "3. SELECT the top bullets per 'bullet_distribution' for the slot; the set must cover the JD's top "
                 "requirements with no two bullets proving the same thing.\n"
                 "4. BRIDGE: where the JD names a tool in the same phase family (see the slot framework's "
