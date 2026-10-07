@@ -573,6 +573,7 @@ routes = [
     Route("/skills-analytics", skills_analytics_view, methods=["GET"]),
     Route("/api/skills-demographics", api_skills_demographics, methods=["GET"]),
     Mount("/screenshots", app=StaticFiles(directory=str(SCREENSHOTS_DIR)), name="screenshots"),
+    Mount("/static", app=StaticFiles(directory=str(PROJECT_ROOT / "src" / "dashboard" / "static")), name="static"),
     # Remote diagnostics for the AI operator (Friday). Disabled (404) unless
     # ADMIN_API_TOKEN is set; strictly read-only.
     *admin_routes,
