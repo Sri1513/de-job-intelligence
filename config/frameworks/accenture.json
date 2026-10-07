@@ -97,19 +97,71 @@
   },
   "bullet_bank": [
     {
-      "id": "accenture_phase_3_transformation_0",
-      "text": "Resolved data skew via data salting and Broadcast Hash Joins",
+      "id": "accenture_resume_00",
+      "text": "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map.",
       "skills": [
-        "AWS (S3, Glue Data Catalog, Redshift)",
-        "PySpark",
-        "Spark SQL",
-        "Python",
-        "Ab Initio",
-        "Apache Airflow",
-        "Git",
-        "Jenkins",
-        "CI/CD"
+        "Ab Initio"
       ],
+      "metrics": [],
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "Ab Initio"
+      ]
+    },
+    {
+      "id": "accenture_resume_01",
+      "text": "Landed data in S3 across raw, cleansed, and curated zones. No mixing.",
+      "skills": [
+        "AWS S3"
+      ],
+      "metrics": [],
+      "phase": "Legacy Decommissioning & Ingestion Microservices",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "AWS S3"
+      ]
+    },
+    {
+      "id": "accenture_resume_02",
+      "text": "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog.",
+      "skills": [
+        "AWS Glue",
+        "PySpark"
+      ],
+      "metrics": [],
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "AWS Glue",
+        "PySpark"
+      ]
+    },
+    {
+      "id": "accenture_resume_03",
+      "text": "Modeled Redshift dims and facts. Set dist and sort keys for how reports actually query.",
+      "skills": [
+        "Amazon Redshift"
+      ],
+      "metrics": [],
+      "phase": "Regulatory & Commercial BI Reporting (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "Amazon Redshift"
+      ]
+    },
+    {
+      "id": "accenture_resume_04",
+      "text": "Ran old and new side by side before cutover. Row counts, column parity. Switched over only when the numbers tied.",
+      "skills": [],
       "metrics": [],
       "phase": "Data Skew Remediation & Incremental Anti-Joins",
       "signals": [
@@ -118,92 +170,83 @@
       "bridging_slots": []
     },
     {
-      "id": "accenture_phase_3_transformation_1",
-      "text": "Enabled Adaptive Query Execution (AQE) and Dynamic Partition Pruning (DPP)",
+      "id": "accenture_resume_05",
+      "text": "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
       "skills": [
-        "AWS (S3, Glue Data Catalog, Redshift)",
-        "PySpark",
-        "Spark SQL",
-        "Python",
-        "Ab Initio",
-        "Apache Airflow",
-        "Git",
-        "Jenkins",
-        "CI/CD"
-      ],
-      "metrics": [],
-      "phase": "Data Skew Remediation & Incremental Anti-Joins",
-      "signals": [
-        "accenture"
-      ],
-      "bridging_slots": []
-    },
-    {
-      "id": "accenture_phase_3_transformation_2",
-      "text": "Replaced full-table merges with partition-aware anti-join and append patterns",
-      "skills": [
-        "AWS (S3, Glue Data Catalog, Redshift)",
-        "PySpark",
-        "Spark SQL",
-        "Python",
-        "Ab Initio",
-        "Apache Airflow",
-        "Git",
-        "Jenkins",
-        "CI/CD"
-      ],
-      "metrics": [],
-      "phase": "Data Skew Remediation & Incremental Anti-Joins",
-      "signals": [
-        "accenture"
-      ],
-      "bridging_slots": []
-    },
-    {
-      "id": "accenture_metric_0",
-      "text": "Reduced financial pipeline execution runtimes by 35\u201340% by eliminating distributed data skew and tuning query plans",
-      "skills": [
-        "AWS (S3, Glue Data Catalog, Redshift)",
-        "PySpark",
-        "Spark SQL",
-        "Python",
-        "Ab Initio",
-        "Apache Airflow",
-        "Git",
-        "Jenkins",
-        "CI/CD"
+        "Apache Spark"
       ],
       "metrics": [
-        "Reduced financial pipeline execution runtimes by 35\u201340% by eliminating distributed data skew and tuning query plans"
+        "35\u201340%"
       ],
-      "phase": "impact",
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "Apache Spark"
+      ]
+    },
+    {
+      "id": "accenture_resume_06",
+      "text": "Baked source-to-target validation into every job. Regulatory reporting, zero room for wrong numbers.",
+      "skills": [],
+      "metrics": [],
+      "phase": "Legacy Decommissioning & Ingestion Microservices",
       "signals": [
         "accenture"
       ],
       "bridging_slots": []
     },
     {
-      "id": "accenture_metric_1",
-      "text": "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks",
+      "id": "accenture_resume_07",
+      "text": "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
       "skills": [
-        "AWS (S3, Glue Data Catalog, Redshift)",
-        "PySpark",
-        "Spark SQL",
-        "Python",
-        "Ab Initio",
         "Apache Airflow",
         "Git",
-        "Jenkins",
-        "CI/CD"
+        "Jenkins"
       ],
-      "metrics": [
-        "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks"
-      ],
-      "phase": "impact",
+      "metrics": [],
+      "phase": "Audit-Ready Warehouse Serving & CI/CD",
       "signals": [
         "accenture"
       ],
-      "bridging_slots": []
+      "bridging_slots": [
+        "Apache Airflow",
+        "Git",
+        "Jenkins"
+      ]
+    },
+    {
+      "id": "accenture_resume_08",
+      "text": "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+      "skills": [
+        "Python"
+      ],
+      "metrics": [],
+      "phase": "Audit-Ready Warehouse Serving & CI/CD",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "Python"
+      ]
+    },
+    {
+      "id": "accenture_resume_09",
+      "text": "Used Athena to query raw S3 data directly during migration. Fastest way to compare legacy output against new tables without loading anything.",
+      "skills": [
+        "Athena",
+        "AWS S3"
+      ],
+      "metrics": [],
+      "phase": "Multi-Tiered Data Lake & Governance",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": [
+        "Athena",
+        "AWS S3"
+      ]
     }
   ]
 }

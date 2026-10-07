@@ -89,13 +89,14 @@ FRAMEWORK DETAIL (JSON):
 GUIDELINES:
 - Core boundaries: {guidelines['core_architectural_boundaries']}
 - {guidelines['bullet_selection_contract']}
+- {guidelines['fidelity_rules']}
 - Formatting: {guidelines['formatting_rules']}
 - Bullet distribution per role: {json.dumps(guidelines['bullet_distribution'])}
 
 Return a STRICT JSON object (no markdown, no backticks) with EXACTLY these keys:
 - "professional_summary": string
 - "technical_skills": object mapping skill-group name -> comma-separated skills string
-- "experience_bullets": object mapping role key -> list of bullet strings
+- "experience_bullets": object with EXACTLY these keys (copy employer headers from BASE RESUME, do not rename): {", ".join(guidelines['bullet_distribution'].keys())} -> list of bullet strings
 """
     raw = generate_text(prompt, json_mode=True, temperature=0.2, task="whatsapp-tailor-resume")
     return json.loads(raw)

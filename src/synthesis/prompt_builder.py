@@ -19,6 +19,44 @@ _RESUME_CACHE: dict[str, str] = {}
 _ROLE_CACHE: dict[str, dict] = {}
 _FRAMEWORK_CACHE: dict[str, dict] = {}
 
+# Resume job slots keyed by REAL employer slugs from the base resume.
+# These keys become the experience_bullets keys in tailored output — they must
+# never be invented employer names.
+BULLET_DISTRIBUTION = {
+    "job1_optum": 8,
+    "job2_quess": 8,
+    "job3_trigent": 9,
+    "job4_experis": 8,
+}
+
+# Identity fidelity: facts that must be copied EXACTLY from the base resume.
+FIDELITY_RULES = (
+    "IDENTITY FIDELITY RULES (MANDATORY — violating these is a failure):\n"
+    "1. Candidate name is 'Sri Omkar D' — never expand, alter, or initial differently.\n"
+    "2. Employer names, job titles, locations, dates: copy EXACTLY from BASE RESUME. "
+    "Never substitute one employer for another (e.g. Optum bullets go under the Optum "
+    "header, never under Herc Rentals or any other name). Never invent employers.\n"
+    "3. Education: degree names, schools, years EXACTLY as in BASE RESUME.\n"
+    "4. Technical Skills: ONLY skills listed in BASE RESUME. Never add tools the resume "
+    "does not list (e.g. no dbt, no Hadoop unless present).\n"
+    "5. Every experience bullet MUST be traceable to the selected framework's bullet_bank. "
+    "If a JD requirement matches nothing in the bank, OMIT it — do not write a new bullet.\n"
+    "6. No duplicate bullets. Bold whole terms only (**Redshift**), never bare numbers "
+    "mid-sentence."
+)
+
+# Plain-voice + honesty rules for recruiter outreach.
+EMAIL_VOICE_RULES = (
+    "VOICE AND HONESTY RULES (MANDATORY):\n"
+    "- Write plain and direct, like the candidate writes. NEVER use: leveraged, robust, "
+    "seamless, rigorous, cutting-edge, state-of-the-art, or 'guarantee 100%'.\n"
+    "- Every alignment bullet must reflect techniques/tools actually on the resume. Do NOT "
+    "invent techniques (e.g. tokenization) the resume never mentions. If the JD names "
+    "something the resume lacks, describe the adjacent real experience instead of "
+    "claiming the missing one.\n"
+    "- No absolute guarantees. State what was done and measured."
+)
+
 
 def build_whatsapp_outreach_prompt(
     company_name: str,
@@ -88,6 +126,8 @@ def build_whatsapp_outreach_prompt(
          sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8
 
     - **CRITICAL RULE**: DO NOT mention the helper ({helper_name}) or any referral source in the email body AT ALL. (They are placed in the CC field automatically).
+
+    {EMAIL_VOICE_RULES}
 
     Return a JSON object with EXACTLY these two keys:
     - "subject": (string)
@@ -278,12 +318,8 @@ def build_job_tailoring_prompt(
             "static_bridging_rules": role_config.get("bridging_rules", ""),
             "domain_adaptation": "Adapt terminology to target employer (e.g., High Volume = self-healing, low-latency streaming; Financial = audit trails, KMS).",
             "tenure_enforcement": "The candidate has 7+ years of cumulative professional experience. The summary MUST explicitly open with this.",
-            "bullet_distribution": {
-                "job1_herc_rentals": 8,
-                "job2_blue_yonder": 8,
-                "job3_accenture": 9,
-                "job4_thomson_reuters": 8,
-            },
+            "bullet_distribution": BULLET_DISTRIBUTION,
+            "fidelity_rules": FIDELITY_RULES,
             "formula": "Google XYZ (Accomplished [X] as measured by [Y], by doing [Z]). Each bullet must address a distinct responsibility.",
             "skills_schema": role_config.get("skills_schema", {}),
             "formatting_rules": formatting_rules,

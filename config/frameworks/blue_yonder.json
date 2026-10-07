@@ -103,21 +103,60 @@
   },
   "bullet_bank": [
     {
-      "id": "blue_yonder_phase_3_transformation_0",
-      "text": "Eliminated Spark Catalyst planning overhead by consolidating iterative casting/enrichment into single-pass operations",
+      "id": "blue_yonder_resume_00",
+      "text": "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
       "skills": [
-        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
-        "Python",
-        "FastAPI",
-        "SQLAlchemy",
-        "PySpark",
-        "Pandas",
-        "Snowflake",
-        "Exasol",
-        "Terraform",
-        "Docker",
-        "Apache Airflow"
+        "Azure",
+        "ERP",
+        "POS",
+        "Snowflake"
       ],
+      "metrics": [],
+      "phase": "API-Driven ERP Ingestion",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": [
+        "Azure",
+        "ERP",
+        "POS",
+        "Snowflake"
+      ]
+    },
+    {
+      "id": "blue_yonder_resume_01",
+      "text": "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off.",
+      "skills": [],
+      "metrics": [],
+      "phase": "API-Driven ERP Ingestion",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "blue_yonder_resume_02",
+      "text": "Wrote the transformation logic in PySpark and SQL. Merged scattered enrichment steps into single unified runs. Cut batch runtimes by 25\u201330%.",
+      "skills": [
+        "PySpark",
+        "SQL"
+      ],
+      "metrics": [
+        "25\u201330%"
+      ],
+      "phase": "Distributed Data Processing & Catalyst Plan Optimization",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": [
+        "PySpark",
+        "SQL"
+      ]
+    },
+    {
+      "id": "blue_yonder_resume_03",
+      "text": "Tested transformations before they touched production. Ran them on sample data, checked outputs row by row, then pointed them at the real tables.",
+      "skills": [],
       "metrics": [],
       "phase": "Distributed Data Processing & Catalyst Plan Optimization",
       "signals": [
@@ -126,77 +165,49 @@
       "bridging_slots": []
     },
     {
-      "id": "blue_yonder_phase_3_transformation_1",
-      "text": "Eliminated unnecessary repartitioning and tuned partition boundaries",
+      "id": "blue_yonder_resume_04",
+      "text": "Built validation into every stage. Duplicate checks, null handling, source-to-target row comparisons. A load that failed a check stopped there instead of corrupting downstream.",
+      "skills": [],
+      "metrics": [],
+      "phase": "API-Driven ERP Ingestion",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "blue_yonder_resume_05",
+      "text": "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables.",
       "skills": [
-        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
-        "Python",
-        "FastAPI",
-        "SQLAlchemy",
-        "PySpark",
-        "Pandas",
-        "Snowflake",
         "Exasol",
-        "Terraform",
-        "Docker",
-        "Apache Airflow"
+        "Snowflake"
       ],
       "metrics": [],
-      "phase": "Distributed Data Processing & Catalyst Plan Optimization",
+      "phase": "Enterprise Data Lake & Cloud Infrastructure",
       "signals": [
         "blue_yonder"
       ],
-      "bridging_slots": []
+      "bridging_slots": [
+        "Exasol",
+        "Snowflake"
+      ]
     },
     {
-      "id": "blue_yonder_metric_0",
-      "text": "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning",
+      "id": "blue_yonder_resume_06",
+      "text": "Ran the batches in Airflow and owned what happened after. DAGs, retries, SLA alerts. When something broke overnight, I found why and fixed it. Wrote the docs so the next person doesn't have to guess.",
       "skills": [
-        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
-        "Python",
-        "FastAPI",
-        "SQLAlchemy",
-        "PySpark",
-        "Pandas",
-        "Snowflake",
-        "Exasol",
-        "Terraform",
-        "Docker",
-        "Apache Airflow"
+        "Apache Airflow",
+        "SLA"
       ],
-      "metrics": [
-        "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning"
-      ],
-      "phase": "impact",
+      "metrics": [],
+      "phase": "Workflow Scheduling & Warehouse Query Profiling",
       "signals": [
         "blue_yonder"
       ],
-      "bridging_slots": []
-    },
-    {
-      "id": "blue_yonder_metric_1",
-      "text": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol",
-      "skills": [
-        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
-        "Python",
-        "FastAPI",
-        "SQLAlchemy",
-        "PySpark",
-        "Pandas",
-        "Snowflake",
-        "Exasol",
-        "Terraform",
-        "Docker",
-        "Apache Airflow"
-      ],
-      "metrics": [
-        "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
-      ],
-      "phase": "impact",
-      "signals": [
-        "blue_yonder"
-      ],
-      "bridging_slots": []
+      "bridging_slots": [
+        "Apache Airflow",
+        "SLA"
+      ]
     }
   ]
 }
