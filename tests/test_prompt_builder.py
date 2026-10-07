@@ -28,3 +28,39 @@ def test_skill_matcher():
     assert result["score"] > 20
     assert "python" in result["matched_core"]
     assert "spark" in result["matched_core"]
+
+
+def test_build_tailoring_prompt_job_override_skips_db():
+    """WhatsApp path: pre-parsed job dict must build the bundle with no saved_jobs lookup."""
+    from unittest.mock import patch
+
+    from src.synthesis.prompt_builder import build_job_tailoring_prompt
+
+    override = {
+        "job_id": "wa-abc123",
+        "title": "Data Engineer",
+        "company": "Ask Consulting",
+        "location": "United States",
+        "is_remote": True,
+        "job_url": "",
+        "description": "Healthcare data engineer, PHI, PySpark, AWS.",
+        "job_category": "data_engineering",
+        "metadata": {"source": "whatsapp"},
+        "notes": "",
+    }
+    slot_frameworks = {
+        "job1": "optum",
+        "job2": "blue_yonder",
+        "job3": "accenture",
+        "job4": "thomson_reuters",
+    }
+    with patch("src.synthesis.prompt_builder.get_db_connection") as mock_conn:
+        bundle = build_job_tailoring_prompt(
+            "wa-abc123", slot_frameworks=slot_frameworks, job_override=override
+        )
+    mock_conn.assert_not_called()
+    assert "error" not in bundle
+    assert bundle["job_metadata"]["company"] == "Ask Consulting"
+    assert bundle["job_metadata"]["title"] == "Data Engineer"
+    assert bundle["slot_frameworks"]["job1"] == "optum"
+    assert "Healthcare" in bundle["job_description"] or "healthcare" in bundle["job_description"].lower()

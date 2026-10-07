@@ -209,28 +209,38 @@ def load_target_resume(role_slug: str) -> str:
 
 
 def build_job_tailoring_prompt(
-    job_id: str, slot_frameworks: dict | None = None
+    job_id: str,
+    slot_frameworks: dict | None = None,
+    job_override: dict | None = None,
 ) -> Dict[str, Any]:
     """Builds the tailoring prompt bundle for a job.
 
     slot_frameworks: optional pre-computed SLOT map from
     src.engine.framework_selector.select_slot_frameworks (shared by the
-    WhatsApp path so one decision drives both resume and email). When omitted,
+    WhatsApp path so one decision drives resume + email). When omitted,
     the selector runs here. Slot 1 switches on the JD (healthcare -> optum,
     else herc_rentals); slots 2-4 are fixed.
+
+    job_override: optional pre-parsed job dict (same shape as a saved_jobs
+    row). When given, the saved_jobs DB lookup is skipped — used by the
+    WhatsApp path, whose leads live in scout.whatsapp_messages, not
+    saved_jobs.
     """
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT job_id, title, company, location, is_remote, job_url,
-                       description, job_category, metadata, notes
-                FROM saved_jobs
-                WHERE job_id = %s;
-                """,
-                (job_id,),
-            )
-            job = cur.fetchone()
+    if job_override is not None:
+        job = job_override
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT job_id, title, company, location, is_remote, job_url,
+                           description, job_category, metadata, notes
+                    FROM saved_jobs
+                    WHERE job_id = %s;
+                    """,
+                    (job_id,),
+                )
+                job = cur.fetchone()
 
     if not job:
         return {"error": f"No job found in the database for job_id '{job_id}'."}

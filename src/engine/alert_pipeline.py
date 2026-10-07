@@ -23,50 +23,29 @@ DEFAULT_MASTER_RESUME_URL = (
 )
 
 
-def _persist_whatsapp_job(
-    meta: Dict[str, Any],
+def _persist_whatsapp_message(
     whatsapp_text: str,
-    company_name: str,
-    job_title: str,
-    extracted_jd: str,
+    sender: str | None = None,
 ) -> str:
-    """Upserts the WhatsApp-sourced job into saved_jobs (source=whatsapp).
+    """Logs the raw inbound WhatsApp message into scout.whatsapp_messages.
 
-    Returns the job_id (wa-<hash>). Uses ON CONFLICT DO NOTHING so a repeated
-    alert never clobbers an already-evaluated row.
+    Returns the message_id (wa-<hash>). Uses ON CONFLICT DO NOTHING so a
+    repeated alert never creates a duplicate row. WhatsApp leads no longer
+    touch saved_jobs — the outreach_tracking record is the working job lead.
     """
     digest = hashlib.sha1(whatsapp_text.encode("utf-8")).hexdigest()[:12]
-    job_id = f"wa-{digest}"
-    metadata = {
-        "source": "whatsapp",
-        "whatsapp_raw": whatsapp_text[:2000],
-        "has_jd": meta.get("has_jd", False),
-        "short_id": meta.get("short_id"),
-        "recipient_email": meta.get("recipient_email"),
-    }
+    message_id = f"wa-{digest}"
     with get_db_connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO saved_jobs (
-                job_id, job_url, status, title, company, location, is_remote,
-                salary_min, salary_max, fit_score, notes, description, metadata,
-                employment_type, sponsorship, job_category, ai_status, saved_at
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, 'PENDING', CURRENT_TIMESTAMP
-            )
-            ON CONFLICT (job_id) DO NOTHING;
+            INSERT INTO scout.whatsapp_messages (message_id, sender, body, status)
+            VALUES (%s, %s, %s, 'new')
+            ON CONFLICT (message_id) DO NOTHING;
             """,
-            (
-                job_id, "", "saved", job_title, company_name, "United States", True,
-                None, None, "0", "WhatsApp alert — pending AI evaluation.",
-                extracted_jd, json.dumps(metadata),
-                "Unknown", "Not Mentioned", "data_engineering",
-            ),
+            (message_id, sender, whatsapp_text[:4000]),
         )
         conn.commit()
-    return job_id
+    return message_id
 
 
 def _generate_tailored_content(bundle: Dict[str, Any]) -> Dict[str, Any]:
@@ -148,10 +127,12 @@ def process_whatsapp_job_alert(
         f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}"
     )
 
-    # 3. Persist WhatsApp job + ONE shared slot decision (reused for
+    # 3. Log the raw WhatsApp message + ONE shared slot decision (reused for
     #    both the resume and the outreach email below). Slot 1 switches on
     #    the JD (healthcare -> optum, else herc_rentals); slots 2-4 fixed.
-    job_id = _persist_whatsapp_job(meta, whatsapp_text, company_name, job_title, extracted_jd)
+    #    WhatsApp leads live in scout.whatsapp_messages + scout.outreach_tracking;
+    #    they no longer touch saved_jobs.
+    message_id = _persist_whatsapp_message(whatsapp_text, sender=helper_name)
     slot_frameworks = select_slot_frameworks(extracted_jd, job_title)
     lead_fw = load_framework(slot_frameworks["job1"])
     framework_context = (
@@ -159,9 +140,9 @@ def process_whatsapp_job_alert(
         f"({lead_fw.get('domain', '')})"
     )
     logger.info(
-        "🧭 Slots: %s | job_id=%s",
+        "🧭 Slots: %s | message_id=%s",
         {s: slot_frameworks[s] for s in ("job1", "job2", "job3", "job4")},
-        job_id,
+        message_id,
     )
 
     # 4. Real framework-aware tailoring vs Quota Saver
@@ -169,7 +150,29 @@ def process_whatsapp_job_alert(
     if has_jd:
         try:
             logger.info("✨ Rich JD detected: running framework-aware tailoring...")
-            bundle = build_job_tailoring_prompt(job_id, slot_frameworks=slot_frameworks)
+            # The wa- lead no longer lives in saved_jobs, so hand the already-
+            # parsed job fields straight to the prompt builder (no DB lookup).
+            bundle = build_job_tailoring_prompt(
+                message_id,
+                slot_frameworks=slot_frameworks,
+                job_override={
+                    "job_id": message_id,
+                    "title": job_title,
+                    "company": company_name,
+                    "location": "United States",
+                    "is_remote": True,
+                    "job_url": "",
+                    "description": extracted_jd,
+                    "job_category": "data_engineering",
+                    "metadata": {
+                        "source": "whatsapp",
+                        "has_jd": has_jd,
+                        "short_id": short_id,
+                        "whatsapp_message_id": message_id,
+                    },
+                    "notes": "WhatsApp alert — pending AI evaluation.",
+                },
+            )
             if "error" in bundle:
                 raise RuntimeError(bundle["error"])
             tailored = _generate_tailored_content(bundle)
@@ -257,7 +260,8 @@ def process_whatsapp_job_alert(
             "subject": subject,
             "cc_helper": resolved_helper_email,
             "short_id": short_id,
-            "job_id": job_id,
+            "job_id": message_id,
+            "whatsapp_message_id": message_id,
             "slot_frameworks": slot_frameworks,
         },
     )
@@ -270,7 +274,7 @@ def process_whatsapp_job_alert(
         "status": "success",
         "outreach_id": outreach_id,
         "short_id": short_id,
-        "job_id": job_id,
+        "job_id": message_id,
         "company_name": company_name,
         "job_title": job_title,
         "recruiter_name": recruiter_name,
