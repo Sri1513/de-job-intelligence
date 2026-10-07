@@ -372,8 +372,11 @@ def build_job_tailoring_prompt(
                 "5. BELIEVABLE: never force a tool into a story where it doesn't fit. FORBID: no new achievements, "
                 "no new metrics, no tools outside (bullet_bank UNION JD). "
                 "If a JD requirement matches nothing in the slot's bank, OMIT it for that slot — do NOT invent coverage.\n"
-                "6. SUMMARY: write the professional summary from the LEAD slot (job1) framework's 'summary_angle' plus the "
-                "top matched skills. It MUST open with '7+ years'. Never copy a hardcoded summary."
+                "6. SUMMARY: write the professional summary FRESH for this JD — 3-4 lines covering the WHOLE career (all four slots), never one flat sentence, never copied from anywhere.\\n"
+                "Line 1: '7+ years' as an ETL Data Engineer + the through-line across all roles (e.g. legacy-to-cloud migrations across healthcare, retail, finance).\\n"
+                "Line 2: career breadth in one breath — the strongest 1-2 verifiable proof points spanning slots (real numbers from the banks, never invented), weighted toward what THIS JD asks for.\\n"
+                "Line 3: tool coverage spanning the career, emphasizing THIS JD's top matched skills.\\n"
+                "Plain direct voice, no AI polish ('utilizing', 'leveraging', 'passionate' are banned). Bold 1-2 key terms per line."
             ),
         },
         "next_action": "Execute the 'export_tailored_resume' tool using the tailored content, then return the Google Doc URL, a Cover Letter (<300 words), and a Recruiter Outreach message.",
