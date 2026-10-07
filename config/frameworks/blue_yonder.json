@@ -1,0 +1,202 @@
+{
+  "framework_id": "blue_yonder",
+  "company_name": "Blue Yonder",
+  "domain": "Retail Supply Chain & Demand Optimization",
+  "business_context": "Ingestion and transformation of massive, multi-tenant retail supply chain datasets suffered from Spark Catalyst planning bottlenecks on wide transformations and unoptimized queries in downstream analytical models.",
+  "summary_angle": "Data Engineer specializing in retail supply chain ETL and distributed processing on Azure Databricks",
+  "process_framework": {
+    "phase_1_ingestion": {
+      "phase_name": "API-Driven ERP Ingestion",
+      "daily_activity": "Constructing programmatic REST API services to securely ingest, validate, and parse complex client ERP JSON payloads and flat files.",
+      "native_tools": [
+        "Python",
+        "FastAPI",
+        "SQLAlchemy",
+        "REST APIs"
+      ],
+      "source_systems": [
+        "Client ERPs",
+        "POS Feeds",
+        "Inventory Systems",
+        "Order Feeds (JSON/CSV)"
+      ],
+      "swappable_categories": [
+        "API Frameworks (Flask, Django, Requests)",
+        "Ingestion Connectors (Airbyte, Fivetran)"
+      ]
+    },
+    "phase_2_storage": {
+      "phase_name": "Enterprise Data Lake & Cloud Infrastructure",
+      "daily_activity": "Routing standardized ERP payloads into cloud lake storage while automating cloud infrastructure provisioning with strict security controls.",
+      "native_tools": [
+        "Azure Data Lake Storage Gen2 (ADLS Gen2)",
+        "Terraform",
+        "Docker",
+        "Azure Key Vault",
+        "Azure RBAC"
+      ],
+      "swappable_categories": [
+        "IaC & Cloud Storage (AWS S3, CloudFormation, GCP Cloud Storage)"
+      ]
+    },
+    "phase_3_transformation": {
+      "phase_name": "Distributed Data Processing & Catalyst Plan Optimization",
+      "daily_activity": "Engineering distributed pipelines to cleanse, deduplicate, and merge retail datasets, eliminating Spark Catalyst planning overhead by consolidating iterative column operations into unified single-pass DataFrames.",
+      "native_tools": [
+        "Azure Databricks",
+        "PySpark",
+        "Pandas",
+        "Spark SQL"
+      ],
+      "key_optimizations": [
+        "Eliminated Spark Catalyst planning overhead by consolidating iterative casting/enrichment into single-pass operations",
+        "Eliminated unnecessary repartitioning and tuned partition boundaries"
+      ],
+      "swappable_categories": [
+        "Distributed Compute (Apache Spark, dbt, EMR, Dataproc)"
+      ]
+    },
+    "phase_4_orchestration_and_modeling": {
+      "phase_name": "Workflow Scheduling & Warehouse Query Profiling",
+      "daily_activity": "Orchestrating multi-tiered batch DAGs, tracking job health via cloud monitoring, and tuning downstream data warehouse models through query profiling and partition pruning.",
+      "native_tools": [
+        "Apache Airflow",
+        "Snowflake",
+        "Exasol",
+        "Azure Monitor",
+        "Log Analytics"
+      ],
+      "swappable_categories": [
+        "Warehouses (Amazon Redshift, Google BigQuery, ClickHouse)",
+        "Monitoring (CloudWatch, Datadog)"
+      ]
+    },
+    "phase_5_serving_and_bi": {
+      "phase_name": "Self-Service Analytics Views (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+      "daily_activity": "Designing enterprise analytical models and views connecting Snowflake to business intelligence tools for stakeholder consumption.",
+      "native_tools": [
+        "Snowflake",
+        "Tableau",
+        "Power BI"
+      ],
+      "swappable_categories": [
+        "BI Platforms (Looker, QuickSight)"
+      ]
+    }
+  },
+  "tech_stack": [
+    "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
+    "Python",
+    "FastAPI",
+    "SQLAlchemy",
+    "PySpark",
+    "Pandas",
+    "Snowflake",
+    "Exasol",
+    "Terraform",
+    "Docker",
+    "Apache Airflow"
+  ],
+  "metrics_and_impact": {
+    "runtime_reduction": "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning",
+    "cost_and_efficiency": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
+  },
+  "bullet_bank": [
+    {
+      "id": "blue_yonder_phase_3_transformation_0",
+      "text": "Eliminated Spark Catalyst planning overhead by consolidating iterative casting/enrichment into single-pass operations",
+      "skills": [
+        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
+        "Python",
+        "FastAPI",
+        "SQLAlchemy",
+        "PySpark",
+        "Pandas",
+        "Snowflake",
+        "Exasol",
+        "Terraform",
+        "Docker",
+        "Apache Airflow"
+      ],
+      "metrics": [],
+      "phase": "Distributed Data Processing & Catalyst Plan Optimization",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "blue_yonder_phase_3_transformation_1",
+      "text": "Eliminated unnecessary repartitioning and tuned partition boundaries",
+      "skills": [
+        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
+        "Python",
+        "FastAPI",
+        "SQLAlchemy",
+        "PySpark",
+        "Pandas",
+        "Snowflake",
+        "Exasol",
+        "Terraform",
+        "Docker",
+        "Apache Airflow"
+      ],
+      "metrics": [],
+      "phase": "Distributed Data Processing & Catalyst Plan Optimization",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "blue_yonder_metric_0",
+      "text": "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning",
+      "skills": [
+        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
+        "Python",
+        "FastAPI",
+        "SQLAlchemy",
+        "PySpark",
+        "Pandas",
+        "Snowflake",
+        "Exasol",
+        "Terraform",
+        "Docker",
+        "Apache Airflow"
+      ],
+      "metrics": [
+        "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning"
+      ],
+      "phase": "impact",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "blue_yonder_metric_1",
+      "text": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol",
+      "skills": [
+        "Azure (ADLS Gen2, Databricks, Key Vault, Monitor, RBAC)",
+        "Python",
+        "FastAPI",
+        "SQLAlchemy",
+        "PySpark",
+        "Pandas",
+        "Snowflake",
+        "Exasol",
+        "Terraform",
+        "Docker",
+        "Apache Airflow"
+      ],
+      "metrics": [
+        "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
+      ],
+      "phase": "impact",
+      "signals": [
+        "blue_yonder"
+      ],
+      "bridging_slots": []
+    }
+  ]
+}

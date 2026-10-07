@@ -1,0 +1,185 @@
+{
+  "framework_id": "thomson_reuters",
+  "company_name": "Thomson Reuters",
+  "domain": "Financial Transactions, Sales & Subscription Analytics",
+  "business_context": "Sales and customer usage data was trapped in on-premise relational databases. Early AWS migrations hit severe write bottlenecks due to Parquet file write distribution and S3 metadata rename penalties.",
+  "summary_angle": "ETL Developer specializing in SQL Server-based extraction, data lake ingestion, and warehouse analytics on AWS",
+  "process_framework": {
+    "phase_1_ingestion": {
+      "phase_name": "Relational Data Extraction",
+      "daily_activity": "Extracting historical relational records and sales data from enterprise databases into the cloud ecosystem.",
+      "native_tools": [
+        "Apache Sqoop",
+        "AWS EMR",
+        "Microsoft SQL Server"
+      ],
+      "swappable_categories": [
+        "Extraction Tools (AWS DMS, Stitch, Fivetran, Kafka Connect)"
+      ]
+    },
+    "phase_2_storage": {
+      "phase_name": "Data Lake Storage & Hadoop Ecosystem",
+      "daily_activity": "Landing extraction files into S3 and executing native transformations on unstructured/flat files.",
+      "native_tools": [
+        "AWS S3",
+        "HDFS",
+        "HiveQL"
+      ],
+      "swappable_categories": [
+        "Storage Layers (ADLS Gen2, GCS, Ceph)"
+      ]
+    },
+    "phase_3_transformation": {
+      "phase_name": "Storage Tuning & Serverless Aggregations",
+      "daily_activity": "Authoring PySpark and Glue jobs to clean and aggregate revenue metrics, resolving batch write delays by tuning Parquet block/page sizes and S3 partition keys.",
+      "native_tools": [
+        "AWS Glue",
+        "PySpark",
+        "Spark SQL",
+        "Python (Pandas, NumPy)"
+      ],
+      "key_optimizations": [
+        "Tuned Parquet block/page sizes and Snappy compression",
+        "Eliminated S3 metadata rename overhead through optimized partitioning"
+      ],
+      "swappable_categories": [
+        "Serverless ETL (Databricks Serverless, AWS Lambda, Google Cloud Dataflow)"
+      ]
+    },
+    "phase_4_orchestration_and_modeling": {
+      "phase_name": "Analytical Querying, Data Quality & Storage Management",
+      "daily_activity": "Loading curated sales datasets into analytical stores, writing complex SQL window functions, and enforcing daily data validation checkpoints.",
+      "native_tools": [
+        "Amazon Redshift",
+        "AWS Athena",
+        "Microsoft SQL Server",
+        "SQL"
+      ],
+      "data_quality": [
+        "Missing record detection",
+        "Daily source-to-target row count reconciliation",
+        "Revenue variance reviews"
+      ],
+      "swappable_categories": [
+        "Query Engines (Presto, Trino)"
+      ]
+    },
+    "phase_5_serving_and_bi": {
+      "phase_name": "Executive Sales & Revenue BI (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+      "daily_activity": "Designing and deploying interactive Tableau, Power BI, and SSRS dashboards connected directly to Athena and Redshift for revenue KPIs.",
+      "native_tools": [
+        "Tableau",
+        "Power BI",
+        "SSRS"
+      ],
+      "swappable_categories": [
+        "BI Platforms (Looker, Qlik Sense)"
+      ]
+    }
+  },
+  "tech_stack": [
+    "AWS (S3, EMR, Glue, Redshift, Athena)",
+    "Apache Sqoop",
+    "HiveQL",
+    "PySpark",
+    "Python (Pandas, NumPy)",
+    "Microsoft SQL Server",
+    "SQL",
+    "Tableau",
+    "Power BI"
+  ],
+  "metrics_and_impact": {
+    "latency_reduction": "Cut batch write latency and storage delays by 20\u201325% via Parquet block sizing and S3 partition tuning",
+    "reporting_performance": "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning"
+  },
+  "bullet_bank": [
+    {
+      "id": "thomson_reuters_phase_3_transformation_0",
+      "text": "Tuned Parquet block/page sizes and Snappy compression",
+      "skills": [
+        "AWS (S3, EMR, Glue, Redshift, Athena)",
+        "Apache Sqoop",
+        "HiveQL",
+        "PySpark",
+        "Python (Pandas, NumPy)",
+        "Microsoft SQL Server",
+        "SQL",
+        "Tableau",
+        "Power BI"
+      ],
+      "metrics": [],
+      "phase": "Storage Tuning & Serverless Aggregations",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "thomson_reuters_phase_3_transformation_1",
+      "text": "Eliminated S3 metadata rename overhead through optimized partitioning",
+      "skills": [
+        "AWS (S3, EMR, Glue, Redshift, Athena)",
+        "Apache Sqoop",
+        "HiveQL",
+        "PySpark",
+        "Python (Pandas, NumPy)",
+        "Microsoft SQL Server",
+        "SQL",
+        "Tableau",
+        "Power BI"
+      ],
+      "metrics": [],
+      "phase": "Storage Tuning & Serverless Aggregations",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "thomson_reuters_metric_0",
+      "text": "Cut batch write latency and storage delays by 20\u201325% via Parquet block sizing and S3 partition tuning",
+      "skills": [
+        "AWS (S3, EMR, Glue, Redshift, Athena)",
+        "Apache Sqoop",
+        "HiveQL",
+        "PySpark",
+        "Python (Pandas, NumPy)",
+        "Microsoft SQL Server",
+        "SQL",
+        "Tableau",
+        "Power BI"
+      ],
+      "metrics": [
+        "Cut batch write latency and storage delays by 20\u201325% via Parquet block sizing and S3 partition tuning"
+      ],
+      "phase": "impact",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "thomson_reuters_metric_1",
+      "text": "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning",
+      "skills": [
+        "AWS (S3, EMR, Glue, Redshift, Athena)",
+        "Apache Sqoop",
+        "HiveQL",
+        "PySpark",
+        "Python (Pandas, NumPy)",
+        "Microsoft SQL Server",
+        "SQL",
+        "Tableau",
+        "Power BI"
+      ],
+      "metrics": [
+        "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning"
+      ],
+      "phase": "impact",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": []
+    }
+  ]
+}

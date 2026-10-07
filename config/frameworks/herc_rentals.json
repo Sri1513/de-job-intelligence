@@ -1,0 +1,269 @@
+{
+  "framework_id": "herc_rentals",
+  "company_name": "Herc Rentals Inc.",
+  "domain": "Equipment Rental, Fleet Operations & Billing Analytics",
+  "business_context": "Legacy processes relied on full-refresh load patterns and monolithic transformation chains that caused severe compute overhead, long daily batch runtimes, and costly rerun efforts upon failure.",
+  "summary_angle": "Data Engineer specializing in high-volume telemetry ingestion and streaming lakehouse pipelines on AWS and Databricks",
+  "process_framework": {
+    "phase_1_ingestion": {
+      "phase_name": "Data Ingestion & Event Streaming",
+      "daily_activity": "Extracting high-volume operational records from legacy/on-prem sources and streaming real-time IoT equipment telemetry payloads.",
+      "native_tools": [
+        "Python",
+        "AWS Kinesis",
+        "Databricks Streaming",
+        "AWS DMS",
+        "REST APIs"
+      ],
+      "source_systems": [
+        "RentalMan",
+        "AS400",
+        "Oracle OLTP",
+        "Teradata",
+        "IoT Telemetry (JSON/XML)"
+      ],
+      "swappable_categories": [
+        "Ingestion Tools (Kafka, Fivetran, Event Hubs, Debezium)"
+      ]
+    },
+    "phase_2_storage": {
+      "phase_name": "Cloud Storage & Lakehouse Landing",
+      "daily_activity": "Landing high-throughput raw operational and telemetry datasets into structured cloud storage layers.",
+      "native_tools": [
+        "AWS S3",
+        "Delta Lake"
+      ],
+      "swappable_categories": [
+        "Cloud Storage (Azure ADLS, Google Cloud Storage, MinIO)"
+      ]
+    },
+    "phase_3_transformation": {
+      "phase_name": "Distributed Transformation & Incremental CDC",
+      "daily_activity": "Building PySpark and Spark SQL pipelines to clean, normalize, and process CDC incremental updates while decoupling monolithic transformation chains into modular, restartable stages.",
+      "native_tools": [
+        "Databricks",
+        "PySpark",
+        "Spark SQL",
+        "Delta Lake"
+      ],
+      "key_optimizations": [
+        "Replaced full-refresh cycles with scheduled incremental load patterns",
+        "Tuned partition strategies and optimized Spark SQL joins",
+        "Decoupled pipelines into modular checkpointed stages"
+      ],
+      "swappable_categories": [
+        "Transformation & Modeling (dbt, Apache Flink, Snowflake SQL, BigQuery)"
+      ]
+    },
+    "phase_4_orchestration_and_modeling": {
+      "phase_name": "Workflow Orchestration, Dimensional Modeling & Governance",
+      "daily_activity": "Managing pipeline dependencies with retry policies, enforcing schema validation, and structuring dimensional star schemas and materialized tables in Teradata.",
+      "native_tools": [
+        "Apache Airflow",
+        "SQL Server Agent",
+        "Teradata",
+        "SQL"
+      ],
+      "data_quality": [
+        "Automated source-to-target reconciliation",
+        "Null validation checks",
+        "Schema enforcement"
+      ],
+      "swappable_categories": [
+        "Orchestrators (Prefect, Dagster)",
+        "Warehouses (Snowflake, Redshift, BigQuery)"
+      ]
+    },
+    "phase_5_serving_and_bi": {
+      "phase_name": "Semantic Layers & BI Serving (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+      "daily_activity": "Building optimized SQL semantic reporting layers and interactive dashboards to deliver operational and fleet metrics to business leadership.",
+      "native_tools": [
+        "SQL",
+        "Qlik Sense",
+        "Tableau",
+        "Power BI"
+      ],
+      "swappable_categories": [
+        "BI Platforms (Looker, QuickSight)"
+      ]
+    }
+  },
+  "tech_stack": [
+    "AWS (S3, Kinesis, DMS)",
+    "Databricks",
+    "Databricks Streaming",
+    "PySpark",
+    "Spark SQL",
+    "Python",
+    "Teradata",
+    "Oracle OLTP",
+    "AS400",
+    "RentalMan",
+    "Qlik Sense",
+    "Apache Airflow",
+    "SQL Server Agent"
+  ],
+  "metrics_and_impact": {
+    "rerun_reduction": "Decreased pipeline rerun effort by 30\u201340% through modular stage design",
+    "runtime_reduction": "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization",
+    "reliability": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+  },
+  "bullet_bank": [
+    {
+      "id": "herc_rentals_phase_3_transformation_0",
+      "text": "Replaced full-refresh cycles with scheduled incremental load patterns",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [],
+      "phase": "Distributed Transformation & Incremental CDC",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_phase_3_transformation_1",
+      "text": "Tuned partition strategies and optimized Spark SQL joins",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [],
+      "phase": "Distributed Transformation & Incremental CDC",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_phase_3_transformation_2",
+      "text": "Decoupled pipelines into modular checkpointed stages",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [],
+      "phase": "Distributed Transformation & Incremental CDC",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_metric_0",
+      "text": "Decreased pipeline rerun effort by 30\u201340% through modular stage design",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [
+        "Decreased pipeline rerun effort by 30\u201340% through modular stage design"
+      ],
+      "phase": "impact",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_metric_1",
+      "text": "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [
+        "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization"
+      ],
+      "phase": "impact",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_metric_2",
+      "text": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations",
+      "skills": [
+        "AWS (S3, Kinesis, DMS)",
+        "Databricks",
+        "Databricks Streaming",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Teradata",
+        "Oracle OLTP",
+        "AS400",
+        "RentalMan",
+        "Qlik Sense",
+        "Apache Airflow",
+        "SQL Server Agent"
+      ],
+      "metrics": [
+        "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+      ],
+      "phase": "impact",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    }
+  ]
+}

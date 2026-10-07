@@ -1,0 +1,102 @@
+{
+  "herc_rentals": {
+    "file": "herc_rentals.json",
+    "kind": "base",
+    "description": "Modern data-stack story: IoT/telematics ingestion, Kinesis + Databricks streaming, PySpark CDC, Airflow orchestration.",
+    "triggers": [
+      "telematics",
+      "iot",
+      "fleet",
+      "pyspark",
+      "airflow",
+      "kinesis",
+      "databricks",
+      "streaming",
+      "telemetry"
+    ],
+    "primary_for": [
+      "telematics",
+      "modern_stack"
+    ]
+  },
+  "blue_yonder": {
+    "file": "blue_yonder.json",
+    "kind": "base",
+    "description": "Retail supply chain ETL: ERP/API ingestion, Azure Databricks PySpark processing, Snowflake/Exasol tuning.",
+    "triggers": [
+      "retail",
+      "supply chain",
+      "pos",
+      "erp",
+      "snowflake",
+      "exasol",
+      "demand"
+    ],
+    "primary_for": [
+      "retail"
+    ]
+  },
+  "accenture": {
+    "file": "accenture.json",
+    "kind": "base",
+    "description": "Regulated financial migration: Ab Initio/mainframe to AWS, Spark skew remediation, audit-ready Redshift modeling.",
+    "triggers": [
+      "financial",
+      "banking",
+      "regulatory",
+      "compliance",
+      "ab initio",
+      "mainframe",
+      "skew",
+      "sox"
+    ],
+    "primary_for": [
+      "financial",
+      "legacy_migration"
+    ]
+  },
+  "thomson_reuters": {
+    "file": "thomson_reuters.json",
+    "kind": "base",
+    "description": "Warehouse analytics: SQL Server extraction (Sqoop/SSIS-era), S3 data lake, Parquet tuning, Redshift/Athena serving.",
+    "triggers": [
+      "t-sql",
+      "tsql",
+      "reporting",
+      "warehouse",
+      "subscription",
+      "revenue",
+      "ssrs"
+    ],
+    "primary_for": [
+      "warehouse_analytics"
+    ]
+  },
+  "default_framework": "herc_rentals",
+  "optum": {
+    "file": "optum.json",
+    "kind": "base",
+    "description": "Healthcare legacy ETL migration: DataStage/SSIS to AWS (S3, Glue, Lambda, Redshift) with HIPAA/HITRUST governance, parallel validation, hypercare cutover.",
+    "triggers": [
+      "healthcare",
+      "hipaa",
+      "hitrust",
+      "phi",
+      "clinical",
+      "payer",
+      "provider",
+      "datastage",
+      "ssis",
+      "informatica",
+      "legacy",
+      "moderniz",
+      "re-platform",
+      "decommission",
+      "claims"
+    ],
+    "primary_for": [
+      "healthcare",
+      "legacy_etl_migration"
+    ]
+  }
+}
