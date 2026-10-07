@@ -1,0 +1,985 @@
+{
+  "_meta": {
+    "description": "Canonical skill taxonomy for the Perfect Resume Engine. Every skill has one canonical id; aliases capture JD spelling variants, acronyms, and vendor names. The normalizer resolves any surface form to its canonical id before matching, so 'PySpark' vs 'pyspark' vs 'Spark (Python)' all score as one skill.",
+    "version": 2
+  },
+  "skills": [
+    {
+      "aliases": [
+        "py spark",
+        "python spark",
+        "spark python",
+        "spark (python)"
+      ],
+      "category": "bigdata",
+      "id": "pyspark",
+      "name": "PySpark"
+    },
+    {
+      "aliases": [
+        "spark",
+        "spark core"
+      ],
+      "category": "bigdata",
+      "id": "apache_spark",
+      "name": "Apache Spark"
+    },
+    {
+      "aliases": [
+        "sparksql"
+      ],
+      "category": "bigdata",
+      "id": "spark_sql",
+      "name": "Spark SQL"
+    },
+    {
+      "aliases": [
+        "structured streaming",
+        "spark structured streaming"
+      ],
+      "category": "bigdata",
+      "id": "spark_streaming",
+      "name": "Spark Streaming"
+    },
+    {
+      "aliases": [
+        "azure databricks",
+        "databricks sql",
+        "databricks platform"
+      ],
+      "category": "bigdata",
+      "id": "databricks",
+      "name": "Databricks"
+    },
+    {
+      "aliases": [
+        "delta live tables",
+        "dlt"
+      ],
+      "category": "bigdata",
+      "id": "databricks_streaming",
+      "name": "Databricks Streaming"
+    },
+    {
+      "aliases": [
+        "hdfs",
+        "apache hadoop"
+      ],
+      "category": "bigdata",
+      "id": "hadoop",
+      "name": "Hadoop"
+    },
+    {
+      "aliases": [
+        "hiveql",
+        "apache hive"
+      ],
+      "category": "bigdata",
+      "id": "hive",
+      "name": "Hive"
+    },
+    {
+      "aliases": [
+        "kafka",
+        "confluent kafka",
+        "msk"
+      ],
+      "category": "bigdata",
+      "id": "kafka",
+      "name": "Apache Kafka"
+    },
+    {
+      "aliases": [
+        "amazon kinesis",
+        "kinesis data streams",
+        "kinesis firehose"
+      ],
+      "category": "cloud",
+      "id": "kinesis",
+      "name": "AWS Kinesis"
+    },
+    {
+      "aliases": [
+        "amazon emr",
+        "elastic mapreduce"
+      ],
+      "category": "cloud",
+      "id": "emr",
+      "name": "AWS EMR"
+    },
+    {
+      "aliases": [
+        "amazon glue",
+        "glue etl",
+        "glue data catalog",
+        "glue crawler"
+      ],
+      "category": "etl_tools",
+      "id": "glue",
+      "name": "AWS Glue"
+    },
+    {
+      "aliases": [
+        "amazon lambda"
+      ],
+      "category": "cloud",
+      "id": "lambda",
+      "name": "AWS Lambda"
+    },
+    {
+      "aliases": [
+        "aws s3",
+        "simple storage service"
+      ],
+      "category": "cloud",
+      "id": "s3",
+      "name": "Amazon S3"
+    },
+    {
+      "aliases": [
+        "aws redshift"
+      ],
+      "category": "databases",
+      "id": "redshift",
+      "name": "Amazon Redshift"
+    },
+    {
+      "aliases": [
+        "aws athena"
+      ],
+      "category": "cloud",
+      "id": "athena",
+      "name": "Amazon Athena"
+    },
+    {
+      "aliases": [
+        "amazon web services",
+        "amazon aws"
+      ],
+      "category": "cloud",
+      "id": "aws",
+      "name": "AWS"
+    },
+    {
+      "aliases": [
+        "microsoft azure"
+      ],
+      "category": "cloud",
+      "id": "azure",
+      "name": "Azure"
+    },
+    {
+      "aliases": [
+        "adls gen2",
+        "azure data lake",
+        "adlsgen2"
+      ],
+      "category": "cloud",
+      "id": "adls",
+      "name": "Azure Data Lake Storage"
+    },
+    {
+      "aliases": [
+        "adf",
+        "data factory"
+      ],
+      "category": "etl_tools",
+      "id": "azure_data_factory",
+      "name": "Azure Data Factory"
+    },
+    {
+      "aliases": [
+        "synapse analytics",
+        "azure synapse analytics"
+      ],
+      "category": "cloud",
+      "id": "synapse",
+      "name": "Azure Synapse"
+    },
+    {
+      "aliases": [
+        "gcp",
+        "google cloud"
+      ],
+      "category": "cloud",
+      "id": "gcp",
+      "name": "Google Cloud Platform"
+    },
+    {
+      "aliases": [
+        "google bigquery",
+        "bq"
+      ],
+      "category": "databases",
+      "id": "bigquery",
+      "name": "BigQuery"
+    },
+    {
+      "aliases": [
+        "datastage",
+        "ibm infosphere datastage",
+        "infosphere",
+        "ds jobs",
+        "datastage jobs",
+        "px jobs",
+        "parallel jobs"
+      ],
+      "category": "etl_tools",
+      "id": "datastage",
+      "name": "IBM DataStage"
+    },
+    {
+      "aliases": [
+        "ssis",
+        "microsoft ssis",
+        "integration services",
+        "ssis packages",
+        "ssis package"
+      ],
+      "category": "etl_tools",
+      "id": "ssis",
+      "name": "SQL Server Integration Services"
+    },
+    {
+      "aliases": [
+        "ssrs"
+      ],
+      "category": "etl_tools",
+      "id": "ssrs",
+      "name": "SQL Server Reporting Services"
+    },
+    {
+      "aliases": [
+        "ssas"
+      ],
+      "category": "etl_tools",
+      "id": "ssas",
+      "name": "SQL Server Analysis Services"
+    },
+    {
+      "aliases": [
+        "informatica powercenter",
+        "powercenter",
+        "iics",
+        "informatica cloud"
+      ],
+      "category": "etl_tools",
+      "id": "informatica",
+      "name": "Informatica"
+    },
+    {
+      "aliases": [
+        "abinitio",
+        "ab initio graphs"
+      ],
+      "category": "etl_tools",
+      "id": "ab_initio",
+      "name": "Ab Initio"
+    },
+    {
+      "aliases": [],
+      "category": "etl_tools",
+      "id": "talend",
+      "name": "Talend"
+    },
+    {
+      "aliases": [
+        "dbt core",
+        "dbt cloud",
+        "data build tool"
+      ],
+      "category": "etl_tools",
+      "id": "dbt",
+      "name": "dbt"
+    },
+    {
+      "aliases": [
+        "airflow",
+        "airflow dags",
+        "apache airflow dags",
+        "mwaa",
+        "cloud composer"
+      ],
+      "category": "devops",
+      "id": "airflow",
+      "name": "Apache Airflow"
+    },
+    {
+      "aliases": [
+        "python3",
+        "py"
+      ],
+      "category": "languages",
+      "id": "python",
+      "name": "Python"
+    },
+    {
+      "aliases": [
+        "ansi sql",
+        "sql queries"
+      ],
+      "category": "languages",
+      "id": "sql",
+      "name": "SQL"
+    },
+    {
+      "aliases": [
+        "t-sql",
+        "transact-sql"
+      ],
+      "category": "languages",
+      "id": "tsql",
+      "name": "T-SQL"
+    },
+    {
+      "aliases": [
+        "pl-sql"
+      ],
+      "category": "languages",
+      "id": "plsql",
+      "name": "PL/SQL"
+    },
+    {
+      "aliases": [
+        "shell scripting",
+        "shell",
+        "bash scripting",
+        "unix shell"
+      ],
+      "category": "languages",
+      "id": "bash",
+      "name": "Bash"
+    },
+    {
+      "aliases": [],
+      "category": "languages",
+      "id": "scala",
+      "name": "Scala"
+    },
+    {
+      "aliases": [],
+      "category": "databases",
+      "id": "snowflake",
+      "name": "Snowflake"
+    },
+    {
+      "aliases": [],
+      "category": "databases",
+      "id": "teradata",
+      "name": "Teradata"
+    },
+    {
+      "aliases": [
+        "oracle db",
+        "oracle oltp",
+        "oracle 19c",
+        "oracle 12c"
+      ],
+      "category": "databases",
+      "id": "oracle",
+      "name": "Oracle Database"
+    },
+    {
+      "aliases": [
+        "ms sql server",
+        "mssql",
+        "sql server database",
+        "microsoft sql server"
+      ],
+      "category": "databases",
+      "id": "sqlserver",
+      "name": "SQL Server"
+    },
+    {
+      "aliases": [
+        "postgresql",
+        "postgres"
+      ],
+      "category": "databases",
+      "id": "postgres",
+      "name": "PostgreSQL"
+    },
+    {
+      "aliases": [],
+      "category": "databases",
+      "id": "mysql",
+      "name": "MySQL"
+    },
+    {
+      "aliases": [],
+      "category": "databases",
+      "id": "exasol",
+      "name": "Exasol"
+    },
+    {
+      "aliases": [
+        "delta",
+        "delta tables"
+      ],
+      "category": "bigdata",
+      "id": "delta_lake",
+      "name": "Delta Lake"
+    },
+    {
+      "aliases": [
+        "iceberg tables"
+      ],
+      "category": "bigdata",
+      "id": "iceberg",
+      "name": "Apache Iceberg"
+    },
+    {
+      "aliases": [],
+      "category": "bigdata",
+      "id": "hudi",
+      "name": "Apache Hudi"
+    },
+    {
+      "aliases": [
+        "apache parquet",
+        "parquet files"
+      ],
+      "category": "bigdata",
+      "id": "parquet",
+      "name": "Parquet"
+    },
+    {
+      "aliases": [],
+      "category": "bigdata",
+      "id": "avro",
+      "name": "Avro"
+    },
+    {
+      "aliases": [
+        "xml parsing",
+        "xml files"
+      ],
+      "category": "bigdata",
+      "id": "xml",
+      "name": "XML"
+    },
+    {
+      "aliases": [
+        "json parsing",
+        "nested json"
+      ],
+      "category": "bigdata",
+      "id": "json",
+      "name": "JSON"
+    },
+    {
+      "aliases": [
+        "docker containers",
+        "containerization"
+      ],
+      "category": "devops",
+      "id": "docker",
+      "name": "Docker"
+    },
+    {
+      "aliases": [
+        "k8s",
+        "k8",
+        "kube"
+      ],
+      "category": "devops",
+      "id": "kubernetes",
+      "name": "Kubernetes"
+    },
+    {
+      "aliases": [
+        "tf",
+        "terraform iac"
+      ],
+      "category": "devops",
+      "id": "terraform",
+      "name": "Terraform"
+    },
+    {
+      "aliases": [],
+      "category": "devops",
+      "id": "jenkins",
+      "name": "Jenkins"
+    },
+    {
+      "aliases": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "version control"
+      ],
+      "category": "devops",
+      "id": "git",
+      "name": "Git"
+    },
+    {
+      "aliases": [
+        "ci/cd",
+        "ci cd",
+        "continuous integration",
+        "deployment pipelines"
+      ],
+      "category": "devops",
+      "id": "cicd",
+      "name": "CI/CD"
+    },
+    {
+      "aliases": [
+        "hipaa compliance"
+      ],
+      "category": "governance",
+      "id": "hipaa",
+      "name": "HIPAA"
+    },
+    {
+      "aliases": [
+        "hitrust csf",
+        "hitrust compliance"
+      ],
+      "category": "governance",
+      "id": "hitrust",
+      "name": "HITRUST"
+    },
+    {
+      "aliases": [
+        "phi data",
+        "protected health information",
+        "phi/pii",
+        "pii/phi"
+      ],
+      "category": "governance",
+      "id": "phi",
+      "name": "PHI"
+    },
+    {
+      "aliases": [
+        "pii data",
+        "personally identifiable information"
+      ],
+      "category": "governance",
+      "id": "pii",
+      "name": "PII"
+    },
+    {
+      "aliases": [
+        "phi masking",
+        "data masking",
+        "pii masking",
+        "masking",
+        "de-identification",
+        "deidentification",
+        "anonymization",
+        "tokenization"
+      ],
+      "category": "governance",
+      "id": "phi_masking",
+      "name": "PHI Masking"
+    },
+    {
+      "aliases": [
+        "role-based access control",
+        "role based access",
+        "access controls"
+      ],
+      "category": "governance",
+      "id": "rbac",
+      "name": "RBAC"
+    },
+    {
+      "aliases": [
+        "lineage",
+        "data lineage tracking",
+        "column lineage"
+      ],
+      "category": "governance",
+      "id": "data_lineage",
+      "name": "Data Lineage"
+    },
+    {
+      "aliases": [
+        "data quality checks",
+        "dq checks",
+        "data validation",
+        "data profiling"
+      ],
+      "category": "governance",
+      "id": "data_quality",
+      "name": "Data Quality"
+    },
+    {
+      "aliases": [
+        "cdc",
+        "change data capture (cdc)",
+        "dms",
+        "debezium"
+      ],
+      "category": "concepts",
+      "id": "cdc",
+      "name": "Change Data Capture"
+    },
+    {
+      "aliases": [
+        "scd type 2",
+        "scd2",
+        "slowly changing dimension"
+      ],
+      "category": "concepts",
+      "id": "scd",
+      "name": "Slowly Changing Dimensions"
+    },
+    {
+      "aliases": [
+        "dimensional modelling",
+        "star schema",
+        "snowflake schema",
+        "star/snowflake"
+      ],
+      "category": "concepts",
+      "id": "dimensional_modeling",
+      "name": "Dimensional Modeling"
+    },
+    {
+      "aliases": [
+        "data modelling"
+      ],
+      "category": "concepts",
+      "id": "data_modeling",
+      "name": "Data Modeling"
+    },
+    {
+      "aliases": [
+        "partition pruning",
+        "partition strategies",
+        "partitioning strategies"
+      ],
+      "category": "concepts",
+      "id": "partitioning",
+      "name": "Partitioning"
+    },
+    {
+      "aliases": [
+        "etl pipelines",
+        "etl processes",
+        "extract transform load"
+      ],
+      "category": "concepts",
+      "id": "etl",
+      "name": "ETL"
+    },
+    {
+      "aliases": [
+        "elt pipelines",
+        "extract load transform"
+      ],
+      "category": "concepts",
+      "id": "elt",
+      "name": "ELT"
+    },
+    {
+      "aliases": [
+        "migration",
+        "cloud migration",
+        "legacy migration",
+        "migration planning",
+        "data migration planning"
+      ],
+      "category": "concepts",
+      "id": "data_migration",
+      "name": "Data Migration"
+    },
+    {
+      "aliases": [
+        "data warehousing",
+        "dwh",
+        "edw",
+        "enterprise data warehouse"
+      ],
+      "category": "concepts",
+      "id": "data_warehouse",
+      "name": "Data Warehouse"
+    },
+    {
+      "aliases": [
+        "data lakehouse",
+        "lakehouse",
+        "data lake architecture"
+      ],
+      "category": "concepts",
+      "id": "data_lake",
+      "name": "Data Lake"
+    },
+    {
+      "aliases": [
+        "real-time streaming",
+        "realtime",
+        "real time data",
+        "near-real-time",
+        "stream processing"
+      ],
+      "category": "concepts",
+      "id": "streaming",
+      "name": "Streaming"
+    },
+    {
+      "aliases": [
+        "slas",
+        "service level agreement",
+        "sla adherence",
+        "sla compliance"
+      ],
+      "category": "concepts",
+      "id": "sla",
+      "name": "SLA"
+    },
+    {
+      "aliases": [
+        "query tuning",
+        "sql tuning",
+        "spark tuning",
+        "performance optimization",
+        "query optimization"
+      ],
+      "category": "concepts",
+      "id": "performance_tuning",
+      "name": "Performance Tuning"
+    },
+    {
+      "aliases": [
+        "workflow orchestration",
+        "pipeline orchestration",
+        "scheduling"
+      ],
+      "category": "concepts",
+      "id": "orchestration",
+      "name": "Orchestration"
+    },
+    {
+      "aliases": [],
+      "category": "bi",
+      "id": "tableau",
+      "name": "Tableau"
+    },
+    {
+      "aliases": [
+        "power bi",
+        "powerbi dashboards"
+      ],
+      "category": "bi",
+      "id": "powerbi",
+      "name": "Power BI"
+    },
+    {
+      "aliases": [
+        "qlik sense",
+        "qlikview",
+        "qlik"
+      ],
+      "category": "bi",
+      "id": "qlik",
+      "name": "Qlik Sense"
+    },
+    {
+      "aliases": [],
+      "category": "bi",
+      "id": "looker",
+      "name": "Looker"
+    },
+    {
+      "aliases": [
+        "agile methodology",
+        "scrum",
+        "sprint"
+      ],
+      "category": "process",
+      "id": "agile",
+      "name": "Agile"
+    },
+    {
+      "aliases": [
+        "rentalman erp"
+      ],
+      "category": "domain",
+      "id": "rentalman",
+      "name": "RentalMan"
+    },
+    {
+      "aliases": [
+        "as/400",
+        "ibm i",
+        "iseries"
+      ],
+      "category": "domain",
+      "id": "as400",
+      "name": "AS400"
+    },
+    {
+      "id": "spof",
+      "name": "Single Point of Failure",
+      "category": "concepts",
+      "aliases": [
+        "single point of failure"
+      ]
+    },
+    {
+      "id": "uat",
+      "name": "UAT",
+      "category": "process",
+      "aliases": [
+        "user acceptance testing"
+      ]
+    },
+    {
+      "id": "archival",
+      "name": "Data Archival",
+      "category": "concepts",
+      "aliases": [
+        "data archival",
+        "archiving"
+      ]
+    },
+    {
+      "id": "cleansing",
+      "name": "Data Cleansing",
+      "category": "concepts",
+      "aliases": [
+        "data cleaning",
+        "data cleansing"
+      ]
+    },
+    {
+      "id": "cutover",
+      "name": "Cutover",
+      "category": "process",
+      "aliases": [
+        "go-live cutover",
+        "production cutover"
+      ]
+    },
+    {
+      "id": "deduplication",
+      "name": "Deduplication",
+      "category": "concepts",
+      "aliases": [
+        "de-duplication",
+        "dedup",
+        "duplicate removal"
+      ]
+    },
+    {
+      "id": "documentation",
+      "name": "Documentation",
+      "category": "process",
+      "aliases": []
+    },
+    {
+      "id": "handover",
+      "name": "Handover",
+      "category": "process",
+      "aliases": []
+    },
+    {
+      "id": "hypercare",
+      "name": "Hypercare",
+      "category": "process",
+      "aliases": [
+        "hypercare support",
+        "post-go-live support"
+      ]
+    },
+    {
+      "id": "knowledge_transfer",
+      "name": "Knowledge Transfer",
+      "category": "process",
+      "aliases": [
+        "kt sessions"
+      ]
+    },
+    {
+      "id": "parity_checks",
+      "name": "Parity Checks",
+      "category": "concepts",
+      "aliases": [
+        "parity validation",
+        "data parity"
+      ]
+    },
+    {
+      "id": "pipeline_standards",
+      "name": "Pipeline Standards",
+      "category": "process",
+      "aliases": [
+        "engineering standards"
+      ]
+    },
+    {
+      "id": "production_support",
+      "name": "Production Support",
+      "category": "process",
+      "aliases": [
+        "prod support",
+        "on-call support"
+      ]
+    },
+    {
+      "id": "reconciliation",
+      "name": "Reconciliation",
+      "category": "concepts",
+      "aliases": [
+        "data reconciliation",
+        "recon"
+      ]
+    },
+    {
+      "id": "regression_testing",
+      "name": "Regression Testing",
+      "category": "process",
+      "aliases": [
+        "regression tests"
+      ]
+    },
+    {
+      "id": "root_cause_analysis",
+      "name": "Root Cause Analysis",
+      "category": "process",
+      "aliases": [
+        "rca",
+        "root-cause analysis"
+      ]
+    },
+    {
+      "id": "runbooks",
+      "name": "Runbooks",
+      "category": "process",
+      "aliases": [
+        "operational runbooks"
+      ]
+    },
+    {
+      "id": "schema_enforcement",
+      "name": "Schema Enforcement",
+      "category": "concepts",
+      "aliases": [
+        "schema validation"
+      ]
+    },
+    {
+      "id": "source_to_target_mapping",
+      "name": "Source-to-Target Mapping",
+      "category": "concepts",
+      "aliases": [
+        "source to target mapping",
+        "sttm",
+        "mapping specs"
+      ]
+    },
+    {
+      "id": "stakeholder_collaboration",
+      "name": "Stakeholder Collaboration",
+      "category": "process",
+      "aliases": [
+        "stakeholder management",
+        "cross-functional collaboration"
+      ]
+    }
+  ]
+}
