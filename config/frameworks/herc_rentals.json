@@ -265,5 +265,11 @@
       ],
       "bridging_slots": []
     }
-  ]
+  ],
+  "resume_slot": {
+    "header": "Akkodis (Herc Rentals)",
+    "title": "Data Engineer",
+    "location": "Florida",
+    "dates": "Nov 2024 \u2013 Present"
+  }
 }

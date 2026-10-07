@@ -94,92 +94,131 @@
   },
   "bullet_bank": [
     {
-      "id": "thomson_reuters_phase_3_transformation_0",
-      "text": "Tuned Parquet block/page sizes and Snappy compression",
+      "id": "thomson_reuters_resume_00",
+      "text": "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
       "skills": [
-        "AWS (S3, EMR, Glue, Redshift, Athena)",
-        "Apache Sqoop",
+        "AWS S3",
+        "Microsoft SSIS",
+        "SQL Server",
+        "SQL"
+      ],
+      "metrics": [],
+      "phase": "Relational Data Extraction",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": [
+        "AWS S3",
+        "Microsoft SSIS",
+        "SQL Server",
+        "SQL"
+      ]
+    },
+    {
+      "id": "thomson_reuters_resume_01",
+      "text": "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+      "skills": [
+        "AWS Glue",
         "HiveQL",
         "PySpark",
-        "Python (Pandas, NumPy)",
-        "Microsoft SQL Server",
-        "SQL",
-        "Tableau",
-        "Power BI"
+        "Microsoft SSIS"
       ],
       "metrics": [],
       "phase": "Storage Tuning & Serverless Aggregations",
       "signals": [
         "thomson_reuters"
       ],
-      "bridging_slots": []
-    },
-    {
-      "id": "thomson_reuters_phase_3_transformation_1",
-      "text": "Eliminated S3 metadata rename overhead through optimized partitioning",
-      "skills": [
-        "AWS (S3, EMR, Glue, Redshift, Athena)",
-        "Apache Sqoop",
+      "bridging_slots": [
+        "AWS Glue",
         "HiveQL",
         "PySpark",
-        "Python (Pandas, NumPy)",
-        "Microsoft SQL Server",
-        "SQL",
-        "Tableau",
-        "Power BI"
+        "Microsoft SSIS"
+      ]
+    },
+    {
+      "id": "thomson_reuters_resume_02",
+      "text": "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+      "skills": [
+        "SQL"
       ],
       "metrics": [],
       "phase": "Storage Tuning & Serverless Aggregations",
       "signals": [
         "thomson_reuters"
       ],
-      "bridging_slots": []
+      "bridging_slots": [
+        "SQL"
+      ]
     },
     {
-      "id": "thomson_reuters_metric_0",
-      "text": "Cut batch write latency and storage delays by 20\u201325% via Parquet block sizing and S3 partition tuning",
-      "skills": [
-        "AWS (S3, EMR, Glue, Redshift, Athena)",
-        "Apache Sqoop",
-        "HiveQL",
-        "PySpark",
-        "Python (Pandas, NumPy)",
-        "Microsoft SQL Server",
-        "SQL",
-        "Tableau",
-        "Power BI"
-      ],
-      "metrics": [
-        "Cut batch write latency and storage delays by 20\u201325% via Parquet block sizing and S3 partition tuning"
-      ],
-      "phase": "impact",
+      "id": "thomson_reuters_resume_03",
+      "text": "Ran data checks every morning. Missing records, duplicates, source-to-target counts, revenue variance. Before the reports went out.",
+      "skills": [],
+      "metrics": [],
+      "phase": "Relational Data Extraction",
       "signals": [
         "thomson_reuters"
       ],
       "bridging_slots": []
     },
     {
-      "id": "thomson_reuters_metric_1",
-      "text": "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning",
+      "id": "thomson_reuters_resume_04",
+      "text": "Sped up slow batches 20\u201325%. Parquet outputs, fixed partitioning.",
       "skills": [
-        "AWS (S3, EMR, Glue, Redshift, Athena)",
-        "Apache Sqoop",
-        "HiveQL",
-        "PySpark",
-        "Python (Pandas, NumPy)",
-        "Microsoft SQL Server",
-        "SQL",
-        "Tableau",
-        "Power BI"
+        "Parquet"
       ],
       "metrics": [
-        "Improved database reporting execution times by 40% through index optimization, partitioning, and query tuning"
+        "20\u201325%"
       ],
-      "phase": "impact",
+      "phase": "Storage Tuning & Serverless Aggregations",
       "signals": [
         "thomson_reuters"
       ],
-      "bridging_slots": []
+      "bridging_slots": [
+        "Parquet"
+      ]
+    },
+    {
+      "id": "thomson_reuters_resume_05",
+      "text": "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+      "skills": [
+        "SQL Server Agent",
+        "SQL Server",
+        "SQL"
+      ],
+      "metrics": [],
+      "phase": "Storage Tuning & Serverless Aggregations",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": [
+        "SQL Server Agent",
+        "SQL Server",
+        "SQL"
+      ]
+    },
+    {
+      "id": "thomson_reuters_resume_06",
+      "text": "Wrote T-SQL procedures, functions, and views behind the ETL and reports. Automated routine ops with UNIX scripts.",
+      "skills": [
+        "T-SQL",
+        "UNIX"
+      ],
+      "metrics": [],
+      "phase": "Storage Tuning & Serverless Aggregations",
+      "signals": [
+        "thomson_reuters"
+      ],
+      "bridging_slots": [
+        "T-SQL",
+        "UNIX"
+      ]
     }
-  ]
+  ],
+  "resume_slot": {
+    "header": "Experis IT (Thomson Reuters)",
+    "title": "ETL Developer",
+    "location": "India",
+    "dates": "June 2017 \u2013 Sep 2019"
+  }
 }

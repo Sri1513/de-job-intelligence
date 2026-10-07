@@ -1,15 +1,15 @@
 """Framework selection: one shared LLM-judged selector used by both the
 dashboard tailoring path and the WhatsApp alert path.
 
-Decision algorithm:
-  1. Thin check (no LLM spent): input too short / title-only -> default framework.
-  2. LLM judgment (one call): the model picks from the registry menu and
-     returns {"framework": "<id>", "rationale": "<one line>"}.
-  3. Validation: unknown id or LLM failure -> default framework.
+Routing model (per-slot):
+  - Slot 1 (current role) is decided per JD: healthcare JD -> optum,
+    everything else -> herc_rentals. The LLM makes this binary call.
+  - Slots 2-4 are FIXED: blue_yonder, accenture, thomson_reuters.
 
-The default framework is `herc_rentals` (modern-stack story fits the widest
-set of generic DE postings); Optum is the specialist pick the model chooses
-for healthcare / legacy-migration JDs.
+Decision algorithm for slot 1:
+  1. Thin check (no LLM spent): input too short / title-only -> herc_rentals.
+  2. LLM judgment (one call): healthcare or not -> optum | herc_rentals.
+  3. Validation: unexpected answer or LLM failure -> herc_rentals.
 """
 
 from __future__ import annotations
@@ -66,50 +66,34 @@ def load_framework(framework_id: str) -> dict[str, Any]:
     return _FRAMEWORK_CACHE[framework_id]
 
 
-def _build_menu(registry: dict[str, Any]) -> str:
-    lines = []
-    for fw_id, entry in registry.items():
-        if fw_id == "default_framework" or not isinstance(entry, dict):
-            continue
-        lines.append(
-            f"- {fw_id}: {entry.get('description', '')} "
-            f"(best for: {', '.join(entry.get('primary_for', []))})"
-        )
-    return "\n".join(lines)
+SELECTION_PROMPT = """You are classifying a job posting for resume tailoring.
+Answer ONE question: is this a HEALTHCARE data role?
 
+Healthcare signals include: healthcare, HIPAA, HITRUST, PHI, clinical,
+payer, provider, claims, pharmacy, hospital, patient data.
 
-SELECTION_PROMPT = """You are choosing which resume framework best fits a job posting.
-Pick exactly ONE framework from the menu below — the one whose story and tech stack
-most closely match what the job asks for.
+- If YES -> return {{"framework": "optum", "rationale": "<one short sentence>"}}
+- If NO -> return {{"framework": "herc_rentals", "rationale": "<one short sentence>"}}
 
-FRAMEWORK MENU:
-{menu}
-
-DEFAULT FRAMEWORK: {default_id}
-If no framework fits clearly, choose the default.
+Nothing else is a valid answer. When in doubt, answer NO.
 
 JOB TITLE: {title}
 
 JOB TEXT:
 {jd_text}
 
-Selection guidance:
-- Healthcare, HIPAA, clinical, payer/provider, or legacy ETL migration (DataStage, SSIS, modernization) -> optum
-- Telematics, IoT, or modern stack (PySpark, Airflow, Kinesis, Databricks streaming) -> herc_rentals
-- Match on the closest story, not keyword counting. One framework only.
-
 Return a STRICT JSON object (no markdown, no backticks):
-{{"framework": "<framework_id>", "rationale": "<one short sentence>"}}
+{{"framework": "optum", "rationale": "<one short sentence>"}}
 """
 
 
 def select_framework(jd_text: str, title: str = "") -> dict[str, Any]:
-    """Selects the framework for a JD (or WhatsApp fragment).
+    """Decides slot 1's framework: optum for healthcare JDs, herc_rentals
+    for everything else.
 
     Returns {"framework_id": str, "rationale": str, "thin": bool}.
-    Never raises: any failure falls back to the default framework.
+    Never raises: any failure falls back to herc_rentals.
     """
-    registry = load_registry()
     default_id = default_framework_id()
 
     text = (jd_text or "").strip()
@@ -121,8 +105,6 @@ def select_framework(jd_text: str, title: str = "") -> dict[str, Any]:
         }
 
     prompt = SELECTION_PROMPT.format(
-        menu=_build_menu(registry),
-        default_id=default_id,
         title=title or "Unknown",
         jd_text=text[:4000],
     )
@@ -142,12 +124,31 @@ def select_framework(jd_text: str, title: str = "") -> dict[str, Any]:
             "thin": False,
         }
 
-    if chosen not in registry or chosen == "default_framework":
-        logger.warning(f"Framework selection returned unknown id '{chosen}'; using default.")
+    if chosen not in ("optum", "herc_rentals"):
+        logger.warning(f"Framework selection returned unexpected id '{chosen}'; using default.")
         return {
             "framework_id": default_id,
-            "rationale": f"Model returned unknown framework '{chosen}'; using default.",
+            "rationale": f"Model returned unexpected framework '{chosen}'; using default.",
             "thin": False,
         }
 
     return {"framework_id": chosen, "rationale": rationale, "thin": False}
+
+
+def select_slot_frameworks(jd_text: str, title: str = "") -> dict[str, Any]:
+    """Returns the framework id for each resume slot.
+
+    Slot 1 is decided per JD (healthcare -> optum, else herc_rentals);
+    slots 2-4 are fixed per the registry's slots config.
+    """
+    registry = load_registry()
+    slots_cfg = registry.get("slots", {})
+    slot1 = select_framework(jd_text, title)
+
+    result: dict[str, Any] = {
+        "job1": slot1["framework_id"],
+        "job1_rationale": slot1["rationale"],
+    }
+    for slot in ("job2", "job3", "job4"):
+        result[slot] = slots_cfg.get(slot, {}).get("fixed", "")
+    return result

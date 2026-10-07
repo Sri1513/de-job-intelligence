@@ -9,7 +9,10 @@ from typing import Any, Dict
 
 from src.core.config import settings
 from src.core.database import get_db_connection
-from src.engine.framework_selector import load_framework, select_framework
+from src.engine.framework_selector import (
+    load_framework,
+    select_slot_frameworks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,43 @@ CONFIG_DIR = getattr(settings, "CONFIG_DIR", Path(__file__).resolve().parents[2]
 _RESUME_CACHE: dict[str, str] = {}
 _ROLE_CACHE: dict[str, dict] = {}
 _FRAMEWORK_CACHE: dict[str, dict] = {}
+
+# Resume job slots. Keys are generic (job1..job4); each slot's employer
+# header comes from its framework's resume_slot block — never invented.
+BULLET_DISTRIBUTION = {
+    "job1": 8,
+    "job2": 8,
+    "job3": 9,
+    "job4": 8,
+}
+
+# Identity fidelity: facts that must be copied EXACTLY from the base resume.
+FIDELITY_RULES = (
+    "IDENTITY FIDELITY RULES (MANDATORY — violating these is a failure):\n"
+    "1. Candidate name is 'Sri Omkar D' — never expand, alter, or initial differently.\n"
+    "2. Employer header, job title, location, dates for EACH slot: use that slot's "
+    "framework 'resume_slot' block EXACTLY (it carries the verified headers). "
+    "Never substitute one employer for another, never invent headers.\n"
+    "3. Education: degree names, schools, years EXACTLY as in BASE RESUME.\n"
+    "4. Technical Skills: ONLY skills listed in BASE RESUME. Never add tools the resume "
+    "does not list (e.g. no dbt, no Hadoop unless present).\n"
+    "5. Every experience bullet MUST be traceable to the selected framework's bullet_bank. "
+    "If a JD requirement matches nothing in the bank, OMIT it — do not write a new bullet.\n"
+    "6. No duplicate bullets. Bold whole terms only (**Redshift**), never bare numbers "
+    "mid-sentence."
+)
+
+# Plain-voice + honesty rules for recruiter outreach.
+EMAIL_VOICE_RULES = (
+    "VOICE AND HONESTY RULES (MANDATORY):\n"
+    "- Write plain and direct, like the candidate writes. NEVER use: leveraged, robust, "
+    "seamless, rigorous, cutting-edge, state-of-the-art, or 'guarantee 100%'.\n"
+    "- Every alignment bullet must reflect techniques/tools actually on the resume. Do NOT "
+    "invent techniques (e.g. tokenization) the resume never mentions. If the JD names "
+    "something the resume lacks, describe the adjacent real experience instead of "
+    "claiming the missing one.\n"
+    "- No absolute guarantees. State what was done and measured."
+)
 
 
 def build_whatsapp_outreach_prompt(
@@ -88,6 +128,8 @@ def build_whatsapp_outreach_prompt(
          sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8
 
     - **CRITICAL RULE**: DO NOT mention the helper ({helper_name}) or any referral source in the email body AT ALL. (They are placed in the CC field automatically).
+
+    {EMAIL_VOICE_RULES}
 
     Return a JSON object with EXACTLY these two keys:
     - "subject": (string)
@@ -167,14 +209,15 @@ def load_target_resume(role_slug: str) -> str:
 
 
 def build_job_tailoring_prompt(
-    job_id: str, framework_selection: dict | None = None
+    job_id: str, slot_frameworks: dict | None = None
 ) -> Dict[str, Any]:
     """Builds the tailoring prompt bundle for a job.
 
-    framework_selection: optional pre-computed selection from
-    src.engine.framework_selector.select_framework (shared by the WhatsApp
-    path so one decision drives both resume and email). When omitted, the
-    selector runs here.
+    slot_frameworks: optional pre-computed SLOT map from
+    src.engine.framework_selector.select_slot_frameworks (shared by the
+    WhatsApp path so one decision drives both resume and email). When omitted,
+    the selector runs here. Slot 1 switches on the JD (healthcare -> optum,
+    else herc_rentals); slots 2-4 are fixed.
     """
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -223,20 +266,30 @@ def build_job_tailoring_prompt(
     role_config = load_role_config(role_slug)
     base_resume = load_target_resume(role_slug)
 
-    # Single shared framework decision (LLM-judged): replaces the old
-    # "dump every company framework into the prompt" behavior. The selected
-    # framework alone is injected below. Callers may pass a pre-computed
-    # selection (WhatsApp path) so one decision drives resume + email.
-    if framework_selection is None:
-        framework_selection = select_framework(
+    # Per-slot framework routing (one shared decision): slot 1 switches on the JD
+    # (healthcare -> optum, else herc_rentals); slots 2-4 are fixed.
+    # Callers may pass a pre-computed slot map (WhatsApp path) so one decision
+    # drives resume + email.
+    if slot_frameworks is None:
+        slot_frameworks = select_slot_frameworks(
             job.get("description") or "", job.get("title") or ""
         )
-    selected_framework = load_framework(framework_selection["framework_id"])
+    slot_ids = {s: slot_frameworks[s] for s in ("job1", "job2", "job3", "job4")}
+    slot_data: dict[str, dict] = {}
+    for slot, fw_id in slot_ids.items():
+        fw = load_framework(fw_id)
+        slot_data[slot] = {
+            "framework_id": fw_id,
+            "resume_slot": fw.get("resume_slot", {}),
+            "summary_angle": fw.get("summary_angle", ""),
+            "domain": fw.get("domain", ""),
+            "bullet_bank": fw.get("bullet_bank", []),
+            "process_framework": fw.get("process_framework", {}),
+        }
     logger.info(
-        "tailoring: job %s -> framework %s (%s)",
+        "tailoring: job %s -> slots %s",
         job.get("job_id"),
-        framework_selection["framework_id"],
-        framework_selection["rationale"],
+        {s: slot_data[s]["framework_id"] for s in slot_data},
     )
 
     formatting_rules = (
@@ -271,48 +324,45 @@ def build_job_tailoring_prompt(
         },
         "job_description": job.get("description"),
         "base_resume": base_resume,
-        "framework_selection": framework_selection,
-        "selected_framework_id": framework_selection["framework_id"],
+        "slot_frameworks": slot_ids,
+        "lead_framework_id": slot_ids["job1"],
         "tailoring_guidelines": {
             "core_architectural_boundaries": role_config.get("boundaries", ""),
             "static_bridging_rules": role_config.get("bridging_rules", ""),
             "domain_adaptation": "Adapt terminology to target employer (e.g., High Volume = self-healing, low-latency streaming; Financial = audit trails, KMS).",
             "tenure_enforcement": "The candidate has 7+ years of cumulative professional experience. The summary MUST explicitly open with this.",
-            "bullet_distribution": {
-                "job1_herc_rentals": 8,
-                "job2_blue_yonder": 8,
-                "job3_accenture": 9,
-                "job4_thomson_reuters": 8,
-            },
+            "bullet_distribution": BULLET_DISTRIBUTION,
+            "fidelity_rules": FIDELITY_RULES,
             "formula": "Google XYZ (Accomplished [X] as measured by [Y], by doing [Z]). Each bullet must address a distinct responsibility.",
             "skills_schema": role_config.get("skills_schema", {}),
             "formatting_rules": formatting_rules,
             "dynamic_phase_weighting_policy": phase_weighting_policy,
             "dynamic_tool_bridging_policy": {
                 "instruction": (
+                    "Per slot (job1..job4), each with its own framework in 'slot_frameworks' below:\n"
                     "1. Extract required tools from the Job Description missing from the base resume.\n"
                     "2. Evaluate the functional category of the missing tool (e.g., Kafka = Streaming, dbt = Modeling/Transformation, Atlan = Governance).\n"
-                    "3. Look up the corresponding phase in 'selected_framework' below.\n"
-                    "4. Conceptually replace the candidate's native tool with the JD's required tool strictly within that daily activity phase to generate the bullet.\n"
-                    "5. Do NOT invent new architectural phases. If a tool contradicts the framework (e.g., frontend frameworks for data platform roles), ignore it."
+                    "3. Look up the corresponding phase in THAT SLOT's framework.\n"
+                    "4. The JD's requested tools MUST appear: swap the JD's tool name into the bullet's 'bridging_slots' so JD keywords appear verbatim — but ONLY within the same phase family.\n"
+                    "5. Do NOT invent new architectural phases. If a tool contradicts the slot's framework (e.g., frontend frameworks for data platform roles), ignore it — believability over keyword stuffing."
                 ),
-                "selected_framework": selected_framework,
+                "slot_frameworks": slot_data,
             },
             "bullet_selection_contract": (
                 "BULLET SELECTION CONTRACT (MANDATORY — you are a SELECTOR, not an inventor):\n"
-                "Every experience bullet you output MUST be traceable to the selected framework's "
-                "'bullet_bank' below. \n"
+                "Work EACH slot independently (job1..job4), using ONLY that slot's 'bullet_bank'. \n"
                 "1. EXTRACT the JD's required skills, responsibilities, and domain signals.\n"
-                "2. RANK each bullet_bank entry by skill/signal overlap with those requirements.\n"
-                "3. SELECT the top bullets per 'bullet_distribution'; the set must cover the JD's top "
+                "2. RANK that slot's bank entries by JD keyword overlap (skills first, then signals/phases) — "
+                "points must be chosen by what the JD asks for, per that slot's company framework.\n"
+                "3. SELECT the top bullets per 'bullet_distribution' for the slot; the set must cover the JD's top "
                 "requirements with no two bullets proving the same thing.\n"
-                "4. BRIDGE: where the JD names a tool in the same phase family (see the framework's "
-                "'swappable_categories'), you may swap it into the bullet's 'bridging_slots'. Keep the "
-                "candidate's wording and metrics EXACT — never alter a number or invent a new one.\n"
-                "5. FORBID: no new achievements, no new metrics, no tools outside (bullet_bank UNION JD). "
-                "If a JD requirement matches nothing in the bank, leave it unmatched and note it as a gap — "
-                "do NOT invent coverage.\n"
-                "6. SUMMARY: write the professional summary from the framework's 'summary_angle' plus the "
+                "4. BRIDGE: where the JD names a tool in the same phase family (see the slot framework's "
+                "'swappable_categories'), swap it into the bullet's 'bridging_slots' so the JD's tools appear "
+                "verbatim. Keep the candidate's wording and metrics EXACT — never alter a number or invent a new one.\n"
+                "5. BELIEVABLE: never force a tool into a story where it doesn't fit. FORBID: no new achievements, "
+                "no new metrics, no tools outside (bullet_bank UNION JD). "
+                "If a JD requirement matches nothing in the slot's bank, OMIT it for that slot — do NOT invent coverage.\n"
+                "6. SUMMARY: write the professional summary from the LEAD slot (job1) framework's 'summary_angle' plus the "
                 "top matched skills. It MUST open with '7+ years'. Never copy a hardcoded summary."
             ),
         },
