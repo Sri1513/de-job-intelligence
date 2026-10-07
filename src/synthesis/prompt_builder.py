@@ -142,7 +142,7 @@ def load_target_resume(role_slug: str) -> str:
         else:
             logger.warning(f"Resume file not found at {resume_path}")
             _RESUME_CACHE[resume_file_suffix] = (
-                "Senior Data Engineer with 8+ years of experience across Apache Spark, PySpark, "
+                "Senior Data Engineer with 7+ years of experience across Apache Spark, PySpark, "
                 "Python, SQL, AWS, Azure, Snowflake, Databricks, and Lakehouse architectures."
             )
 
@@ -234,7 +234,7 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
             "core_architectural_boundaries": role_config.get("boundaries", ""),
             "static_bridging_rules": role_config.get("bridging_rules", ""),
             "domain_adaptation": "Adapt terminology to target employer (e.g., High Volume = self-healing, low-latency streaming; Financial = audit trails, KMS).",
-            "tenure_enforcement": "The candidate has 8+ years of cumulative professional experience. The summary MUST explicitly open with this.",
+            "tenure_enforcement": "The candidate has 7+ years of cumulative professional experience. The summary MUST explicitly open with this.",
             "bullet_distribution": {
                 "job1_herc_rentals": 8,
                 "job2_blue_yonder": 8,

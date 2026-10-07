@@ -179,7 +179,7 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     summary = dynamic_data.get("summary") or dynamic_data.get("professional_summary", "")
     if not summary:
         summary = (
-            "Senior Data Engineer with 8+ years of experience designing and operating high-throughput "
+            "Senior Data Engineer with 7+ years of experience designing and operating high-throughput "
             "distributed architectures, cloud data lakehouses, and real-time streaming pipelines across AWS and Azure."
         )
     replacements["{{SUMMARY}}"] = clean_text(summary)
