@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from src.core.database import get_db_connection
 from src.database.helper_repo import get_or_create_helper, log_outreach_event
 from src.engine.email_analyzer import parse_whatsapp_alert_metadata
-from src.engine.framework_selector import load_framework, select_framework
+from src.engine.framework_selector import load_framework, select_slot_frameworks
 from src.engine.llm_text import generate_text
 from src.engine.tailor import export_tailored_resume_to_drive
 from src.synthesis.gmail_client import create_gmail_draft
@@ -72,7 +72,11 @@ def _persist_whatsapp_job(
 def _generate_tailored_content(bundle: Dict[str, Any]) -> Dict[str, Any]:
     """Runs the LLM over the tailoring bundle to produce the resume payload."""
     guidelines = bundle["tailoring_guidelines"]
-    selected_fw = guidelines["dynamic_tool_bridging_policy"]["selected_framework"]
+    slot_fws = guidelines["dynamic_tool_bridging_policy"]["slot_frameworks"]
+    slot_headers = {
+        slot: data.get("resume_slot", {}).get("header", slot)
+        for slot, data in slot_fws.items()
+    }
     prompt = f"""You are tailoring a resume for a specific job. Follow ALL guidelines exactly.
 
 BASE RESUME:
@@ -82,21 +86,21 @@ JOB TITLE: {bundle['job_metadata']['title']} at {bundle['job_metadata']['company
 JOB DESCRIPTION:
 {(bundle['job_description'] or '')[:4000]}
 
-SELECTED FRAMEWORK: {bundle['selected_framework_id']}
-FRAMEWORK DETAIL (JSON):
-{json.dumps(selected_fw, indent=2)[:6000]}
+SLOT FRAMEWORKS (JSON — each slot has its own framework, bullet_bank, and verified resume_slot header):
+{json.dumps(slot_fws, indent=2)[:8000]}
 
 GUIDELINES:
 - Core boundaries: {guidelines['core_architectural_boundaries']}
 - {guidelines['bullet_selection_contract']}
 - {guidelines['fidelity_rules']}
 - Formatting: {guidelines['formatting_rules']}
-- Bullet distribution per role: {json.dumps(guidelines['bullet_distribution'])}
+- Bullet distribution per slot: {json.dumps(guidelines['bullet_distribution'])}
 
 Return a STRICT JSON object (no markdown, no backticks) with EXACTLY these keys:
 - "professional_summary": string
 - "technical_skills": object mapping skill-group name -> comma-separated skills string
-- "experience_bullets": object with EXACTLY these keys (copy employer headers from BASE RESUME, do not rename): {", ".join(guidelines['bullet_distribution'].keys())} -> list of bullet strings
+- "experience_bullets": object with EXACTLY these keys -> list of bullet strings: {", ".join(guidelines['bullet_distribution'].keys())}
+- "slot_headers": use these EXACT employer headers per slot: {json.dumps(slot_headers)}
 """
     raw = generate_text(prompt, json_mode=True, temperature=0.2, task="whatsapp-tailor-resume")
     return json.loads(raw)
@@ -144,18 +148,20 @@ def process_whatsapp_job_alert(
         f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}"
     )
 
-    # 3. Persist WhatsApp job + ONE shared framework decision (reused for
-    #    both the resume and the outreach email below).
+    # 3. Persist WhatsApp job + ONE shared slot decision (reused for
+    #    both the resume and the outreach email below). Slot 1 switches on
+    #    the JD (healthcare -> optum, else herc_rentals); slots 2-4 fixed.
     job_id = _persist_whatsapp_job(meta, whatsapp_text, company_name, job_title, extracted_jd)
-    selection = select_framework(extracted_jd, job_title)
-    framework = load_framework(selection["framework_id"])
+    slot_frameworks = select_slot_frameworks(extracted_jd, job_title)
+    lead_fw = load_framework(slot_frameworks["job1"])
     framework_context = (
-        f"{selection['framework_id']}: {framework.get('summary_angle', '')} "
-        f"({framework.get('domain', '')})"
+        f"{slot_frameworks['job1']}: {lead_fw.get('summary_angle', '')} "
+        f"({lead_fw.get('domain', '')})"
     )
     logger.info(
-        "🧭 Framework: %s | %s | job_id=%s",
-        selection["framework_id"], selection["rationale"], job_id,
+        "🧭 Slots: %s | job_id=%s",
+        {s: slot_frameworks[s] for s in ("job1", "job2", "job3", "job4")},
+        job_id,
     )
 
     # 4. Real framework-aware tailoring vs Quota Saver
@@ -163,7 +169,7 @@ def process_whatsapp_job_alert(
     if has_jd:
         try:
             logger.info("✨ Rich JD detected: running framework-aware tailoring...")
-            bundle = build_job_tailoring_prompt(job_id, framework_selection=selection)
+            bundle = build_job_tailoring_prompt(job_id, slot_frameworks=slot_frameworks)
             if "error" in bundle:
                 raise RuntimeError(bundle["error"])
             tailored = _generate_tailored_content(bundle)
@@ -251,7 +257,7 @@ def process_whatsapp_job_alert(
             "cc_helper": resolved_helper_email,
             "short_id": short_id,
             "job_id": job_id,
-            "framework_selection": selection,
+            "slot_frameworks": slot_frameworks,
         },
     )
 
@@ -268,7 +274,7 @@ def process_whatsapp_job_alert(
         "job_title": job_title,
         "recruiter_name": recruiter_name,
         "has_jd": has_jd,
-        "framework_selection": selection,
+        "framework_selection": slot_frameworks,
         "resume_url": resume_url,
         "gmail_draft_id": draft_result["draft_id"],
     }

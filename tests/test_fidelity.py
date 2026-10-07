@@ -8,21 +8,17 @@ from src.synthesis import prompt_builder as pb
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 
 
-def test_bullet_distribution_uses_real_job_slugs():
-    assert set(pb.BULLET_DISTRIBUTION) == {
-        "job1_optum",
-        "job2_quess",
-        "job3_trigent",
-        "job4_experis",
-    }
-    assert "herc_rentals" not in str(pb.BULLET_DISTRIBUTION)
+def test_bullet_distribution_uses_generic_slot_keys():
+    # Keys are generic slots; each slot's employer header comes from its
+    # framework's resume_slot block (tested separately) — never invented.
+    assert set(pb.BULLET_DISTRIBUTION) == {"job1", "job2", "job3", "job4"}
 
 
 def test_fidelity_rules_cover_identity_facts():
     rules = pb.FIDELITY_RULES.lower()
     for must_have in [
         "sri omkar d",
-        "exactly from base resume",
+        "resume_slot",
         "never substitute",
         "never invent",
         "traceable",

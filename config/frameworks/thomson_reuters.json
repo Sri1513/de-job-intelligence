@@ -214,5 +214,11 @@
         "UNIX"
       ]
     }
-  ]
+  ],
+  "resume_slot": {
+    "header": "Experis IT (Thomson Reuters)",
+    "title": "ETL Developer",
+    "location": "India",
+    "dates": "June 2017 \u2013 Sep 2019"
+  }
 }

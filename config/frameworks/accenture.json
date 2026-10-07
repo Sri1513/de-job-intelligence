@@ -248,5 +248,11 @@
         "AWS S3"
       ]
     }
-  ]
+  ],
+  "resume_slot": {
+    "header": "Trigent Software Pvt Ltd. (Accenture Solutions Pvt Ltd.)",
+    "title": "Data Engineer",
+    "location": "India",
+    "dates": "Jan 2020 \u2013 June 2022"
+  }
 }

@@ -209,5 +209,11 @@
         "SLA"
       ]
     }
-  ]
+  ],
+  "resume_slot": {
+    "header": "Quess Corp (Blue Yonder India Pvt Ltd.)",
+    "title": "Data Engineer",
+    "location": "India",
+    "dates": "June 2022 \u2013 July 2023"
+  }
 }

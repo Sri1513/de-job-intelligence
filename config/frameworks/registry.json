@@ -98,5 +98,21 @@
       "healthcare",
       "legacy_etl_migration"
     ]
+  },
+  "slots": {
+    "job1": {
+      "decision": "llm_healthcare_check",
+      "healthcare": "optum",
+      "default": "herc_rentals"
+    },
+    "job2": {
+      "fixed": "blue_yonder"
+    },
+    "job3": {
+      "fixed": "accenture"
+    },
+    "job4": {
+      "fixed": "thomson_reuters"
+    }
   }
 }
