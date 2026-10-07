@@ -60,7 +60,6 @@ def audit_credibility(
     from src.engine.jd_skill_extractor import _patterns
 
     bank_texts = _bank_texts(slot_data)
-    bank_blob = "\n".join(bank_texts)
     bank_numbers = {_norm_num(n) for t in bank_texts for n in _numbers(t)}
     bank_skills = _bank_skill_ids(slot_data)
     jd_skills = set(jd_skill_ids or [])

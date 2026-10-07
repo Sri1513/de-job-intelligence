@@ -12,7 +12,6 @@ then MMR (lambda=0.7) for diversity into K slots.
 """
 
 import logging
-import math
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
