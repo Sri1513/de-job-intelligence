@@ -392,8 +392,11 @@ def build_job_tailoring_prompt(
                 "5. BELIEVABLE: never force a tool into a story where it doesn't fit. FORBID: no new achievements, "
                 "no new metrics, no tools outside (bullet_bank UNION JD). "
                 "If a JD requirement matches nothing in the slot's bank, OMIT it for that slot — do NOT invent coverage.\n"
-                "6. SUMMARY: write the professional summary from the LEAD slot (job1) framework's 'summary_angle' plus the "
-                "top matched skills. It MUST open with '7+ years'. Never copy a hardcoded summary."
+                "6. SUMMARY: write the professional summary FRESH for this JD — 3 lines, never one flat sentence, never copied from anywhere.\\n"
+                "Line 1: '7+ years' + specialty (from the lead slot's 'summary_angle').\\n"
+                "Line 2: ONE verifiable proof point from the lead slot's bullet bank (a scale metric like jobs migrated, or an SLA fix) — a real number from the bank, never invented.\\n"
+                "Line 3: core tool coverage for THIS JD's top matched skills.\\n"
+                "Plain direct voice, no AI polish ('utilizing', 'leveraging', 'passionate' are banned). Bold 1-2 key terms per line."
             ),
         },
         "next_action": "Execute the 'export_tailored_resume' tool using the tailored content, then return the Google Doc URL, a Cover Letter (<300 words), and a Recruiter Outreach message.",
