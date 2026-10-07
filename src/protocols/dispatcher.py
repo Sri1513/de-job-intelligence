@@ -128,7 +128,12 @@ async def _handle_export_tailored_resume(arguments: Dict[str, Any]) -> Any:
     )
     doc_title = arguments.get("document_title") or default_title
 
-    doc_url = await asyncio.to_thread(generate_resume_from_llm_payload, llm_payload, doc_title)
+    doc_url = await asyncio.to_thread(
+        generate_resume_from_llm_payload,
+        llm_payload,
+        doc_title,
+        arguments.get("slot_headers"),
+    )
     return {
         "status": "success",
         "document_url": doc_url,

@@ -271,7 +271,11 @@ def create_tailored_document(
     return f"https://docs.google.com/document/d/{new_doc_id}/edit"
 
 
-def generate_resume_from_llm_payload(llm_payload: Dict[str, Any], document_title: str) -> str:
+def generate_resume_from_llm_payload(
+    llm_payload: Dict[str, Any],
+    document_title: str,
+    slot_headers: Dict[str, Dict[str, str]] | None = None,
+) -> str:
     """Saves raw payload, parses markdown bold selections, and maps cleanly to Google Docs."""
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -304,7 +308,7 @@ def generate_resume_from_llm_payload(llm_payload: Dict[str, Any], document_title
     if cleaned_exp:
         cleaned_payload["experience_bullets"] = cleaned_exp
 
-    replacements = build_replacement_payload(cleaned_payload)
+    replacements = build_replacement_payload(cleaned_payload, slot_headers=slot_headers)
 
     (logs_dir / "last_styling_terms.json").write_text(
         json.dumps({"summary_terms": summary_terms, "bullet_terms": bullet_terms}, indent=2),
