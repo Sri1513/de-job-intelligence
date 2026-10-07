@@ -387,6 +387,7 @@ def build_job_tailoring_prompt(
                 "3. SELECT the top bullets per 'bullet_distribution' for the slot; the set must cover the JD's top "
                 "requirements with no two bullets proving the same thing.\n"
                 "3b. JD-CONDITIONAL TOOLS: a bank bullet for a tool the JD never mentions (e.g. dbt when the JD doesn't ask for dbt) may only fill remaining slots after all JD-covering bullets are placed — never as a lead bullet, never in the summary's tool line. The resume mirrors the JD; it doesn't advertise off-JD tools.\n"
+                "3c. SLOT FIDELITY: each slot draws bullets ONLY from its own framework's bullet bank in 'slot_frameworks'. Never borrow a bullet from another slot's framework \u2014 a HIPAA bullet from the Optum bank does not belong in the Herc Rentals slot, no matter how well it reads.\n"
                 "4. BRIDGE: where the JD names a tool in the same phase family (see the slot framework's "
                 "'swappable_categories'), swap it into the bullet's 'bridging_slots' so the JD's tools appear "
                 "verbatim. Keep the candidate's wording and metrics EXACT — never alter a number or invent a new one.\n"
