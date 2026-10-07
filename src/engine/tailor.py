@@ -39,9 +39,15 @@ def export_tailored_resume_to_drive(arguments: dict) -> dict:
 
         # Per-slot verified headers from the shared slot decision, so the
         # mapper stamps the routed headers (e.g. Akkodis (Optum)) instead
-        # of the static fallback.
+        # of the static fallback. Only the four real slot keys carry
+        # framework ids — the map also holds "job1_rationale", which must
+        # never reach load_framework().
+        slot_map = arguments.get("slot_frameworks") or {}
         slot_headers = {}
-        for slot_key, fw_id in (arguments.get("slot_frameworks") or {}).items():
+        for slot_key in ("job1", "job2", "job3", "job4"):
+            fw_id = slot_map.get(slot_key)
+            if not fw_id:
+                continue
             try:
                 rs = load_framework(fw_id).get("resume_slot", {})
             except Exception:
