@@ -199,14 +199,21 @@ def build_replacement_payload(
         if rs.get("dates"):
             replacements["{{" + f"{prefix}_DATES" + "}}"] = rs["dates"]
 
-    # 1. Professional Summary
+    # 1. Professional Summary — 6 bullet lines ({{SUMMARY_1}}..{{SUMMARY_6}});
+    # legacy single {{SUMMARY}} placeholder still filled for old templates.
     summary = dynamic_data.get("summary") or dynamic_data.get("professional_summary", "")
     if not summary:
         summary = (
             "Senior Data Engineer with 7+ years of experience designing and operating high-throughput "
             "distributed architectures, cloud data lakehouses, and real-time streaming pipelines across AWS and Azure."
         )
-    replacements["{{SUMMARY}}"] = clean_text(summary)
+    summary_lines = [clean_text(line) for line in str(summary).splitlines()
+                     if clean_text(line).strip()]
+    for i in range(1, 7):
+        replacements[f"{{{{SUMMARY_{i}}}}}"] = (
+            summary_lines[i - 1] if i - 1 < len(summary_lines) else ""
+        )
+    replacements["{{SUMMARY}}"] = "\n".join(summary_lines)
 
     # 2. Technical Skills Matrix
     raw_skills = (

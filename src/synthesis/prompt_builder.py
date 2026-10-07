@@ -392,10 +392,13 @@ def build_job_tailoring_prompt(
                 "5. BELIEVABLE: never force a tool into a story where it doesn't fit. FORBID: no new achievements, "
                 "no new metrics, no tools outside (bullet_bank UNION JD). "
                 "If a JD requirement matches nothing in the slot's bank, OMIT it for that slot — do NOT invent coverage.\n"
-                "6. SUMMARY: write the professional summary FRESH for this JD — 3 lines, never one flat sentence, never copied from anywhere.\\n"
-                "Line 1: '7+ years' + specialty (from the lead slot's 'summary_angle').\\n"
-                "Line 2: ONE verifiable proof point from the lead slot's bullet bank (a scale metric like jobs migrated, or an SLA fix) — a real number from the bank, never invented.\\n"
-                "Line 3: core tool coverage for THIS JD's top matched skills.\\n"
+                "6. SUMMARY: write the professional summary FRESH for this JD as EXACTLY 6 lines covering the WHOLE career (all four slots), never copied from anywhere. Output 6 plain lines, NO bullet characters (the template provides the bullets).\\n"
+                "Line 1: '7+ years' as an ETL Data Engineer + the through-line across all roles (e.g. legacy-to-cloud migrations across healthcare, retail, finance).\\n"
+                "Line 2: current/most recent role proof point — one verifiable metric from the lead slot's bank (never invented).\\n"
+                "Line 3: earlier roles breadth — 1-2 verifiable proof points spanning the other slots.\\n"
+                "Line 4: reliability/governance strength, verifiable from the banks.\\n"
+                "Line 5: domain angle weighted to THIS JD (e.g. healthcare governance for a healthcare JD).\\n"
+                "Line 6: tool coverage spanning the career, emphasizing THIS JD's top matched skills.\\n"
                 "Plain direct voice, no AI polish ('utilizing', 'leveraging', 'passionate' are banned). Bold 1-2 key terms per line."
             ),
         },
