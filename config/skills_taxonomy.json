@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Canonical skill taxonomy for the Perfect Resume Engine. Every skill has one canonical id; aliases capture JD spelling variants, acronyms, and vendor names. The normalizer resolves any surface form to its canonical id before matching, so 'PySpark' vs 'pyspark' vs 'Spark (Python)' all score as one skill.",
-    "version": 3
+    "version": 4
   },
   "skills": [
     {
@@ -154,7 +154,8 @@
     {
       "aliases": [
         "amazon web services",
-        "amazon aws"
+        "amazon aws",
+        "aws (s3, kinesis, dms)"
       ],
       "category": "cloud",
       "id": "aws",
@@ -344,7 +345,8 @@
         "shell scripting",
         "shell",
         "bash scripting",
-        "unix shell"
+        "unix shell",
+        "unix"
       ],
       "category": "languages",
       "id": "bash",
@@ -384,7 +386,8 @@
         "ms sql server",
         "mssql",
         "sql server database",
-        "microsoft sql server"
+        "microsoft sql server",
+        "sql server agent"
       ],
       "category": "databases",
       "id": "sqlserver",
@@ -600,7 +603,9 @@
         "data quality checks",
         "dq checks",
         "data validation",
-        "data profiling"
+        "data profiling",
+        "profiling",
+        "validation"
       ],
       "category": "governance",
       "id": "data_quality",
@@ -1091,6 +1096,23 @@
       "aliases": [
         "jira",
         "confluence"
+      ]
+    },
+    {
+      "id": "erp",
+      "name": "ERP",
+      "category": "domain",
+      "aliases": [
+        "enterprise resource planning"
+      ]
+    },
+    {
+      "id": "pos",
+      "name": "POS",
+      "category": "domain",
+      "aliases": [
+        "point of sale",
+        "point-of-sale"
       ]
     }
   ]
