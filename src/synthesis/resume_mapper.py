@@ -12,12 +12,12 @@ from typing import Any, Dict, List
 logger = logging.getLogger("de-job-intelligence.synthesis")
 
 STATIC_PROFILE = {
-    "{{NAME}}": "Sri Omkar Dumpa",
+    "{{NAME}}": "Sri Omkar D",
     "{{CONTACT_BAR}}": "Email: sri.omkar.d@gmail.com | Phone: (951) 545-2146 | sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8",
-    # Job 1 - Herc Rentals
-    "{{JOB1_COMPANY}}": "Herc Rentals Inc.",
-    "{{JOB1_LOCATION}}": "Bonita Springs, FL",
-    "{{JOB1_TITLE}}": "Senior Data Engineer",
+    # Job 1 - default slot framework (herc_rentals); overridden per-JD via slot_headers
+    "{{JOB1_COMPANY}}": "Akkodis (Herc Rentals)",
+    "{{JOB1_LOCATION}}": "Florida",
+    "{{JOB1_TITLE}}": "Data Engineer",
     "{{JOB1_DATES}}": "Nov 2024 – Present",
     # Job 2 - Blue Yonder
     "{{JOB2_COMPANY}}": "Blue Yonder",
@@ -50,7 +50,7 @@ BASE_SKILLS = {
     "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks Streaming, Hadoop, HiveQL",
     "languages": "Python (FastAPI, SQLAlchemy, Pandas, NumPy), SQL, Bash",
     "databases": "Amazon Redshift, Snowflake, Teradata, PostgreSQL, MS SQL Server",
-    "devops": "Apache Airflow, Docker, Terraform, Git, Jenkins, CI/CD, dbt",
+    "devops": "Apache Airflow, Docker, Terraform, Git, Jenkins, CI/CD",
     "modeling_tuning": "Dimensional Modeling (Star/Snowflake), SCD Type 2, CDC, AQE, Broadcast Joins",
 }
 
@@ -168,12 +168,36 @@ def parse_skills_text(skills_val: Any) -> Dict[str, str]:
     return parsed
 
 
-def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
+def build_replacement_payload(
+    dynamic_data: Dict[str, Any], slot_headers: Dict[str, Dict[str, str]] | None = None
+) -> Dict[str, str]:
     """
     Constructs the complete 66-token map for Google Docs API substitution.
     Resolves nested experience keys and falls back to verified profile defaults.
+
+    slot_headers: optional per-slot header overrides, e.g.
+        {"job1": {"header": "Akkodis (Optum)", "title": "Data Engineer",
+                  "location": "Florida", "dates": "Nov 2024 – Present"}, ...}
+    Each slot's verified resume_slot block from its selected framework.
+    Without it, the STATIC_PROFILE fallback is used (registry default).
     """
     replacements = dict(STATIC_PROFILE)
+
+    # 0. Per-slot verified headers (from the slot's selected framework).
+    #    These MUST win over the static fallback, or the LLM's slot-1
+    #    routing decision never reaches the final document.
+    for slot_key, rs in (slot_headers or {}).items():
+        if not isinstance(rs, dict):
+            continue
+        prefix = str(slot_key).upper()  # "job1" -> "JOB1"
+        if rs.get("header"):
+            replacements["{{" + f"{prefix}_COMPANY" + "}}"] = rs["header"]
+        if rs.get("title"):
+            replacements["{{" + f"{prefix}_TITLE" + "}}"] = rs["title"]
+        if rs.get("location"):
+            replacements["{{" + f"{prefix}_LOCATION" + "}}"] = rs["location"]
+        if rs.get("dates"):
+            replacements["{{" + f"{prefix}_DATES" + "}}"] = rs["dates"]
 
     # 1. Professional Summary
     summary = dynamic_data.get("summary") or dynamic_data.get("professional_summary", "")
@@ -273,8 +297,10 @@ def build_replacement_payload(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
     return replacements
 
 
-def map_resume_placeholders(dynamic_data: Dict[str, Any]) -> Dict[str, str]:
+def map_resume_placeholders(
+    dynamic_data: Dict[str, Any], slot_headers: Dict[str, Dict[str, str]] | None = None
+) -> Dict[str, str]:
     """
     Alias for build_replacement_payload to maintain compatibility with test suites.
     """
-    return build_replacement_payload(dynamic_data)
+    return build_replacement_payload(dynamic_data, slot_headers=slot_headers)

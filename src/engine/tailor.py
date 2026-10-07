@@ -2,6 +2,7 @@ import json
 import logging
 from pathlib import Path
 
+from src.engine.framework_selector import load_framework
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_tailoring_prompt
 
@@ -36,8 +37,22 @@ def export_tailored_resume_to_drive(arguments: dict) -> dict:
         else:
             tailored_data = raw_content
 
+        # Per-slot verified headers from the shared slot decision, so the
+        # mapper stamps the routed headers (e.g. Akkodis (Optum)) instead
+        # of the static fallback.
+        slot_headers = {}
+        for slot_key, fw_id in (arguments.get("slot_frameworks") or {}).items():
+            try:
+                rs = load_framework(fw_id).get("resume_slot", {})
+            except Exception:
+                rs = {}
+            if isinstance(rs, dict) and rs.get("header"):
+                slot_headers[slot_key] = rs
+
         doc_url = generate_resume_from_llm_payload(
-            llm_payload=tailored_data, document_title=doc_title
+            llm_payload=tailored_data,
+            document_title=doc_title,
+            slot_headers=slot_headers or None,
         )
 
         return {

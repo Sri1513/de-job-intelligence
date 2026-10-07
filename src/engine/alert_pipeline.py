@@ -178,6 +178,7 @@ def process_whatsapp_job_alert(
                     **tailored,
                     "company_name": company_name,
                     "job_title": job_title,
+                    "slot_frameworks": slot_frameworks,
                 }
             )
             if export_result.get("status") == "success":

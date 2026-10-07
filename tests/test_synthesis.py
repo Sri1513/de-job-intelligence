@@ -39,3 +39,47 @@ def test_resume_mapper_fallback_resilience():
     assert "{{JOB2_BULLET1}}" in mapped
     assert "{{JOB3_BULLET1}}" in mapped
     assert "{{JOB4_BULLET1}}" in mapped
+
+
+def test_slot_headers_override_static_fallback():
+    # Healthcare JD -> slot 1 must stamp Akkodis (Optum), not the static fallback
+    slot_headers = {
+        "job1": {
+            "header": "Akkodis (Optum)",
+            "title": "Data Engineer",
+            "location": "Florida",
+            "dates": "Nov 2024 – Present",
+        },
+        "job2": {
+            "header": "Quess (Blue Yonder)",
+            "title": "Data Engineer",
+            "location": "Hyderabad, India",
+            "dates": "June 2022 – July 2023",
+        },
+    }
+    mapped = build_replacement_payload({}, slot_headers=slot_headers)
+    assert mapped["{{JOB1_COMPANY}}"] == "Akkodis (Optum)"
+    assert mapped["{{JOB1_TITLE}}"] == "Data Engineer"
+    assert mapped["{{JOB1_LOCATION}}"] == "Florida"
+    assert mapped["{{JOB1_DATES}}"] == "Nov 2024 – Present"
+    assert mapped["{{JOB2_COMPANY}}"] == "Quess (Blue Yonder)"
+    # Slots without an override keep the static fallback
+    assert mapped["{{JOB3_COMPANY}}"] == STATIC_PROFILE["{{JOB3_COMPANY}}"]
+
+
+def test_mapper_static_fallback_is_truthful():
+    mapped = build_replacement_payload({})
+    # Name must be the real one, never the old full-name variant
+    assert mapped["{{NAME}}"] == "Sri Omkar D"
+    # Default slot-1 fallback follows the registry default (herc_rentals)
+    assert mapped["{{JOB1_COMPANY}}"] == "Akkodis (Herc Rentals)"
+    # Unsupported skills must not leak in via the default skills matrix
+    assert "dbt" not in mapped["{{SKILLS_DEVOPS}}"].lower()
+
+
+def test_map_resume_placeholders_passes_slot_headers():
+    slot_headers = {"job1": {"header": "Akkodis (Optum)"}}
+    from src.synthesis.resume_mapper import map_resume_placeholders
+
+    mapped = map_resume_placeholders({}, slot_headers=slot_headers)
+    assert mapped["{{JOB1_COMPANY}}"] == "Akkodis (Optum)"
