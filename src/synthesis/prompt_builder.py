@@ -27,12 +27,28 @@ def build_whatsapp_outreach_prompt(
     helper_name: str,
     resume_url: str,
     recruiter_name: str = None,
+    framework_context: str = "",
 ) -> str:
     """
     Builds a precise, structured prompt for Gemini to draft a human-like email
     matching Sri Omkar's exact format from the reference screenshot.
+
+    framework_context: one-to-two line description of the selected resume
+    framework (e.g. "optum: Healthcare legacy ETL migration ..."). The
+    alignment bullets are steered to reflect the framework's angles so the
+    email and the tailored resume tell the same story.
     """
     salutation_target = f"Hi {recruiter_name}," if recruiter_name else "Hi Hiring Team,"
+
+    framework_block = (
+        f"\n    - Selected Resume Framework: {framework_context}\n"
+        "    - FRAMEWORK ALIGNMENT: the 4 alignment bullets below MUST reflect the "
+        "selected framework's angles (e.g. a healthcare-migration framework -> "
+        "parity/UAT/governance bullets; a modern-stack framework -> Spark/Airflow "
+        "tuning bullets)."
+        if framework_context
+        else ""
+    )
 
     return f"""
     You are Sri Omkar D, a Senior Data Engineer with 7+ years of experience specializing in PySpark, AWS, distributed lakehouses, and Apache Airflow.
@@ -42,7 +58,7 @@ def build_whatsapp_outreach_prompt(
     - Job Title: {job_title}
     - Recruiter First Name: {recruiter_name or "Unknown"}
     - Details/Requirements: {extracted_jd}
-    - Resume Link: {resume_url}
+    - Resume Link: {resume_url}{framework_block}
 
     INSTRUCTIONS FOR EMAIL GENERATION:
     You must structure the email to strictly match Sri Omkar's proven high-converting outreach format:
@@ -150,7 +166,16 @@ def load_target_resume(role_slug: str) -> str:
     return _RESUME_CACHE[resume_file_suffix]
 
 
-def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
+def build_job_tailoring_prompt(
+    job_id: str, framework_selection: dict | None = None
+) -> Dict[str, Any]:
+    """Builds the tailoring prompt bundle for a job.
+
+    framework_selection: optional pre-computed selection from
+    src.engine.framework_selector.select_framework (shared by the WhatsApp
+    path so one decision drives both resume and email). When omitted, the
+    selector runs here.
+    """
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -200,10 +225,12 @@ def build_job_tailoring_prompt(job_id: str) -> Dict[str, Any]:
 
     # Single shared framework decision (LLM-judged): replaces the old
     # "dump every company framework into the prompt" behavior. The selected
-    # framework alone is injected below.
-    framework_selection = select_framework(
-        job.get("description") or "", job.get("title") or ""
-    )
+    # framework alone is injected below. Callers may pass a pre-computed
+    # selection (WhatsApp path) so one decision drives resume + email.
+    if framework_selection is None:
+        framework_selection = select_framework(
+            job.get("description") or "", job.get("title") or ""
+        )
     selected_framework = load_framework(framework_selection["framework_id"])
     logger.info(
         "tailoring: job %s -> framework %s (%s)",
