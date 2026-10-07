@@ -67,7 +67,7 @@ def get_cached_resume(job_category: str = "data_engineering") -> str:
             _RESUME_CACHE[slug] = loaded_text
         else:
             _RESUME_CACHE[slug] = (
-                "Senior Data Engineer with 8+ years of experience specializing in Apache Spark, "
+                "Senior Data Engineer with 7+ years of experience specializing in Apache Spark, "
                 "PySpark, Python, SQL, AWS, Azure, Snowflake, Databricks, and Lakehouse architectures."
             )
 

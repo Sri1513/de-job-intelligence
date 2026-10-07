@@ -1,0 +1,209 @@
+{
+  "framework_id": "accenture",
+  "company_name": "Accenture",
+  "domain": "Banking, Financial Crime & Regulatory Compliance",
+  "business_context": "Legacy modernization migrating on-premises Mainframe and Ab Initio workflows to AWS. Heavy pipeline degradation caused by full-table merge patterns and severe data skew across multi-billion-row financial transaction tables.",
+  "summary_angle": "Data Engineer specializing in legacy-to-cloud migration and large-scale Spark optimization for regulated financial data",
+  "process_framework": {
+    "phase_1_ingestion": {
+      "phase_name": "Legacy Decommissioning & Ingestion Microservices",
+      "daily_activity": "Decoupling legacy Ab Initio ETL graphs by authoring custom Python ingestion services that stream on-premise transactional and compliance data to the cloud.",
+      "native_tools": [
+        "Python",
+        "REST APIs",
+        "Legacy Ab Initio",
+        "Mainframe"
+      ],
+      "swappable_categories": [
+        "Data Ingestion (AWS DMS, Kafka, NiFi)"
+      ]
+    },
+    "phase_2_storage": {
+      "phase_name": "Multi-Tiered Data Lake & Governance",
+      "daily_activity": "Structuring multi-tiered Bronze, Silver, and Gold storage layers and registering metadata for seamless enterprise discovery.",
+      "native_tools": [
+        "AWS S3",
+        "AWS Glue Data Catalog"
+      ],
+      "swappable_categories": [
+        "Metadata & Catalogs (Unity Catalog, Apache Atlas, Alation, Google Dataplex)"
+      ]
+    },
+    "phase_3_transformation": {
+      "phase_name": "Data Skew Remediation & Incremental Anti-Joins",
+      "daily_activity": "Diagnosing cluster bottlenecks using Spark UI, mitigating data skew on multi-billion-row tables using data salting, AQE, and Broadcast Hash Joins, and replacing full merges with partition-aware anti-joins.",
+      "native_tools": [
+        "Apache Spark",
+        "PySpark",
+        "Spark SQL",
+        "Spark UI"
+      ],
+      "key_optimizations": [
+        "Resolved data skew via data salting and Broadcast Hash Joins",
+        "Enabled Adaptive Query Execution (AQE) and Dynamic Partition Pruning (DPP)",
+        "Replaced full-table merges with partition-aware anti-join and append patterns"
+      ],
+      "swappable_categories": [
+        "Processing Engines (Databricks, Ray, Trino)"
+      ]
+    },
+    "phase_4_orchestration_and_modeling": {
+      "phase_name": "Audit-Ready Warehouse Serving & CI/CD",
+      "daily_activity": "Modeling dimensional schemas and materialized views for financial crime analytics, orchestrating Airflow DAGs, and maintaining automated CI/CD deployment pipelines.",
+      "native_tools": [
+        "Amazon Redshift",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "data_quality": [
+        "Automated source-to-target reconciliation",
+        "Variance audits",
+        "Column-level data masking & RBAC"
+      ],
+      "swappable_categories": [
+        "Warehouses (Snowflake, BigQuery)",
+        "CI/CD Tools (GitHub Actions, GitLab CI)"
+      ]
+    },
+    "phase_5_serving_and_bi": {
+      "phase_name": "Regulatory & Commercial BI Reporting (SUPPRESS IF ROLE IS PURE BACKEND DE)",
+      "daily_activity": "Building compliance dashboards and analytical models for commercial stakeholders and regulatory audits.",
+      "native_tools": [
+        "Amazon Redshift",
+        "Power BI",
+        "SSRS"
+      ],
+      "swappable_categories": [
+        "BI Platforms (Tableau, Looker)"
+      ]
+    }
+  },
+  "tech_stack": [
+    "AWS (S3, Glue Data Catalog, Redshift)",
+    "PySpark",
+    "Spark SQL",
+    "Python",
+    "Ab Initio",
+    "Apache Airflow",
+    "Git",
+    "Jenkins",
+    "CI/CD"
+  ],
+  "metrics_and_impact": {
+    "runtime_reduction": "Reduced financial pipeline execution runtimes by 35\u201340% by eliminating distributed data skew and tuning query plans",
+    "audit_accuracy": "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks"
+  },
+  "bullet_bank": [
+    {
+      "id": "accenture_phase_3_transformation_0",
+      "text": "Resolved data skew via data salting and Broadcast Hash Joins",
+      "skills": [
+        "AWS (S3, Glue Data Catalog, Redshift)",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Ab Initio",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "metrics": [],
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "accenture_phase_3_transformation_1",
+      "text": "Enabled Adaptive Query Execution (AQE) and Dynamic Partition Pruning (DPP)",
+      "skills": [
+        "AWS (S3, Glue Data Catalog, Redshift)",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Ab Initio",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "metrics": [],
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "accenture_phase_3_transformation_2",
+      "text": "Replaced full-table merges with partition-aware anti-join and append patterns",
+      "skills": [
+        "AWS (S3, Glue Data Catalog, Redshift)",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Ab Initio",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "metrics": [],
+      "phase": "Data Skew Remediation & Incremental Anti-Joins",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "accenture_metric_0",
+      "text": "Reduced financial pipeline execution runtimes by 35\u201340% by eliminating distributed data skew and tuning query plans",
+      "skills": [
+        "AWS (S3, Glue Data Catalog, Redshift)",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Ab Initio",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "metrics": [
+        "Reduced financial pipeline execution runtimes by 35\u201340% by eliminating distributed data skew and tuning query plans"
+      ],
+      "phase": "impact",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "accenture_metric_1",
+      "text": "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks",
+      "skills": [
+        "AWS (S3, Glue Data Catalog, Redshift)",
+        "PySpark",
+        "Spark SQL",
+        "Python",
+        "Ab Initio",
+        "Apache Airflow",
+        "Git",
+        "Jenkins",
+        "CI/CD"
+      ],
+      "metrics": [
+        "Achieved 100% data reliability for regulatory compliance through automated reconciliation and variance checks"
+      ],
+      "phase": "impact",
+      "signals": [
+        "accenture"
+      ],
+      "bridging_slots": []
+    }
+  ]
+}

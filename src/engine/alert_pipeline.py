@@ -1,4 +1,5 @@
 # src/engine/alert_pipeline.py
+import hashlib
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -6,16 +7,98 @@ from typing import Any, Dict, Optional
 from src.core.database import get_db_connection
 from src.database.helper_repo import get_or_create_helper, log_outreach_event
 from src.engine.email_analyzer import parse_whatsapp_alert_metadata
+from src.engine.framework_selector import load_framework, select_framework
 from src.engine.llm_text import generate_text
-from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
+from src.engine.tailor import export_tailored_resume_to_drive
 from src.synthesis.gmail_client import create_gmail_draft
-from src.synthesis.prompt_builder import build_whatsapp_outreach_prompt
+from src.synthesis.prompt_builder import (
+    build_job_tailoring_prompt,
+    build_whatsapp_outreach_prompt,
+)
 
 logger = logging.getLogger("de-job-intelligence.engine")
 
 DEFAULT_MASTER_RESUME_URL = (
     "https://docs.google.com/document/d/1ODeobXRFlOpv3-SS__v4fh7gNZUJ1bN5lx2AhTQpD_pg/edit"
 )
+
+
+def _persist_whatsapp_job(
+    meta: Dict[str, Any],
+    whatsapp_text: str,
+    company_name: str,
+    job_title: str,
+    extracted_jd: str,
+) -> str:
+    """Upserts the WhatsApp-sourced job into saved_jobs (source=whatsapp).
+
+    Returns the job_id (wa-<hash>). Uses ON CONFLICT DO NOTHING so a repeated
+    alert never clobbers an already-evaluated row.
+    """
+    digest = hashlib.sha1(whatsapp_text.encode("utf-8")).hexdigest()[:12]
+    job_id = f"wa-{digest}"
+    metadata = {
+        "source": "whatsapp",
+        "whatsapp_raw": whatsapp_text[:2000],
+        "has_jd": meta.get("has_jd", False),
+        "short_id": meta.get("short_id"),
+        "recipient_email": meta.get("recipient_email"),
+    }
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO saved_jobs (
+                job_id, job_url, status, title, company, location, is_remote,
+                salary_min, salary_max, fit_score, notes, description, metadata,
+                employment_type, sponsorship, job_category, ai_status, saved_at
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, 'PENDING', CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (job_id) DO NOTHING;
+            """,
+            (
+                job_id, "", "saved", job_title, company_name, "United States", True,
+                None, None, "0", "WhatsApp alert — pending AI evaluation.",
+                extracted_jd, json.dumps(metadata),
+                "Unknown", "Not Mentioned", "data_engineering",
+            ),
+        )
+        conn.commit()
+    return job_id
+
+
+def _generate_tailored_content(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    """Runs the LLM over the tailoring bundle to produce the resume payload."""
+    guidelines = bundle["tailoring_guidelines"]
+    selected_fw = guidelines["dynamic_tool_bridging_policy"]["selected_framework"]
+    prompt = f"""You are tailoring a resume for a specific job. Follow ALL guidelines exactly.
+
+BASE RESUME:
+{bundle['base_resume'][:6000]}
+
+JOB TITLE: {bundle['job_metadata']['title']} at {bundle['job_metadata']['company']}
+JOB DESCRIPTION:
+{(bundle['job_description'] or '')[:4000]}
+
+SELECTED FRAMEWORK: {bundle['selected_framework_id']}
+FRAMEWORK DETAIL (JSON):
+{json.dumps(selected_fw, indent=2)[:6000]}
+
+GUIDELINES:
+- Core boundaries: {guidelines['core_architectural_boundaries']}
+- {guidelines['bullet_selection_contract']}
+- Formatting: {guidelines['formatting_rules']}
+- Bullet distribution per role: {json.dumps(guidelines['bullet_distribution'])}
+
+Return a STRICT JSON object (no markdown, no backticks) with EXACTLY these keys:
+- "professional_summary": string
+- "technical_skills": object mapping skill-group name -> comma-separated skills string
+- "experience_bullets": object mapping role key -> list of bullet strings
+"""
+    raw = generate_text(prompt, json_mode=True, temperature=0.2, task="whatsapp-tailor-resume")
+    return json.loads(raw)
 
 
 def process_whatsapp_job_alert(
@@ -60,29 +143,48 @@ def process_whatsapp_job_alert(
         f"🏢 Company: {company_name} | Role: {job_title} | Recruiter: {recruiter_name} | Short ID: {short_id} | Has JD: {has_jd}"
     )
 
-    # 3. Conditional Resume Tailoring vs Quota Saver
+    # 3. Persist WhatsApp job + ONE shared framework decision (reused for
+    #    both the resume and the outreach email below).
+    job_id = _persist_whatsapp_job(meta, whatsapp_text, company_name, job_title, extracted_jd)
+    selection = select_framework(extracted_jd, job_title)
+    framework = load_framework(selection["framework_id"])
+    framework_context = (
+        f"{selection['framework_id']}: {framework.get('summary_angle', '')} "
+        f"({framework.get('domain', '')})"
+    )
+    logger.info(
+        "🧭 Framework: %s | %s | job_id=%s",
+        selection["framework_id"], selection["rationale"], job_id,
+    )
+
+    # 4. Real framework-aware tailoring vs Quota Saver
+    resume_url = DEFAULT_MASTER_RESUME_URL
     if has_jd:
-        logger.info("✨ Rich JD detected: Triggering custom RAG resume tailoring pipeline...")
-        llm_payload = {
-            "professional_summary": (
-                "Senior Data Engineer with 7+ years of experience designing scalable "
-                "data platforms and lakehouse architectures across AWS and PySpark."
-            ),
-            "technical_skills": {
-                "bigdata": "Apache Spark, PySpark, Spark SQL, Databricks, Delta Lake",
-                "languages": "Python, SQL, Bash",
-                "devops": "Apache Airflow, Docker, Git, CI/CD",
-                "databases": "Snowflake, PostgreSQL, Amazon Redshift",
-            },
-            "experience_bullets": {},
-        }
-        document_title = f"{company_name} - Tailored Resume - Data Engineer"
-        resume_url = generate_resume_from_llm_payload(llm_payload, document_title=document_title)
+        try:
+            logger.info("✨ Rich JD detected: running framework-aware tailoring...")
+            bundle = build_job_tailoring_prompt(job_id, framework_selection=selection)
+            if "error" in bundle:
+                raise RuntimeError(bundle["error"])
+            tailored = _generate_tailored_content(bundle)
+            export_result = export_tailored_resume_to_drive(
+                {
+                    **tailored,
+                    "company_name": company_name,
+                    "job_title": job_title,
+                }
+            )
+            if export_result.get("status") == "success":
+                resume_url = export_result["document_url"]
+                logger.info(f"📄 Tailored resume: {resume_url}")
+            else:
+                raise RuntimeError(export_result.get("message"))
+        except Exception as e:
+            logger.warning(f"Tailoring failed ({e}); falling back to master resume.")
+            resume_url = DEFAULT_MASTER_RESUME_URL
     else:
         logger.info("⚡ Lightweight alert detected: Using default master resume to save quota.")
-        resume_url = DEFAULT_MASTER_RESUME_URL
 
-    # 4. Build email prompt using extracted recruiter name
+    # 5. Build framework-aware email prompt using extracted recruiter name
     email_prompt = build_whatsapp_outreach_prompt(
         company_name=company_name,
         job_title=job_title,
@@ -90,6 +192,7 @@ def process_whatsapp_job_alert(
         helper_name=helper_name,
         resume_url=resume_url,
         recruiter_name=recruiter_name,
+        framework_context=framework_context,
     )
 
     try:
@@ -146,6 +249,8 @@ def process_whatsapp_job_alert(
             "subject": subject,
             "cc_helper": resolved_helper_email,
             "short_id": short_id,
+            "job_id": job_id,
+            "framework_selection": selection,
         },
     )
 
@@ -157,10 +262,12 @@ def process_whatsapp_job_alert(
         "status": "success",
         "outreach_id": outreach_id,
         "short_id": short_id,
+        "job_id": job_id,
         "company_name": company_name,
         "job_title": job_title,
         "recruiter_name": recruiter_name,
         "has_jd": has_jd,
+        "framework_selection": selection,
         "resume_url": resume_url,
         "gmail_draft_id": draft_result["draft_id"],
     }
