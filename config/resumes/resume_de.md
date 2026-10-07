@@ -10,7 +10,7 @@
 ---
 
 ## Core Technical Skills
-* **ETL Tools:** IBM DataStage (Parallel / Server / Sequence Jobs), Microsoft SSIS (Control Flow, Data Flow), Ab Initio, AWS Glue
+* **ETL Tools:** IBM DataStage (Parallel / Server / Sequence Jobs), Microsoft SSIS (Control Flow, Data Flow), Ab Initio, AWS Glue, dbt Core
 * **Cloud Platforms:** AWS (S3, Glue, Glue Data Catalog, Redshift, Lambda, Athena, EMR, Kinesis, IAM, CloudWatch), Azure (ADLS Gen2, Azure Databricks, Key Vault, Monitor, RBAC)
 * **Programming:** SQL (T-SQL, PL/SQL, Spark SQL, HiveQL), Python, PySpark
 * **Databases & Warehousing:** SQL Server, Oracle, Teradata, DB2, Snowflake, Redshift, Exasol. Dimensional modeling (star/snowflake, SCD Type 2), MPP architectures
@@ -62,6 +62,9 @@
 * Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.
 * Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.
 * Used Athena to query raw S3 data directly during migration. Fastest way to compare legacy output against new tables without loading anything.
+* Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage — a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand.
+* Built dbt models in layers: stg_ views over raw Redshift tables and S3 feeds, int_ for customer risk aggregation and transaction joins, dim_/fct_ marts for KYC risk scoring and daily loan ledger reconciliations. Incremental models on composite keys with a 3-day lookback, so late-arriving loan transactions landed without rescanning years of history.
+* Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.
 
 ### ETL Developer | Experis IT (Thomson Reuters)
 *India | June 2017 – Sep 2019*

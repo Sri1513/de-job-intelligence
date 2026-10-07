@@ -247,6 +247,68 @@
         "Athena",
         "AWS S3"
       ]
+    },
+    {
+      "id": "accenture_resume_10",
+      "text": "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand.",
+      "skills": [
+        "dbt",
+        "Apache Airflow",
+        "Amazon Redshift"
+      ],
+      "metrics": [
+        "800+ line stored procedures replaced"
+      ],
+      "phase": "Legacy Decommissioning & Ingestion Microservices",
+      "signals": [
+        "accenture",
+        "financial crime",
+        "compliance"
+      ],
+      "bridging_slots": [
+        "dbt"
+      ]
+    },
+    {
+      "id": "accenture_resume_11",
+      "text": "Built dbt models in layers: stg_ views over raw Redshift tables and S3 feeds, int_ for customer risk aggregation and transaction joins, dim_/fct_ marts for KYC risk scoring and daily loan ledger reconciliations. Incremental models on composite keys with a 3-day lookback, so late-arriving loan transactions landed without rescanning years of history.",
+      "skills": [
+        "dbt",
+        "Amazon Redshift",
+        "AWS S3"
+      ],
+      "metrics": [],
+      "phase": "Audit-Ready Warehouse Serving & CI/CD",
+      "signals": [
+        "accenture",
+        "financial crime",
+        "compliance",
+        "kyc"
+      ],
+      "bridging_slots": [
+        "dbt"
+      ]
+    },
+    {
+      "id": "accenture_resume_12",
+      "text": "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+      "skills": [
+        "dbt",
+        "Data Quality"
+      ],
+      "metrics": [
+        "~30-35% runtime reduction",
+        "over 1 hour to under 45 minutes"
+      ],
+      "phase": "Audit-Ready Warehouse Serving & CI/CD",
+      "signals": [
+        "accenture",
+        "financial crime",
+        "compliance"
+      ],
+      "bridging_slots": [
+        "dbt"
+      ]
     }
   ],
   "resume_slot": {
