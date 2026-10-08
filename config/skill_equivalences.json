@@ -1,0 +1,147 @@
+{
+  "version": 2,
+  "note": "JD-requested tool -> the candidate's REAL equivalent skills. The engine highlights the equivalent; the JD keyword may appear in Technical Skills for ATS. Experience bullets describe only the equivalent work, never the JD tool itself.",
+  "equivalences": {
+    "scala": {
+      "equivalent": [
+        "PySpark",
+        "Apache Spark"
+      ],
+      "why": "Spark is the engine; the candidate builds Spark pipelines in PySpark",
+      "confidence": "green"
+    },
+    "databricks": {
+      "equivalent": [
+        "Apache Spark",
+        "AWS EMR",
+        "AWS Glue"
+      ],
+      "why": "Managed Spark platform; the candidate runs Spark on EMR and Glue",
+      "confidence": "green"
+    },
+    "delta lake": {
+      "equivalent": [
+        "Apache Spark",
+        "Parquet",
+        "AWS S3"
+      ],
+      "why": "Lakehouse table format on Spark",
+      "confidence": "green"
+    },
+    "apache iceberg": {
+      "equivalent": [
+        "Apache Spark",
+        "Parquet"
+      ],
+      "why": "Open lakehouse table format",
+      "confidence": "green"
+    },
+    "apache hudi": {
+      "equivalent": [
+        "Apache Spark",
+        "Parquet"
+      ],
+      "why": "Open lakehouse table format",
+      "confidence": "green"
+    },
+    "unity catalog": {
+      "equivalent": [
+        "AWS Glue Data Catalog",
+        "data lineage"
+      ],
+      "why": "Data catalog and governance",
+      "confidence": "green"
+    },
+    "azure purview": {
+      "equivalent": [
+        "AWS Glue Data Catalog",
+        "data lineage"
+      ],
+      "why": "Data catalog and governance",
+      "confidence": "yellow"
+    },
+    "bigquery": {
+      "equivalent": [
+        "Amazon Redshift"
+      ],
+      "why": "Cloud MPP data warehouse",
+      "confidence": "green"
+    },
+    "azure synapse": {
+      "equivalent": [
+        "Amazon Redshift",
+        "SQL Server"
+      ],
+      "why": "MPP analytics plus SQL",
+      "confidence": "green"
+    },
+    "informatica": {
+      "equivalent": [
+        "IBM DataStage",
+        "SSIS"
+      ],
+      "why": "Enterprise batch ETL",
+      "confidence": "green"
+    },
+    "talend": {
+      "equivalent": [
+        "IBM DataStage",
+        "SSIS"
+      ],
+      "why": "Batch ETL",
+      "confidence": "green"
+    },
+    "matillion": {
+      "equivalent": [
+        "dbt Core",
+        "AWS Glue"
+      ],
+      "why": "ELT transformation",
+      "confidence": "green"
+    },
+    "fivetran": {
+      "equivalent": [
+        "AWS Glue",
+        "Apache Airflow"
+      ],
+      "why": "Managed ingestion; the candidate builds ingestion on Glue and Airflow",
+      "confidence": "yellow"
+    },
+    "dagster": {
+      "equivalent": [
+        "Apache Airflow"
+      ],
+      "why": "Python orchestration",
+      "confidence": "green"
+    },
+    "prefect": {
+      "equivalent": [
+        "Apache Airflow"
+      ],
+      "why": "Python orchestration",
+      "confidence": "green"
+    },
+    "apache kafka": {
+      "equivalent": [
+        "Amazon Kinesis"
+      ],
+      "why": "Streaming ingestion",
+      "confidence": "green"
+    },
+    "apache flink": {
+      "equivalent": [
+        "Apache Spark",
+        "Spark Structured Streaming"
+      ],
+      "why": "Stream processing",
+      "confidence": "green"
+    },
+    "snowflake": {
+      "equivalent": [
+        "Amazon Redshift"
+      ],
+      "why": "Cloud MPP data warehouse (fallback; candidate also lists Snowflake)",
+      "confidence": "yellow"
+    }
+  }
+}

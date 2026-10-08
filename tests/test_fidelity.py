@@ -22,7 +22,7 @@ def test_fidelity_rules_cover_identity_facts():
         "never substitute",
         "never invent",
         "traceable",
-        "omit",
+        "translate",
     ]:
         assert must_have in rules, f"missing: {must_have}"
 
