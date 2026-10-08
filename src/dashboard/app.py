@@ -7,7 +7,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -555,8 +555,17 @@ async def api_queue_application(request: Request) -> JSONResponse:
         return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
 
 
+async def service_worker(request: Request) -> FileResponse:
+    """Serve the PWA service worker from root so its scope covers the whole site."""
+    return FileResponse(
+        str(PROJECT_ROOT / "src" / "dashboard" / "static" / "sw.js"),
+        media_type="application/javascript",
+    )
+
+
 routes = [
     Route("/", dashboard_view, methods=["GET"]),
+    Route("/sw.js", service_worker, methods=["GET"]),
     Route("/applications", applications_view, methods=["GET"]),
     Route("/api/applications", api_applications, methods=["GET"]),
     Route(
