@@ -84,7 +84,7 @@ def test_skill_equivalences_load():
 
 
 def test_translation_policy_in_prompt():
-    from src.synthesis.prompt_builder import TOOL_TRANSLATION_POLICY, FIDELITY_RULES
+    from src.synthesis.prompt_builder import FIDELITY_RULES, TOOL_TRANSLATION_POLICY
 
     assert "skill_equivalences" in TOOL_TRANSLATION_POLICY
     assert "PySpark" in TOOL_TRANSLATION_POLICY
