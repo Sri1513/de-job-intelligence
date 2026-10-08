@@ -80,6 +80,7 @@ def test_skill_equivalences_load():
     for tool, entry in m.items():
         assert entry["equivalent"], f"{tool} has empty equivalent list"
         assert entry.get("why"), f"{tool} missing rationale"
+        assert entry.get("confidence") in ("green", "yellow"), f"{tool} missing confidence tag"
 
 
 def test_translation_policy_in_prompt():

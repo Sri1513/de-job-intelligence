@@ -44,6 +44,9 @@ TOOL_TRANSLATION_POLICY = (
     "(e.g. 'Scala (via PySpark / Apache Spark)') — never as a standalone claimed proficiency.\n"
     "4. Experience bullets describe ONLY the real equivalent work. Never write 'built X in Scala' when the "
     "work was PySpark. The bullet proves the equivalent; the keyword match lives in the skills matrix.\n"
+    "5. CONFIDENCE: each mapping is tagged green (same engine/workflow — pair freely) or yellow (conceptual "
+    "relative — pair only when the JD leans on it and no green mapping covers it). Never stretch a yellow "
+    "mapping into a claim of hands-on experience.\n"
 )
 
 # Identity fidelity: facts that must be copied EXACTLY from the base resume.
