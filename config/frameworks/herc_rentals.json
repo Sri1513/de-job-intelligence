@@ -303,7 +303,8 @@
         "AWS DMS",
         "AWS S3",
         "Apache Airflow",
-        "PostgreSQL (pgvector)",
+        "PostgreSQL",
+        "pgvector",
         "Python",
         "AS400",
         "Oracle OLTP"
