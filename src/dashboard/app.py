@@ -1,4 +1,6 @@
 # src/dashboard/app.py
+import functools
+import hmac
 import json
 import logging
 from datetime import date, datetime
@@ -13,6 +15,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from src.core.database import get_db_connection
+from src.core.config import settings
 from src.dashboard.admin import admin_routes
 
 logger = logging.getLogger("de-job-intelligence.dashboard")
@@ -25,6 +28,37 @@ SCREENSHOTS_DIR = PROJECT_ROOT / "data" / "screenshots"
 SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+def _has_write_auth(request: Request) -> bool:
+    """Bearer-token check for dashboard write endpoints.
+
+    Reuses ADMIN_API_TOKEN (same secret as the /api/admin/* diagnostics API).
+    Fail-closed: when the token is unset, no write is authorized.
+    """
+    token = settings.ADMIN_API_TOKEN
+    if not token:
+        return False
+    auth = request.headers.get("authorization", "")
+    scheme, _, credential = auth.partition(" ")
+    if scheme.lower() != "bearer" or not credential:
+        return False
+    return hmac.compare_digest(credential, token)
+
+
+def _require_write_auth(handler):
+    """Decorator: reject unauthenticated callers of mutating endpoints."""
+
+    @functools.wraps(handler)
+    async def wrapper(request: Request) -> JSONResponse:
+        if not _has_write_auth(request):
+            return JSONResponse(
+                {"success": False, "error": "Authentication required. Log in to perform this action."},
+                status_code=401,
+            )
+        return await handler(request)
+
+    return wrapper
 
 
 def serialize_for_json(obj):
@@ -131,6 +165,7 @@ async def api_applications(request: Request) -> JSONResponse:
     return JSONResponse({"stats": stats, "applications": applications})
 
 
+@_require_write_auth
 async def api_update_application_status(request: Request) -> JSONResponse:
     """Updates apply_status (e.g. SUBMITTED, QUEUED, DISMISSED) for a job."""
     try:
@@ -225,6 +260,7 @@ async def api_jobs(request: Request) -> JSONResponse:
     return JSONResponse(jobs)
 
 
+@_require_write_auth
 async def api_update_job_notes(request: Request) -> JSONResponse:
     """Updates ONLY the personal_notes key inside the metadata JSON column."""
     try:
@@ -265,6 +301,7 @@ async def api_update_job_notes(request: Request) -> JSONResponse:
         return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
 
+@_require_write_auth
 async def api_update_job_status(request: Request) -> JSONResponse:
     """Marks a job applied (or another status) from the dashboard.
 
@@ -405,6 +442,7 @@ async def api_whatsapp_alerts(request: Request) -> JSONResponse:
     return JSONResponse(alerts)
 
 
+@_require_write_auth
 async def api_update_outreach_status(request: Request) -> JSONResponse:
     """Updates the status of an outreach record."""
     try:
@@ -508,18 +546,18 @@ async def api_skills_demographics(request: Request) -> JSONResponse:
 # In src/dashboard/app.py
 
 
+@_require_write_auth
 async def api_queue_application(request: Request) -> JSONResponse:
-    """Queues a job for autonomous application processing."""
+    """Queues a job for autonomous application processing. POST only."""
     try:
-        job_id = None
-        if request.method == "POST":
-            try:
-                data = await request.json()
-                job_id = data.get("job_id")
-            except Exception:
-                job_id = request.query_params.get("job_id")
-        else:
-            job_id = request.query_params.get("job_id")
+        try:
+            data = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"success": False, "error": "JSON body with job_id is required."},
+                status_code=400,
+            )
+        job_id = data.get("job_id")
 
         if not job_id:
             return JSONResponse({"success": False, "error": "job_id is required"}, status_code=400)
@@ -563,14 +601,34 @@ async def service_worker(request: Request) -> FileResponse:
     )
 
 
+async def login_view(request: Request) -> HTMLResponse:
+    """Renders the login page. Reads stay public; writes need the token."""
+    return templates.TemplateResponse(
+        request, "login.html", {"next": request.query_params.get("next", "/")}
+    )
+
+
+async def api_login(request: Request) -> JSONResponse:
+    """Verifies a dashboard token. Returns 200 when it matches ADMIN_API_TOKEN."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"success": False}, status_code=400)
+    token = (data.get("token") or "").strip()
+    expected = settings.ADMIN_API_TOKEN
+    if expected and token and hmac.compare_digest(token, expected):
+        return JSONResponse({"success": True})
+    return JSONResponse({"success": False}, status_code=401)
+
+
 routes = [
     Route("/", dashboard_view, methods=["GET"]),
+    Route("/login", login_view, methods=["GET"]),
+    Route("/api/login", api_login, methods=["POST"]),
     Route("/sw.js", service_worker, methods=["GET"]),
     Route("/applications", applications_view, methods=["GET"]),
     Route("/api/applications", api_applications, methods=["GET"]),
-    Route(
-        "/api/applications/queue", api_queue_application, methods=["POST", "GET"]
-    ),  # <-- ADD THIS ROUTE
+    Route("/api/applications/queue", api_queue_application, methods=["POST"]),
     Route("/api/applications/update-status", api_update_application_status, methods=["POST"]),
     Route("/api/jobs", api_jobs, methods=["GET"]),
     Route("/api/jobs/update-status", api_update_job_status, methods=["POST"]),
@@ -588,4 +646,4 @@ routes = [
     *admin_routes,
 ]
 
-app = Starlette(debug=True, routes=routes)
+app = Starlette(debug=settings.DASHBOARD_DEBUG, routes=routes)

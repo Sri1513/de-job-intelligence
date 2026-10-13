@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # /api/admin/* routes behave as if they do not exist (404).
     ADMIN_API_TOKEN: str = ""
 
+    # Dashboard write endpoints (/api/*/update-status, /api/applications/queue,
+    # ...) require a Bearer token matching ADMIN_API_TOKEN. Reads stay public.
+    # Dashboard debug mode (tracebacks in responses). Keep off in production.
+    DASHBOARD_DEBUG: bool = False
+
     # URL the dashboard's admin health check uses to probe the MCP server.
     MCP_HEALTH_URL: str = "http://localhost:8000/health"
 
