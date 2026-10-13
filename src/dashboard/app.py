@@ -14,8 +14,8 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from src.core.database import get_db_connection
 from src.core.config import settings
+from src.core.database import get_db_connection
 from src.dashboard.admin import admin_routes
 
 logger = logging.getLogger("de-job-intelligence.dashboard")
