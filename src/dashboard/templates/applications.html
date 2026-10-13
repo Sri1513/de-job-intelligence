@@ -59,6 +59,7 @@
       padding: 6px 12px;
     }
   </style>
+    <script src="/static/auth.js"></script>
 </head>
 <body>
 
@@ -220,11 +221,7 @@ async function fetchApplications() {
 
 async function updateStatus(jobId, status) {
   const notes = prompt(`Optional note for transitioning ${jobId} to ${status}:`, "");
-  const res = await fetch("/api/applications/update-status", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId, status: status, notes: notes })
-  });
+  const res = await djWrite("/api/applications/update-status", { job_id: jobId, status: status, notes: notes });
   if (res.ok) {
     fetchApplications();
   } else {

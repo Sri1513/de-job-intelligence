@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in — Job Scout</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex items-center justify-center p-6">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-xl p-8">
+        <h1 class="text-xl font-bold text-emerald-400 mb-2">🔒 Job Scout login</h1>
+        <p class="text-sm text-slate-400 mb-6">Browsing is public. Performing actions needs the dashboard token.</p>
+        <form id="login-form" class="space-y-4">
+            <input id="token" type="password" autocomplete="off" placeholder="Dashboard token"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+            <p id="login-error" class="hidden text-sm text-red-400">Wrong token — try again.</p>
+            <button type="submit"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm px-4 py-2 rounded-lg">
+                Log in
+            </button>
+        </form>
+    </div>
+    <script>
+        const next = {{ next | tojson }};
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = document.getElementById('token').value.trim();
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            if (res.ok) {
+                sessionStorage.setItem('dj_token', token);
+                window.location.href = next || '/';
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

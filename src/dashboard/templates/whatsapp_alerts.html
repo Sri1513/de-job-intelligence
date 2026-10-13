@@ -14,6 +14,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WhatsApp Job Alerts Command Center</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/auth.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
     <div class="max-w-7xl mx-auto">
@@ -384,11 +385,7 @@
 
         async function updateStatus(outreachId, newStatus) {
             try {
-                const response = await fetch('/api/whatsapp-alerts/update-status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ outreach_id: outreachId, status: newStatus })
-                });
+                const response = await djWrite('/api/whatsapp-alerts/update-status', { outreach_id: outreachId, status: newStatus });
                 const res = await response.json();
                 if (res.status === 'success') {
                     const alert = allAlerts.find(a => a.outreach_id === outreachId);
