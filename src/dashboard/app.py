@@ -3,6 +3,7 @@ import functools
 import hmac
 import json
 import logging
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -202,7 +203,7 @@ async def api_jobs(request: Request) -> JSONResponse:
     query = """
         SELECT job_id, title, company, location, employment_type, sponsorship,
                fit_score, status, metadata, job_url, saved_at, notes, applied_at,
-               apply_status
+               apply_status, description
         FROM saved_jobs
         WHERE job_category ILIKE %s
         ORDER BY saved_at DESC NULLS LAST;
@@ -233,6 +234,12 @@ async def api_jobs(request: Request) -> JSONResponse:
                 ai_notes = row.get("notes") or "No AI notes generated."
                 personal_notes = meta.get("personal_notes", "")
 
+                # Strip HTML from the stored description (JobSpy scrapes raw
+                # posting HTML) and cap it — the card shows it collapsed.
+                raw_desc = row.get("description") or ""
+                desc_text = re.sub(r"<[^>]+>", " ", raw_desc)
+                desc_text = re.sub(r"\s+", " ", desc_text).strip()[:3000]
+
                 jobs.append(
                     {
                         "job_id": row.get("job_id") or "N/A",
@@ -251,6 +258,7 @@ async def api_jobs(request: Request) -> JSONResponse:
                         "saved_at": serialize_for_json(row.get("saved_at")),
                         "ai_notes": ai_notes,
                         "personal_notes": personal_notes,
+                        "description": desc_text,
                     }
                 )
     except Exception as exc:

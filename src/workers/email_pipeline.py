@@ -82,6 +82,35 @@ def is_us_location(job: dict) -> bool:
     return False
 
 
+def _find_qualified_match(found_jobs: list, company: str):
+    """First JobSpy result matching the email alert's company + a relevant role."""
+    target_company_lower = company.lower()
+    for fj in found_jobs:
+        fj_company = fj.get("company", "").lower()
+        fj_title = fj.get("title", "").lower()
+
+        is_company_match = (target_company_lower in fj_company) or (
+            fj_company in target_company_lower
+        )
+        is_sponsored = any(bad in fj_title for bad in ["promoted", "sponsored", "ad"])
+        is_relevant_role = any(
+            kw in fj_title for kw in ["data", "etl", "engineer", "developer", "analytics"]
+        )
+        # The same role is often reposted from multiple offices; only accept
+        # the US posting so the pipeline never points at a foreign listing.
+        if (
+            is_company_match
+            and is_relevant_role
+            and not is_sponsored
+            and is_us_location(fj)
+        ):
+            logger.info(
+                f"   -> ✅ Qualified match found: '{fj.get('title')}' at '{fj.get('company')}'"
+            )
+            return fj
+    return None
+
+
 def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -> dict:
     """
     Pulls LinkedIn job alerts from Gmail, widens metadata via JobSpy scraper,
@@ -130,34 +159,22 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
             is_remote=True,
             site_name=["linkedin"],
         )
+        qualified_job = _find_qualified_match(found_jobs, company)
 
-        qualified_job = None
-        target_company_lower = company.lower()
-
-        for fj in found_jobs:
-            fj_company = fj.get("company", "").lower()
-            fj_title = fj.get("title", "").lower()
-
-            is_company_match = (target_company_lower in fj_company) or (
-                fj_company in target_company_lower
+        if not qualified_job:
+            # LinkedIn 429-blocks the VM's datacenter IP, so the LinkedIn
+            # widening often returns nothing. Try Indeed before giving up and
+            # storing the placeholder description.
+            logger.info("   -> LinkedIn widening missed; retrying via Indeed...")
+            found_jobs = fetch_scraped_jobs(
+                search_term=search_query,
+                location="United States",
+                results_wanted=15,
+                hours_old=168,
+                is_remote=True,
+                site_name=["indeed"],
             )
-            is_sponsored = any(bad in fj_title for bad in ["promoted", "sponsored", "ad"])
-            is_relevant_role = any(
-                kw in fj_title for kw in ["data", "etl", "engineer", "developer", "analytics"]
-            )
-            # The same role is often reposted from multiple offices; only accept
-            # the US posting so the pipeline never points at a foreign listing.
-            if (
-                is_company_match
-                and is_relevant_role
-                and not is_sponsored
-                and is_us_location(fj)
-            ):
-                qualified_job = fj
-                logger.info(
-                    f"   -> ✅ Qualified match found: '{fj.get('title')}' at '{fj.get('company')}'"
-                )
-                break
+            qualified_job = _find_qualified_match(found_jobs, company)
 
         if qualified_job:
             qualified_job["retrieved_at"] = retrieval_timestamp

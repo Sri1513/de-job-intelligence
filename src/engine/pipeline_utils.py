@@ -40,6 +40,30 @@ def extract_linkedin_id(url: str) -> str:
     return match.group(1) if match else None
 
 
+def _is_placeholder_description(desc: str) -> bool:
+    """
+    True when a stored description is a pipeline placeholder, not a real posting.
+
+    Placeholders come from two paths: the email parser stamps
+    "Extracted via email alert for ..." and the <20-char fallback stamps
+    "Role: {title} at {company}. Extracted via scraper." Anything under 50
+    chars is also not a real posting — genuine JDs are paragraphs.
+    """
+    d = (desc or "").strip()
+    return (
+        not d
+        or d.startswith("Extracted via email alert")
+        or d.startswith("Role: ")
+        or len(d) < 50
+    )
+
+
+def _is_real_description(desc: str) -> bool:
+    """True when an incoming description is a genuine posting, not a placeholder."""
+    d = (desc or "").strip()
+    return len(d) >= 150 and not _is_placeholder_description(d)
+
+
 def generate_job_id(company: str, title: str, job_url: str = None) -> str:
     """Generates a deterministic unique job ID."""
     if job_url:
@@ -114,28 +138,71 @@ def stage_raw_jobs(
                 job_desc = f"Role: {title} at {company}. Extracted via scraper."
 
             # 1. Check if record already exists
-            cur.execute("SELECT metadata FROM saved_jobs WHERE job_id = %s;", (job_id,))
+            cur.execute(
+                "SELECT description, metadata FROM saved_jobs WHERE job_id = %s;", (job_id,)
+            )
             existing_record = cur.fetchone()
 
             if existing_record:
-                metadata = (
-                    existing_record["metadata"]
-                    if isinstance(existing_record, dict)
-                    else existing_record[0]
-                ) or {}
+                if isinstance(existing_record, dict):
+                    existing_desc = existing_record.get("description") or ""
+                    metadata = existing_record.get("metadata") or {}
+                else:
+                    existing_desc = existing_record[0] or ""
+                    metadata = existing_record[1] or {}
+
+                # Heal: an email-alert placeholder must be replaced when a real
+                # posting description arrives later (e.g. batch ingestion
+                # re-finds the job after the email run). Without this, the
+                # placeholder is write-once and the full description is
+                # discarded as a "duplicate". Recompute the local fit score
+                # too — it was scored against the placeholder.
+                healed = False
+                if _is_placeholder_description(existing_desc) and _is_real_description(job_desc):
+                    healed_eval = calculate_local_fit_score(
+                        resume_text=resume_text,
+                        job_description=job_desc,
+                        job_title=title,
+                        job_category=job_category,
+                    )
+                    metadata["matched_skills"] = healed_eval.get("matched_skills", [])
+                    metadata["missing_skills"] = healed_eval.get("missing_skills", [])
+                    metadata["semantic_match"] = healed_eval.get("semantic_match", 0)
+                    metadata["skill_match"] = healed_eval.get("skill_match", 0)
+                    healed = True
+
                 locations_list = metadata.get("locations", [])
                 location_exists = any(
                     loc.get("url") == job_url or loc.get("city", "").lower() == city.lower()
                     for loc in locations_list
                 )
 
+                changed = healed
                 if not location_exists:
                     locations_list.append({"city": city, "url": job_url})
                     metadata["locations"] = locations_list
-                    cur.execute(
-                        "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
-                        (json.dumps(metadata), job_id),
-                    )
+                    changed = True
+
+                if changed:
+                    if healed:
+                        cur.execute(
+                            """
+                            UPDATE saved_jobs
+                            SET description = %s, fit_score = %s, metadata = %s
+                            WHERE job_id = %s;
+                            """,
+                            (
+                                job_desc,
+                                str(healed_eval.get("score", 0)),
+                                json.dumps(metadata),
+                                job_id,
+                            ),
+                        )
+                    else:
+                        cur.execute(
+                            "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
+                            (json.dumps(metadata), job_id),
+                        )
                     updated_count += 1
                 else:
                     skipped_count += 1
