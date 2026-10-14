@@ -13,6 +13,7 @@ from src.engine.pipeline_utils import (
     _is_real_description,
     stage_raw_jobs,
 )
+from src.workers.email_pipeline import _find_qualified_match
 
 REAL_DESC = (
     "We are hiring a Senior Data Engineer to build and operate our Databricks "
@@ -117,6 +118,49 @@ def test_real_description_not_overwritten_by_other_real(_resume):
         c for c in cur.execute.call_args_list if "UPDATE saved_jobs" in str(c.args[0])
     ]
     assert update_calls == []
+
+
+def test_exact_linkedin_id_match_beats_company_variant():
+    # JobSpy returned the alert's job, but under a company-name variant
+    # ("Colas" vs "Colas USA") that fuzzy matching would miss.
+    found = [
+        {
+            "title": "Senior Data Engineer",
+            "company": "Colas",
+            "location": "Remote",
+            "job_url": "https://www.linkedin.com/jobs/view/1234567890/?tracking=abc",
+            "description": REAL_DESC,
+        }
+    ]
+    match = _find_qualified_match(found, "Colas USA", linkedin_id="1234567890")
+    assert match is found[0]
+
+
+def test_fuzzy_match_still_works_without_id():
+    found = [
+        {
+            "title": "Senior Data Engineer",
+            "company": "Colas USA",
+            "location": "United States",
+            "job_url": "https://www.linkedin.com/jobs/view/555/?tracking=x",
+            "description": REAL_DESC,
+        }
+    ]
+    match = _find_qualified_match(found, "Colas USA", linkedin_id=None)
+    assert match is found[0]
+
+
+def test_wrong_id_does_not_match():
+    found = [
+        {
+            "title": "Senior Data Engineer",
+            "company": "Some Other Co",
+            "location": "United States",
+            "job_url": "https://www.linkedin.com/jobs/view/999/?tracking=x",
+            "description": REAL_DESC,
+        }
+    ]
+    assert _find_qualified_match(found, "Colas USA", linkedin_id="1234567890") is None
 
 
 @patch("src.workers.email_pipeline.get_db_connection")

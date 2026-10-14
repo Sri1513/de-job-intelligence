@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from src.core.database import get_db_connection
 from src.engine.evaluator import run_backfill_batch
-from src.engine.pipeline_utils import stage_raw_jobs
+from src.engine.pipeline_utils import extract_linkedin_id, stage_raw_jobs
 from src.engine.scraper import fetch_scraped_jobs
 from src.ingestion.email_scraper import fetch_jobs_from_email
 
@@ -82,8 +82,26 @@ def is_us_location(job: dict) -> bool:
     return False
 
 
-def _find_qualified_match(found_jobs: list, company: str):
-    """First JobSpy result matching the email alert's company + a relevant role."""
+def _find_qualified_match(found_jobs: list, company: str, linkedin_id: str | None = None):
+    """
+    First JobSpy result matching the email alert.
+
+    Exact match wins: the alert email's "View job:" URL carries the LinkedIn
+    numeric job ID, and a JobSpy result with the same ID IS the alert's
+    posting — accept it outright, no fuzzy company/title checks. That is the
+    parameter the widening step was missing: it only ever matched on
+    title/company substrings, so company-name variants ("Colas USA" vs
+    "Colas") or title variants silently missed a job JobSpy had returned.
+    Falls back to the fuzzy company + role + US-location match otherwise.
+    """
+    for fj in found_jobs:
+        fj_url = str(fj.get("job_url") or "")
+        if linkedin_id and f"/jobs/view/{linkedin_id}" in fj_url:
+            logger.info(
+                f"   -> ✅ Exact LinkedIn ID match: '{fj.get('title')}' at '{fj.get('company')}'"
+            )
+            return fj
+
     target_company_lower = company.lower()
     for fj in found_jobs:
         fj_company = fj.get("company", "").lower()
@@ -159,7 +177,10 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
             is_remote=True,
             site_name=["linkedin"],
         )
-        qualified_job = _find_qualified_match(found_jobs, company)
+        # The alert email's job URL carries the exact LinkedIn job ID —
+        # pass it to the matcher so an exact-ID hit wins over fuzzy matching.
+        linkedin_id = extract_linkedin_id(item.get("job_url"))
+        qualified_job = _find_qualified_match(found_jobs, company, linkedin_id)
 
         if not qualified_job:
             # LinkedIn 429-blocks the VM's datacenter IP, so the LinkedIn
@@ -174,7 +195,7 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
                 is_remote=True,
                 site_name=["indeed"],
             )
-            qualified_job = _find_qualified_match(found_jobs, company)
+            qualified_job = _find_qualified_match(found_jobs, company, linkedin_id)
 
         if qualified_job:
             qualified_job["retrieved_at"] = retrieval_timestamp
