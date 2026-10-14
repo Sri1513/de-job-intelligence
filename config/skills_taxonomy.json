@@ -155,7 +155,8 @@
       "aliases": [
         "amazon web services",
         "amazon aws",
-        "aws (s3, kinesis, dms)"
+        "aws (s3, kinesis, dms)",
+        "aws dms"
       ],
       "category": "cloud",
       "id": "aws",
@@ -1114,6 +1115,48 @@
         "point of sale",
         "point-of-sale"
       ]
+    },
+    {
+      "id": "langgraph",
+      "name": "LangGraph",
+      "aliases": [
+        "langgraph agents",
+        "langgraph routing"
+      ],
+      "category": "concepts"
+    },
+    {
+      "id": "pgvector",
+      "name": "pgvector",
+      "aliases": [
+        "postgres vector",
+        "postgresql vector",
+        "vector database",
+        "vector store",
+        "vector embeddings"
+      ],
+      "category": "databases"
+    },
+    {
+      "id": "mcp",
+      "name": "MCP",
+      "aliases": [
+        "mcp servers",
+        "python mcp servers",
+        "model context protocol"
+      ],
+      "category": "concepts"
+    },
+    {
+      "id": "rest_api",
+      "name": "REST API",
+      "aliases": [
+        "rest apis",
+        "rest",
+        "restful api",
+        "restful apis"
+      ],
+      "category": "concepts"
     }
   ]
 }

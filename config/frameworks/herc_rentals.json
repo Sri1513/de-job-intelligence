@@ -86,6 +86,33 @@
       "swappable_categories": [
         "BI Platforms (Looker, QuickSight)"
       ]
+    },
+    "phase_6_ai_agent_platform": {
+      "phase_name": "AI Agent Platform (RAG, Agentic Telemetry, MCP)",
+      "daily_activity": "Productionizing LLM-powered capabilities on top of the data platform: RAG over legacy rental contracts and maintenance logs, LangGraph-routed agents over live IoT telemetry, and custom MCP servers exposing governed schemas for secure agent access.",
+      "native_tools": [
+        "LangGraph",
+        "PostgreSQL (pgvector)",
+        "Python MCP servers",
+        "AWS DMS",
+        "Apache Airflow",
+        "AWS Kinesis",
+        "Databricks Streaming",
+        "Delta Lake",
+        "Docker",
+        "REST APIs"
+      ],
+      "source_systems": [
+        "Rental contracts",
+        "Maintenance logs",
+        "IoT Telemetry",
+        "Teradata star schemas",
+        "Oracle OLTP"
+      ],
+      "swappable_categories": [
+        "Agent frameworks (CrewAI, AutoGen)",
+        "Vector stores (Pinecone, Weaviate)"
+      ]
     }
   },
   "tech_stack": [
@@ -101,11 +128,15 @@
     "RentalMan",
     "Qlik Sense",
     "Apache Airflow",
-    "SQL Server Agent"
+    "SQL Server Agent",
+    "LangGraph",
+    "PostgreSQL (pgvector)",
+    "Python MCP servers",
+    "Docker"
   ],
   "metrics_and_impact": {
-    "rerun_reduction": "Decreased pipeline rerun effort by 30\u201340% through modular stage design",
-    "runtime_reduction": "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization",
+    "rerun_reduction": "Decreased pipeline rerun effort by 30–40% through modular stage design",
+    "runtime_reduction": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
     "reliability": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
   },
   "bullet_bank": [
@@ -186,7 +217,7 @@
     },
     {
       "id": "herc_rentals_metric_0",
-      "text": "Decreased pipeline rerun effort by 30\u201340% through modular stage design",
+      "text": "Decreased pipeline rerun effort by 30–40% through modular stage design",
       "skills": [
         "AWS (S3, Kinesis, DMS)",
         "Databricks",
@@ -203,7 +234,7 @@
         "SQL Server Agent"
       ],
       "metrics": [
-        "Decreased pipeline rerun effort by 30\u201340% through modular stage design"
+        "Decreased pipeline rerun effort by 30–40% through modular stage design"
       ],
       "phase": "impact",
       "signals": [
@@ -213,7 +244,7 @@
     },
     {
       "id": "herc_rentals_metric_1",
-      "text": "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization",
+      "text": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
       "skills": [
         "AWS (S3, Kinesis, DMS)",
         "Databricks",
@@ -230,7 +261,7 @@
         "SQL Server Agent"
       ],
       "metrics": [
-        "Reduced daily batch runtimes by 25\u201330% via PySpark partition tuning and Spark SQL join optimization"
+        "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization"
       ],
       "phase": "impact",
       "signals": [
@@ -264,12 +295,70 @@
         "herc_rentals"
       ],
       "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_phase_6_ai_agent_platform_0",
+      "text": "Built a RAG pipeline over legacy rental contracts and maintenance logs: CDC ingestion from AS400/Oracle via AWS DMS to S3; Airflow-orchestrated embedding jobs into pgvector on PostgreSQL, enabling natural-language querying of fleet repair history.",
+      "skills": [
+        "AWS DMS",
+        "AWS S3",
+        "Apache Airflow",
+        "PostgreSQL",
+        "pgvector",
+        "Python",
+        "AS400",
+        "Oracle OLTP"
+      ],
+      "metrics": [],
+      "phase": "AI Agent Platform",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_phase_6_ai_agent_platform_1",
+      "text": "Developed an agentic telemetry workflow with LangGraph routing: Kinesis-ingested IoT telemetry via Databricks Streaming/PySpark into Delta Lake, with agents calling REST/SQL tools against live Delta tables and Teradata star schemas for real-time equipment health analysis.",
+      "skills": [
+        "LangGraph",
+        "AWS Kinesis",
+        "Databricks Streaming",
+        "PySpark",
+        "Delta Lake",
+        "Teradata",
+        "REST APIs",
+        "SQL"
+      ],
+      "metrics": [],
+      "phase": "AI Agent Platform",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
+    },
+    {
+      "id": "herc_rentals_phase_6_ai_agent_platform_2",
+      "text": "Deployed secure enterprise LLM integration via custom Python MCP servers exposing sanitized Teradata/Oracle schemas through REST APIs; Docker-containerized on AWS with prompt engineering and context-window optimization for reliable, low-latency agent access.",
+      "skills": [
+        "Python MCP servers",
+        "Teradata",
+        "Oracle OLTP",
+        "REST APIs",
+        "Docker",
+        "AWS"
+      ],
+      "metrics": [],
+      "phase": "AI Agent Platform",
+      "signals": [
+        "herc_rentals"
+      ],
+      "bridging_slots": []
     }
   ],
   "resume_slot": {
     "header": "Akkodis (Herc Rentals)",
     "title": "Data Engineer",
     "location": "Florida",
-    "dates": "Nov 2024 \u2013 Present"
+    "dates": "Nov 2024 – Present"
   }
 }
