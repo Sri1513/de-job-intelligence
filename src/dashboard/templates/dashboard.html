@@ -206,6 +206,10 @@
             }
         }
 
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
         function filterAndRenderJobs() {
             const postedVal = document.getElementById('filter-posted').value;
             const sweptVal = document.getElementById('filter-swept').value;
@@ -357,6 +361,12 @@
                         <div class="text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 text-slate-300 italic mb-2">
                             💡 AI: "${job.ai_notes || 'No AI notes generated.'}"
                         </div>
+
+                        <!-- 1b. Job description (collapsed; empty when only a placeholder was stored) -->
+                        ${job.description ? `<details class="text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 text-slate-300 mb-2">
+                            <summary class="cursor-pointer font-semibold">📋 Job description</summary>
+                            <div class="mt-1 whitespace-pre-wrap">${escapeHtml(job.description)}</div>
+                        </details>` : ''}
 
                         <!-- 2. Clickable Personal Notes Box -->
                         <div onclick="openNotesModal('${job.job_id}', \`${(job.personal_notes || '').replace(/["']/g, "&#39;")}\`)" 
