@@ -142,6 +142,20 @@
       ],
       "why": "Cloud MPP data warehouse (fallback; candidate also lists Snowflake)",
       "confidence": "yellow"
+    },
+    "crewai": {
+      "equivalent": [
+        "LangGraph"
+      ],
+      "why": "Python agent orchestration framework; the candidate builds production agent workflows in LangGraph",
+      "confidence": "yellow"
+    },
+    "langchain": {
+      "equivalent": [
+        "LangGraph"
+      ],
+      "why": "Python agent orchestration framework; the candidate builds production agent workflows in LangGraph",
+      "confidence": "yellow"
     }
   }
 }
