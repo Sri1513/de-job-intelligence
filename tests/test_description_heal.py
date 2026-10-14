@@ -207,3 +207,86 @@ def test_widening_falls_back_to_indeed(
     staged = mock_stage.call_args.kwargs["jobs"]
     assert staged[0]["description"] == REAL_DESC
     assert staged[0]["job_url"] == "https://www.indeed.com/viewjob?jk=abc"
+
+
+_EMAIL_ITEM = {
+    "title": "Senior Data Engineer, Databricks",
+    "company": "Colas USA",
+    "location": "United States",
+    "job_url": "https://www.linkedin.com/jobs/view/999",
+    "description": PLACEHOLDER,
+    "employment_type": "Unknown",
+    "sponsorship": "Not Mentioned",
+    "source": "Email Alert",
+    "date_posted": "2026-10-14",
+}
+
+
+@patch("src.workers.email_pipeline.get_db_connection")
+@patch("src.workers.email_pipeline.run_backfill_batch", return_value={"successful": 0})
+@patch("src.workers.email_pipeline.stage_raw_jobs", return_value={"saved": 1, "updated": 0, "skipped": 0})
+@patch("src.workers.email_pipeline.fetch_linkedin_guest_job", return_value=None)
+@patch("src.workers.email_pipeline.fetch_scraped_jobs")
+@patch("src.workers.email_pipeline.fetch_jobs_from_email")
+def test_widening_falls_back_to_zip_recruiter(
+    mock_fetch_email, mock_scraped, mock_guest, mock_stage, _backfill, mock_conn
+):
+    from src.workers.email_pipeline import run_email_pipeline
+
+    mock_fetch_email.return_value = [dict(_EMAIL_ITEM)]
+    zip_job = {
+        "title": "Senior Data Engineer",
+        "company": "Colas USA",
+        "location": "United States",
+        "job_url": "https://www.ziprecruiter.com/jobs/abc",
+        "description": REAL_DESC,
+        "is_remote": True,
+    }
+    # LinkedIn + Indeed miss; ZipRecruiter finds the job.
+    mock_scraped.side_effect = [[], [], [zip_job]]
+    mock_conn.return_value.__enter__.return_value = MagicMock()
+
+    result = run_email_pipeline(limit=1)
+
+    assert result["status"] == "success"
+    assert mock_scraped.call_count == 3
+    assert mock_scraped.call_args_list[2].kwargs["site_name"] == ["zip_recruiter"]
+    assert mock_guest.call_count == 0  # board hit — guest API never reached
+    staged = mock_stage.call_args.kwargs["jobs"]
+    assert staged[0]["description"] == REAL_DESC
+    assert staged[0]["job_url"] == "https://www.ziprecruiter.com/jobs/abc"
+
+
+@patch("src.workers.email_pipeline.get_db_connection")
+@patch("src.workers.email_pipeline.run_backfill_batch", return_value={"successful": 0})
+@patch("src.workers.email_pipeline.stage_raw_jobs", return_value={"saved": 1, "updated": 0, "skipped": 0})
+@patch("src.workers.email_pipeline.fetch_linkedin_guest_job")
+@patch("src.workers.email_pipeline.fetch_scraped_jobs")
+@patch("src.workers.email_pipeline.fetch_jobs_from_email")
+def test_widening_falls_back_to_guest_api(
+    mock_fetch_email, mock_scraped, mock_guest, mock_stage, _backfill, mock_conn
+):
+    from src.workers.email_pipeline import run_email_pipeline
+
+    mock_fetch_email.return_value = [dict(_EMAIL_ITEM)]
+    mock_scraped.side_effect = [[], [], []]  # all three boards miss
+    mock_guest.return_value = {
+        "title": "Senior Data Engineer",
+        "company": "Colas USA",
+        "location": "United States",
+        "description": REAL_DESC,
+        "job_url": "https://www.linkedin.com/jobs/view/999/",
+        "job_type": "N/A",
+        "date_posted": "N/A",
+        "site": "linkedin",
+    }
+    mock_conn.return_value.__enter__.return_value = MagicMock()
+
+    result = run_email_pipeline(limit=1)
+
+    assert result["status"] == "success"
+    assert mock_scraped.call_count == 3
+    mock_guest.assert_called_once_with("999")  # ID from the alert's job URL
+    staged = mock_stage.call_args.kwargs["jobs"]
+    assert staged[0]["description"] == REAL_DESC
+    assert staged[0]["job_url"] == "https://www.linkedin.com/jobs/view/999/"

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from src.core.database import get_db_connection
 from src.engine.evaluator import run_backfill_batch
 from src.engine.pipeline_utils import extract_linkedin_id, stage_raw_jobs
-from src.engine.scraper import fetch_scraped_jobs
+from src.engine.scraper import fetch_linkedin_guest_job, fetch_scraped_jobs
 from src.ingestion.email_scraper import fetch_jobs_from_email
 
 logger = logging.getLogger(__name__)
@@ -169,33 +169,40 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
         # Uses fetch_scraped_jobs from your new scraper module which returns a list directly.
         # Google is excluded: it returns no data from datacenter IPs (every call
         # errors), so it only adds noise to the widening step.
-        found_jobs = fetch_scraped_jobs(
-            search_term=search_query,
-            location="United States",
-            results_wanted=15,
-            hours_old=168,
-            is_remote=True,
-            site_name=["linkedin"],
-        )
+        # Board order: LinkedIn first (exact-ID match possible), then
+        # independent boards with their own rate limits (Indeed, ZipRecruiter).
         # The alert email's job URL carries the exact LinkedIn job ID —
         # pass it to the matcher so an exact-ID hit wins over fuzzy matching.
         linkedin_id = extract_linkedin_id(item.get("job_url"))
-        qualified_job = _find_qualified_match(found_jobs, company, linkedin_id)
-
-        if not qualified_job:
-            # LinkedIn 429-blocks the VM's datacenter IP, so the LinkedIn
-            # widening often returns nothing. Try Indeed before giving up and
-            # storing the placeholder description.
-            logger.info("   -> LinkedIn widening missed; retrying via Indeed...")
+        qualified_job = None
+        for board in ("linkedin", "indeed", "zip_recruiter"):
             found_jobs = fetch_scraped_jobs(
                 search_term=search_query,
                 location="United States",
                 results_wanted=15,
                 hours_old=168,
                 is_remote=True,
-                site_name=["indeed"],
+                site_name=[board],
             )
             qualified_job = _find_qualified_match(found_jobs, company, linkedin_id)
+            if qualified_job:
+                break
+            logger.info(f"   -> {board.capitalize()} widening missed; trying next board...")
+
+        if not qualified_job and linkedin_id:
+            # Last resort: one targeted guest-API request for the exact
+            # posting. Same LinkedIn wall as search (not a bypass), but a
+            # single request sometimes slips past the rate limit that
+            # blocks a paged search.
+            logger.info("   -> All board widening missed; trying LinkedIn guest API...")
+            guest_job = fetch_linkedin_guest_job(linkedin_id)
+            if guest_job and guest_job.get("description"):
+                # Title/company parse is best-effort in the guest fetch;
+                # the email alert already knows them, so fill any gaps.
+                guest_job["title"] = guest_job.get("title") or title
+                guest_job["company"] = guest_job.get("company") or company
+                guest_job["job_url"] = guest_job.get("job_url") or item.get("job_url")
+                qualified_job = guest_job
 
         if qualified_job:
             qualified_job["retrieved_at"] = retrieval_timestamp
