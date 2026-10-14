@@ -8,12 +8,12 @@ never displayed the description at all.
 """
 from unittest.mock import MagicMock, patch
 
+from src.engine.jit_enrichment import _find_qualified_match
 from src.engine.pipeline_utils import (
     _is_placeholder_description,
     _is_real_description,
     stage_raw_jobs,
 )
-from src.workers.email_pipeline import _find_qualified_match
 
 REAL_DESC = (
     "We are hiring a Senior Data Engineer to build and operate our Databricks "
@@ -166,7 +166,7 @@ def test_wrong_id_does_not_match():
 @patch("src.workers.email_pipeline.get_db_connection")
 @patch("src.workers.email_pipeline.run_backfill_batch", return_value={"successful": 0})
 @patch("src.workers.email_pipeline.stage_raw_jobs", return_value={"saved": 1, "updated": 0, "skipped": 0})
-@patch("src.workers.email_pipeline.fetch_scraped_jobs")
+@patch("src.engine.jit_enrichment.fetch_scraped_jobs")
 @patch("src.workers.email_pipeline.fetch_jobs_from_email")
 def test_widening_falls_back_to_indeed(
     mock_fetch_email, mock_scraped, mock_stage, _backfill, mock_conn
@@ -225,8 +225,8 @@ _EMAIL_ITEM = {
 @patch("src.workers.email_pipeline.get_db_connection")
 @patch("src.workers.email_pipeline.run_backfill_batch", return_value={"successful": 0})
 @patch("src.workers.email_pipeline.stage_raw_jobs", return_value={"saved": 1, "updated": 0, "skipped": 0})
-@patch("src.workers.email_pipeline.fetch_linkedin_guest_job", return_value=None)
-@patch("src.workers.email_pipeline.fetch_scraped_jobs")
+@patch("src.engine.jit_enrichment.fetch_linkedin_guest_job", return_value=None)
+@patch("src.engine.jit_enrichment.fetch_scraped_jobs")
 @patch("src.workers.email_pipeline.fetch_jobs_from_email")
 def test_widening_falls_back_to_zip_recruiter(
     mock_fetch_email, mock_scraped, mock_guest, mock_stage, _backfill, mock_conn
@@ -260,8 +260,8 @@ def test_widening_falls_back_to_zip_recruiter(
 @patch("src.workers.email_pipeline.get_db_connection")
 @patch("src.workers.email_pipeline.run_backfill_batch", return_value={"successful": 0})
 @patch("src.workers.email_pipeline.stage_raw_jobs", return_value={"saved": 1, "updated": 0, "skipped": 0})
-@patch("src.workers.email_pipeline.fetch_linkedin_guest_job")
-@patch("src.workers.email_pipeline.fetch_scraped_jobs")
+@patch("src.engine.jit_enrichment.fetch_linkedin_guest_job")
+@patch("src.engine.jit_enrichment.fetch_scraped_jobs")
 @patch("src.workers.email_pipeline.fetch_jobs_from_email")
 def test_widening_falls_back_to_guest_api(
     mock_fetch_email, mock_scraped, mock_guest, mock_stage, _backfill, mock_conn

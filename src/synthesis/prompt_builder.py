@@ -13,6 +13,7 @@ from src.engine.framework_selector import (
     load_framework,
     select_slot_frameworks,
 )
+from src.engine.jit_enrichment import maybe_enrich_job_for_tailoring
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,8 @@ def build_job_tailoring_prompt(
     saved_jobs.
     """
     if job_override is not None:
-        job = job_override
+        # WhatsApp path: no DB row — enrich the in-memory dict only.
+        job = maybe_enrich_job_for_tailoring(job_override, conn=None)
     else:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -278,6 +280,12 @@ def build_job_tailoring_prompt(
                     (job_id,),
                 )
                 job = cur.fetchone()
+            if job:
+                # JIT enrichment: a placeholder description poisons the
+                # healthcare slot-routing check and the bullet ranking
+                # below, both of which read the description as the JD.
+                # One live widening pass, fail-open, attempt-guarded.
+                job = maybe_enrich_job_for_tailoring(job, conn)
 
     if not job:
         return {"error": f"No job found in the database for job_id '{job_id}'."}
