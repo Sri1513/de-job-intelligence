@@ -3,6 +3,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 
 logger = logging.getLogger(__name__)
@@ -12,6 +14,78 @@ BLACKLIST_KEYWORDS = [
     "building engineer", "critical environments", "data center",
     "hardware", "operator", "chiller", "plumbing", "carpentry",
 ]
+
+_LINKEDIN_GUEST_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
+
+def fetch_linkedin_guest_job(linkedin_id: str) -> dict | None:
+    """
+    Fetch one LinkedIn posting via the public guest API, job-shaped dict or None.
+
+    Single targeted request to /jobs-guest/jobs/api/jobPosting/<id>. Honest
+    caveat: this is the SAME guest-endpoint family JobSpy's LinkedIn search
+    uses, so it hits the same 429 wall from the VM's datacenter IP — it is
+    not a bypass. It earns its place as the last resort because one request
+    sometimes slips past the rate limit that blocks a paged search, and it
+    fetches the exact posting by ID instead of a fuzzy search.
+
+    Fail-open by design: any network error, non-200 status, auth-wall HTML,
+    or missing description markup returns None and the caller falls through
+    to the placeholder path. Title/company parse best-effort — the caller
+    fills gaps from the email alert, which already knows them.
+    """
+    if not linkedin_id:
+        return None
+    url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{linkedin_id}"
+    try:
+        resp = requests.get(
+            url, headers={"User-Agent": _LINKEDIN_GUEST_UA}, timeout=15
+        )
+    except requests.RequestException as req_err:
+        logger.warning(
+            "LinkedIn guest API fetch failed for job %s: %s", linkedin_id, req_err
+        )
+        return None
+    if resp.status_code != 200:
+        logger.warning(
+            "LinkedIn guest API returned %s for job %s.",
+            resp.status_code, linkedin_id,
+        )
+        return None
+    soup = BeautifulSoup(resp.text, "html.parser")
+    desc_el = soup.select_one("div.show-more-less-html__markup")
+    if not desc_el:
+        logger.warning(
+            "LinkedIn guest API: no description markup for job %s "
+            "(auth wall or changed markup).",
+            linkedin_id,
+        )
+        return None
+    description = desc_el.get_text("\n", strip=True)
+    if len(description) < 50:
+        logger.warning(
+            "LinkedIn guest API: description too short (%d chars) for job %s.",
+            len(description), linkedin_id,
+        )
+        return None
+    title_el = soup.select_one("h2.top-card-layout__title")
+    company_el = soup.select_one("a.topcard__org-name-link")
+    location_el = soup.select_one("span.topcard__flavor--bullet")
+    return {
+        "title": title_el.get_text(strip=True) if title_el else None,
+        "company": company_el.get_text(strip=True) if company_el else None,
+        "location": location_el.get_text(strip=True)
+        if location_el
+        else "United States",
+        "description": description,
+        "job_url": f"https://www.linkedin.com/jobs/view/{linkedin_id}/",
+        "job_type": "N/A",
+        "date_posted": "N/A",
+        "site": "linkedin",
+    }
 
 
 def is_unwanted_job(title: str) -> bool:
