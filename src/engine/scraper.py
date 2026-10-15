@@ -1,6 +1,10 @@
 # src/engine/scraper.py
+import contextlib
 import logging
+import os
+import socket
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -9,10 +13,83 @@ from jobspy import scrape_jobs
 
 logger = logging.getLogger(__name__)
 
+# Residential egress for scraping. LinkedIn/Indeed/ZipRecruiter all
+# 429/403/challenge the VM's datacenter IP; a forward proxy on the user's
+# laptop (reached over Tailscale, e.g. http://100.68.109.36:8888) gives
+# scraper traffic a residential IP. Set SCRAPER_PROXY_URL in .env.
+# When unset or unreachable this is a no-op and traffic goes direct --
+# today's behavior, never worse.
+_PROXY_ENV_VARS = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
+_NO_PROXY_ENV_VARS = ("NO_PROXY", "no_proxy")
+_PROXY_CHECK_TIMEOUT_S = 3.0
+
+
+def _configured_proxy_url() -> str | None:
+    url = (os.environ.get("SCRAPER_PROXY_URL") or "").strip()
+    return url or None
+
+
+def _proxy_reachable(proxy_url: str) -> bool:
+    try:
+        parts = urlparse(proxy_url)
+        host, port = parts.hostname, parts.port or 8080
+        if not host:
+            return False
+        with socket.create_connection((host, port), timeout=_PROXY_CHECK_TIMEOUT_S):
+            return True
+    except OSError:
+        return False
+
+
+@contextlib.contextmanager
+def maybe_scraper_proxy():
+    """Route scraper HTTP traffic via SCRAPER_PROXY_URL when reachable.
+
+    requests.Session honors HTTP(S)_PROXY env vars, which is how JobSpy's
+    internal session picks the proxy up. NO_PROXY keeps localhost/loopback
+    direct. Env is restored afterwards.
+
+    Threading note: os.environ is process-wide, so two overlapping scrapes
+    race on these vars -- but they always write the same values, and the
+    worst case is one scrape silently falling back to direct. Scrapes are
+    user-triggered minutes apart, so this stays a benign, fail-open edge.
+    """
+    proxy_url = _configured_proxy_url()
+    if not proxy_url or not _proxy_reachable(proxy_url):
+        if proxy_url:
+            logger.info("Scraper proxy %s unreachable; scraping direct.", proxy_url)
+        yield
+        return
+    saved = {k: os.environ.get(k) for k in _PROXY_ENV_VARS + _NO_PROXY_ENV_VARS}
+    for k in _PROXY_ENV_VARS:
+        os.environ[k] = proxy_url
+    for k in _NO_PROXY_ENV_VARS:
+        os.environ[k] = "localhost,127.0.0.1"
+    logger.info("Scraping via residential proxy %s.", proxy_url)
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 BLACKLIST_KEYWORDS = [
-    "technician", "electrician", "hvac", "facility", "facilities",
-    "building engineer", "critical environments", "data center",
-    "hardware", "operator", "chiller", "plumbing", "carpentry",
+    "technician",
+    "electrician",
+    "hvac",
+    "facility",
+    "facilities",
+    "building engineer",
+    "critical environments",
+    "data center",
+    "hardware",
+    "operator",
+    "chiller",
+    "plumbing",
+    "carpentry",
 ]
 
 _LINKEDIN_GUEST_UA = (
@@ -41,26 +118,25 @@ def fetch_linkedin_guest_job(linkedin_id: str) -> dict | None:
         return None
     url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{linkedin_id}"
     try:
-        resp = requests.get(
-            url, headers={"User-Agent": _LINKEDIN_GUEST_UA}, timeout=15
-        )
+        # maybe_scraper_proxy: residential egress when the laptop proxy is
+        # up, direct otherwise (fail-open).
+        with maybe_scraper_proxy():
+            resp = requests.get(url, headers={"User-Agent": _LINKEDIN_GUEST_UA}, timeout=15)
     except requests.RequestException as req_err:
-        logger.warning(
-            "LinkedIn guest API fetch failed for job %s: %s", linkedin_id, req_err
-        )
+        logger.warning("LinkedIn guest API fetch failed for job %s: %s", linkedin_id, req_err)
         return None
     if resp.status_code != 200:
         logger.warning(
             "LinkedIn guest API returned %s for job %s.",
-            resp.status_code, linkedin_id,
+            resp.status_code,
+            linkedin_id,
         )
         return None
     soup = BeautifulSoup(resp.text, "html.parser")
     desc_el = soup.select_one("div.show-more-less-html__markup")
     if not desc_el:
         logger.warning(
-            "LinkedIn guest API: no description markup for job %s "
-            "(auth wall or changed markup).",
+            "LinkedIn guest API: no description markup for job %s (auth wall or changed markup).",
             linkedin_id,
         )
         return None
@@ -68,7 +144,8 @@ def fetch_linkedin_guest_job(linkedin_id: str) -> dict | None:
     if len(description) < 50:
         logger.warning(
             "LinkedIn guest API: description too short (%d chars) for job %s.",
-            len(description), linkedin_id,
+            len(description),
+            linkedin_id,
         )
         return None
     title_el = soup.select_one("h2.top-card-layout__title")
@@ -77,9 +154,7 @@ def fetch_linkedin_guest_job(linkedin_id: str) -> dict | None:
     return {
         "title": title_el.get_text(strip=True) if title_el else None,
         "company": company_el.get_text(strip=True) if company_el else None,
-        "location": location_el.get_text(strip=True)
-        if location_el
-        else "United States",
+        "location": location_el.get_text(strip=True) if location_el else "United States",
         "description": description,
         "job_url": f"https://www.linkedin.com/jobs/view/{linkedin_id}/",
         "job_type": "N/A",
@@ -107,79 +182,80 @@ def fetch_scraped_jobs(
 
     collected_jobs = []
 
-    for site in site_name:
-        logger.info(
-            f"🌐 Scraping {results_wanted} listings from '{site}' for '{search_term}'..."
-        )
-        try:
-            df = scrape_jobs(
-                site_name=[site],
-                search_term=search_term,
-                location=location,
-                results_wanted=results_wanted,
-                is_remote=is_remote,
-                country_indeed="usa",  # Always pass 'usa' so JobSpy never encounters None.strip()
-            )
-
-            if df is None or df.empty:
-                logger.info(f"No listings returned from '{site}'.")
-                continue
-
-            # Recency post-filter. If every row is older than the cutoff (LinkedIn
-            # frequently returns stale-dated rows), fall back to the most recent
-            # rows instead of silently returning zero — a stale job the user can
-            # still apply to beats an empty pipeline nobody notices.
-            if hours_old and "date_posted" in df.columns:
-                try:
-                    cutoff_date = (
-                        datetime.now(timezone.utc) - timedelta(hours=hours_old)
-                    ).date()
-                    parsed_dates = pd.to_datetime(
-                        df["date_posted"], errors="coerce", utc=True
-                    ).dt.date
-                    fresh = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
-                    dropped = len(df) - len(fresh)
-                    if dropped:
-                        logger.info(
-                            "Recency filter (%dh) dropped %d stale row(s) from '%s' "
-                            "(newest seen: %s).",
-                            hours_old, dropped, site, parsed_dates.max(),
-                        )
-                    if fresh.empty and not df.empty:
-                        ranked = (
-                            df.assign(_parsed_date=parsed_dates)
-                            .sort_values("_parsed_date", ascending=False, na_position="first")
-                            .drop(columns=["_parsed_date"])
-                            .head(results_wanted)
-                        )
-                        logger.warning(
-                            "⚠️ All '%s' rows were older than %dh; keeping %d most "
-                            "recent instead of returning zero.",
-                            site, hours_old, len(ranked),
-                        )
-                        df = ranked
-                    else:
-                        df = fresh
-                except Exception as filter_err:
-                    logger.warning(
-                        f"Could not apply date filter for '{site}': {filter_err}"
-                    )
-
-            records = df.fillna("N/A").to_dict(orient="records")
-            clean_records = [
-                j
-                for j in records
-                if not is_unwanted_job(str(j.get("title", "")))
-            ]
-            collected_jobs.extend(clean_records)
+    # Residential proxy (laptop over Tailscale) when reachable; direct
+    # otherwise. Covers every site in the loop and whatever requests the
+    # site scrapers make internally.
+    with maybe_scraper_proxy():
+        for site in site_name:
             logger.info(
-                f"✅ Extracted {len(clean_records)} jobs from '{site}'."
+                f"🌐 Scraping {results_wanted} listings from '{site}' for '{search_term}'..."
             )
+            try:
+                df = scrape_jobs(
+                    site_name=[site],
+                    search_term=search_term,
+                    location=location,
+                    results_wanted=results_wanted,
+                    is_remote=is_remote,
+                    country_indeed="usa",  # Always pass 'usa' so JobSpy never encounters None.strip()
+                )
 
-        except Exception as site_err:
-            logger.warning(
-                f"⚠️ Provider '{site}' failed: {site_err}. Proceeding to next source.",
-                exc_info=True,
-            )
+                if df is None or df.empty:
+                    logger.info(f"No listings returned from '{site}'.")
+                    continue
+
+                # Recency post-filter. If every row is older than the cutoff (LinkedIn
+                # frequently returns stale-dated rows), fall back to the most recent
+                # rows instead of silently returning zero — a stale job the user can
+                # still apply to beats an empty pipeline nobody notices.
+                if hours_old and "date_posted" in df.columns:
+                    try:
+                        cutoff_date = (
+                            datetime.now(timezone.utc) - timedelta(hours=hours_old)
+                        ).date()
+                        parsed_dates = pd.to_datetime(
+                            df["date_posted"], errors="coerce", utc=True
+                        ).dt.date
+                        fresh = df[(parsed_dates >= cutoff_date) | parsed_dates.isna()]
+                        dropped = len(df) - len(fresh)
+                        if dropped:
+                            logger.info(
+                                "Recency filter (%dh) dropped %d stale row(s) from '%s' "
+                                "(newest seen: %s).",
+                                hours_old,
+                                dropped,
+                                site,
+                                parsed_dates.max(),
+                            )
+                        if fresh.empty and not df.empty:
+                            ranked = (
+                                df.assign(_parsed_date=parsed_dates)
+                                .sort_values("_parsed_date", ascending=False, na_position="first")
+                                .drop(columns=["_parsed_date"])
+                                .head(results_wanted)
+                            )
+                            logger.warning(
+                                "⚠️ All '%s' rows were older than %dh; keeping %d most "
+                                "recent instead of returning zero.",
+                                site,
+                                hours_old,
+                                len(ranked),
+                            )
+                            df = ranked
+                        else:
+                            df = fresh
+                    except Exception as filter_err:
+                        logger.warning(f"Could not apply date filter for '{site}': {filter_err}")
+
+                records = df.fillna("N/A").to_dict(orient="records")
+                clean_records = [j for j in records if not is_unwanted_job(str(j.get("title", "")))]
+                collected_jobs.extend(clean_records)
+                logger.info(f"✅ Extracted {len(clean_records)} jobs from '{site}'.")
+
+            except Exception as site_err:
+                logger.warning(
+                    f"⚠️ Provider '{site}' failed: {site_err}. Proceeding to next source.",
+                    exc_info=True,
+                )
 
     return collected_jobs
