@@ -1,13 +1,77 @@
 # src/engine/ingestion.py
 import logging
+import time
 
 from src.core.database import get_db_connection
 from src.engine.evaluator import run_backfill_batch
-from src.engine.pipeline_utils import stage_raw_jobs
-from src.engine.scraper import fetch_scraped_jobs
+from src.engine.pipeline_utils import (
+    _is_real_description,
+    extract_linkedin_id,
+    stage_raw_jobs,
+)
+from src.engine.scraper import fetch_linkedin_guest_job, fetch_scraped_jobs
 from src.ingestion.dice_client import DiceJobClient
 
 logger = logging.getLogger(__name__)
+
+# Guest-API enrichment tuning. LinkedIn has 429/signup-walled JobSpy's
+# per-job description fetch from datacenter IPs since ~2026-10-02 (Indeed
+# descriptions still flow fine, so this is LinkedIn-specific, not a staging
+# bug). One guest request per job needing it; polite delay between attempts;
+# stop after consecutive misses so an IP-level block doesn't burn the run.
+GUEST_ENRICH_DELAY_S = 2.0
+GUEST_ENRICH_MAX_CONSECUTIVE_MISSES = 3
+# Mirrors stage_raw_jobs: shorter than this gets the "Role: ..." placeholder.
+_MISSING_DESC_THRESHOLD = 20
+
+
+def _enrich_missing_linkedin_descriptions(jobs: list) -> int:
+    """Fill empty LinkedIn descriptions via the guest API before staging.
+
+    JobSpy scrapes each LinkedIn description from the full /jobs/view/ page,
+    which LinkedIn 429s or redirects to the signup wall from datacenter IPs
+    (JobSpy then silently returns an empty description). The lightweight
+    guest endpoint (/jobs-guest/jobs/api/jobPosting/<id>) usually still
+    answers. Only LinkedIn jobs with a missing/short description are
+    attempted; non-LinkedIn jobs and jobs that already have descriptions are
+    skipped. Fail-open throughout: any miss or error leaves the job for the
+    placeholder path, exactly as before.
+    Returns the number of jobs enriched.
+    """
+    enriched = 0
+    consecutive_misses = 0
+    for job in jobs:
+        if consecutive_misses >= GUEST_ENRICH_MAX_CONSECUTIVE_MISSES:
+            logger.info(
+                "Guest-API enrichment stopping after %d consecutive misses "
+                "(likely IP-level block); remaining jobs keep placeholders.",
+                consecutive_misses,
+            )
+            break
+        if len(job.get("description") or "") >= _MISSING_DESC_THRESHOLD:
+            continue
+        linkedin_id = extract_linkedin_id(job.get("job_url"))
+        if not linkedin_id:
+            continue
+        time.sleep(GUEST_ENRICH_DELAY_S)
+        try:
+            guest_job = fetch_linkedin_guest_job(linkedin_id)
+        except Exception as exc:
+            logger.warning(
+                "Guest-API enrichment failed for job '%s': %s",
+                job.get("job_id"), exc,
+            )
+            guest_job = None
+        if guest_job and _is_real_description(guest_job.get("description")):
+            job["description"] = guest_job["description"]
+            enriched += 1
+            consecutive_misses = 0
+            logger.info(
+                "   -> Guest-API enriched description for '%s'.", job.get("job_id")
+            )
+        else:
+            consecutive_misses += 1
+    return enriched
 
 
 def run_batch_ingestion_workflow(
@@ -41,6 +105,14 @@ def run_batch_ingestion_workflow(
     logger.info(
         f"📦 Total combined raw jobs fetched: {len(raw_jobs)} (JobSpy: {len(jobspy_jobs)}, Dice: {len(dice_jobs)})"
     )
+
+    # LinkedIn descriptions come back empty when LinkedIn walls JobSpy's
+    # per-job page fetch (429/signup redirect from datacenter IPs). Fill
+    # them via the guest API before staging so they don't become
+    # placeholders — stage_raw_jobs then scores them on the real text.
+    enriched = _enrich_missing_linkedin_descriptions(raw_jobs)
+    if enriched:
+        logger.info(f"✨ Guest-API enriched {enriched} LinkedIn description(s).")
 
     if not raw_jobs:
         return {
