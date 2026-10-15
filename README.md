@@ -387,6 +387,12 @@ ADMIN_API_TOKEN=your_strong_random_token
 MCP_SERVER_PORT=8000
 DASHBOARD_PORT=5001
 
+# Scraper proxy (optional): routes scraper traffic through Omkar's laptop
+# CONNECT proxy on the Tailscale network so requests exit via the
+# residential IP instead of the VM's datacenter IP. Unset = direct scrape.
+# The health check runs automatically; a dead laptop falls back to direct.
+SCRAPER_PROXY_URL=http://100.68.109.36:8888
+
 ```
 
 Place your authorized `credentials.json` and generated `token.json` in the project root to enable Google Drive, Google Docs, and Gmail API draft creation.
