@@ -20,6 +20,10 @@ services:
     # Tee stdout to a file so the dashboard's admin API can serve log tails.
     command: ["sh", "-c", "uvicorn src.protocols.app:app --host 0.0.0.0 --port 8000 2>&1 | tee /app/logs/mcp.log"]
     env_file: .env
+    environment:
+      # Residential egress for scraping: forward proxy on the user's laptop
+      # over Tailscale (e.g. http://100.68.109.36:8888). Empty = scrape direct.
+      - SCRAPER_PROXY_URL=${SCRAPER_PROXY_URL:-}
     ports:
       - "8000:8000"
     depends_on:
