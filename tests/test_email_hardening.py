@@ -1,6 +1,6 @@
 """Tests for email-pipeline hardening: title sanitization and US-location gating."""
+from src.engine.jit_enrichment import is_us_location
 from src.ingestion.email_scraper import clean_job_title, parse_linkedin_plain_text_email
-from src.workers.email_pipeline import is_us_location
 
 
 class TestCleanJobTitle:

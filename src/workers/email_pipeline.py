@@ -1,132 +1,16 @@
 # src/workers/email_pipeline.py
 import logging
-import re
 from datetime import datetime
 
 from dotenv import load_dotenv
 
 from src.core.database import get_db_connection
 from src.engine.evaluator import run_backfill_batch
-from src.engine.pipeline_utils import extract_linkedin_id, stage_raw_jobs
-from src.engine.scraper import fetch_linkedin_guest_job, fetch_scraped_jobs
+from src.engine.jit_enrichment import enrich_job_description
+from src.engine.pipeline_utils import stage_raw_jobs
 from src.ingestion.email_scraper import fetch_jobs_from_email
 
 logger = logging.getLogger(__name__)
-
-_US_STATE_ABBR = frozenset(
-    s.lower()
-    for s in (
-        "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS "
-        "MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY"
-    ).split()
-)
-_US_STATE_NAMES = frozenset(
-    (
-        "alabama alaska arizona arkansas california colorado connecticut delaware "
-        "florida georgia hawaii idaho illinois indiana iowa kansas kentucky louisiana "
-        "maine maryland massachusetts michigan minnesota mississippi missouri montana "
-        "nebraska nevada hampshire jersey mexico york carolina dakota ohio oklahoma "
-        "oregon pennsylvania rhode island carolina dakota tennessee texas utah vermont "
-        "virginia washington wisconsin wyoming district of columbia"
-    ).split()
-)
-_US_MARKERS = ("united states", "usa", "u.s.a", "u.s.")
-_NON_US_MARKERS = (
-    "united kingdom",
-    "canada",
-    "india",
-    "australia",
-    "ireland",
-    "germany",
-    "france",
-    "netherlands",
-    "spain",
-    "mexico",
-    "brazil",
-    "singapore",
-    "philippines",
-    "pakistan",
-)
-_REMOTE_US_LABELS = frozenset(
-    {"remote", "remote us", "remote usa", "remote united states", "us remote", "usa remote"}
-)
-
-
-def is_us_location(job: dict) -> bool:
-    """
-    Best-effort check that a JobSpy result is a US posting.
-
-    JobSpy's location filter is fuzzy, and the same role is often reposted from
-    several offices — when duplicates match, this picks the US posting. Explicit
-    non-US markers reject first (guards ambiguous abbreviations like IN), then
-    positive US evidence (state names/abbreviations, USA markers, US remote
-    labels) accepts. Remote results with no parsable location are accepted
-    because the JobSpy query itself is US-scoped.
-    """
-    loc = (job.get("location") or "").strip()
-    low = loc.lower()
-
-    if any(m in low for m in _NON_US_MARKERS):
-        return False
-    if any(m in low for m in _US_MARKERS):
-        return True
-    if low in _REMOTE_US_LABELS:
-        return True
-    tokens = set(re.split(r"[^a-z0-9]+", low))
-    if tokens & _US_STATE_ABBR:
-        return True
-    if any(name in low for name in _US_STATE_NAMES):
-        return True
-    if not loc and job.get("is_remote"):
-        return True
-    return False
-
-
-def _find_qualified_match(found_jobs: list, company: str, linkedin_id: str | None = None):
-    """
-    First JobSpy result matching the email alert.
-
-    Exact match wins: the alert email's "View job:" URL carries the LinkedIn
-    numeric job ID, and a JobSpy result with the same ID IS the alert's
-    posting — accept it outright, no fuzzy company/title checks. That is the
-    parameter the widening step was missing: it only ever matched on
-    title/company substrings, so company-name variants ("Colas USA" vs
-    "Colas") or title variants silently missed a job JobSpy had returned.
-    Falls back to the fuzzy company + role + US-location match otherwise.
-    """
-    for fj in found_jobs:
-        fj_url = str(fj.get("job_url") or "")
-        if linkedin_id and f"/jobs/view/{linkedin_id}" in fj_url:
-            logger.info(
-                f"   -> ✅ Exact LinkedIn ID match: '{fj.get('title')}' at '{fj.get('company')}'"
-            )
-            return fj
-
-    target_company_lower = company.lower()
-    for fj in found_jobs:
-        fj_company = fj.get("company", "").lower()
-        fj_title = fj.get("title", "").lower()
-
-        is_company_match = (target_company_lower in fj_company) or (
-            fj_company in target_company_lower
-        )
-        is_sponsored = any(bad in fj_title for bad in ["promoted", "sponsored", "ad"])
-        is_relevant_role = any(
-            kw in fj_title for kw in ["data", "etl", "engineer", "developer", "analytics"]
-        )
-        # The same role is often reposted from multiple offices; only accept
-        # the US posting so the pipeline never points at a foreign listing.
-        if (
-            is_company_match
-            and is_relevant_role
-            and not is_sponsored
-            and is_us_location(fj)
-        ):
-            logger.info(
-                f"   -> ✅ Qualified match found: '{fj.get('title')}' at '{fj.get('company')}'"
-            )
-            return fj
-    return None
 
 
 def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -> dict:
@@ -166,43 +50,12 @@ def run_email_pipeline(limit: int = 5, job_category: str = "data_engineering") -
         search_query = f"{title} {company}"
         logger.info(f"🔍 Searching wider pool for -> Query: '{search_query}'")
 
-        # Uses fetch_scraped_jobs from your new scraper module which returns a list directly.
-        # Google is excluded: it returns no data from datacenter IPs (every call
-        # errors), so it only adds noise to the widening step.
-        # Board order: LinkedIn first (exact-ID match possible), then
-        # independent boards with their own rate limits (Indeed, ZipRecruiter).
-        # The alert email's job URL carries the exact LinkedIn job ID —
-        # pass it to the matcher so an exact-ID hit wins over fuzzy matching.
-        linkedin_id = extract_linkedin_id(item.get("job_url"))
-        qualified_job = None
-        for board in ("linkedin", "indeed", "zip_recruiter"):
-            found_jobs = fetch_scraped_jobs(
-                search_term=search_query,
-                location="United States",
-                results_wanted=15,
-                hours_old=168,
-                is_remote=True,
-                site_name=[board],
-            )
-            qualified_job = _find_qualified_match(found_jobs, company, linkedin_id)
-            if qualified_job:
-                break
-            logger.info(f"   -> {board.capitalize()} widening missed; trying next board...")
-
-        if not qualified_job and linkedin_id:
-            # Last resort: one targeted guest-API request for the exact
-            # posting. Same LinkedIn wall as search (not a bypass), but a
-            # single request sometimes slips past the rate limit that
-            # blocks a paged search.
-            logger.info("   -> All board widening missed; trying LinkedIn guest API...")
-            guest_job = fetch_linkedin_guest_job(linkedin_id)
-            if guest_job and guest_job.get("description"):
-                # Title/company parse is best-effort in the guest fetch;
-                # the email alert already knows them, so fill any gaps.
-                guest_job["title"] = guest_job.get("title") or title
-                guest_job["company"] = guest_job.get("company") or company
-                guest_job["job_url"] = guest_job.get("job_url") or item.get("job_url")
-                qualified_job = guest_job
+        # One shared widening chain (boards + guest-API fallback), also used
+        # by just-in-time tailoring enrichment. Google is excluded: it
+        # returns no data from datacenter IPs, so it only adds noise.
+        qualified_job = enrich_job_description(
+            title, company, item.get("job_url")
+        )
 
         if qualified_job:
             qualified_job["retrieved_at"] = retrieval_timestamp
