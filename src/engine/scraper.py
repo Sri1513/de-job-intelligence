@@ -2,7 +2,9 @@
 import contextlib
 import logging
 import os
+import random
 import socket
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
@@ -76,6 +78,31 @@ def maybe_scraper_proxy():
                 os.environ[k] = v
 
 
+def _env_float(key: str, default: float) -> float:
+    """Read a float env var, falling back to default on missing/garbage."""
+    try:
+        return max(0.0, float(os.environ.get(key, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def linkedin_throttle_sleep(env_key: str, default_s: float, jitter_s: float = 1.5) -> None:
+    """Pause with jitter to keep LinkedIn traffic under the burst 429 window.
+
+    LinkedIn 429s rapid sequential requests even from a residential IP (verified
+    2026-10-16: single guest-API requests return 200 while pipeline bursts 429).
+    A small randomized pause between requests smooths the pattern. The base delay
+    is env-overridable per call site so it can be tuned without a code change;
+    0 disables. Jitter avoids a metronomic request fingerprint.
+    """
+    base = _env_float(env_key, default_s)
+    if base <= 0:
+        return
+    delay = base + random.uniform(0, jitter_s)
+    logger.debug("LinkedIn throttle: sleeping %.1fs (%s).", delay, env_key)
+    time.sleep(delay)
+
+
 BLACKLIST_KEYWORDS = [
     "technician",
     "electrician",
@@ -116,6 +143,9 @@ def fetch_linkedin_guest_job(linkedin_id: str) -> dict | None:
     """
     if not linkedin_id:
         return None
+    # Throttle before the request: LinkedIn 429s burst patterns even via the
+    # residential proxy, while spaced single requests return 200.
+    linkedin_throttle_sleep("LINKEDIN_GUEST_DELAY_S", 5.0)
     url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{linkedin_id}"
     try:
         # maybe_scraper_proxy: residential egress when the laptop proxy is
@@ -186,7 +216,11 @@ def fetch_scraped_jobs(
     # otherwise. Covers every site in the loop and whatever requests the
     # site scrapers make internally.
     with maybe_scraper_proxy():
-        for site in site_name:
+        for idx, site in enumerate(site_name):
+            if idx > 0:
+                # Space out per-site scrapes; JobSpy fires its own internal
+                # request burst per site, so back-to-back sites look automated.
+                linkedin_throttle_sleep("LINKEDIN_SITE_DELAY_S", 3.0)
             logger.info(
                 f"🌐 Scraping {results_wanted} listings from '{site}' for '{search_term}'..."
             )

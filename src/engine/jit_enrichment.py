@@ -34,7 +34,11 @@ from src.engine.pipeline_utils import (
     extract_linkedin_id,
     get_cached_resume,
 )
-from src.engine.scraper import fetch_linkedin_guest_job, fetch_scraped_jobs
+from src.engine.scraper import (
+    fetch_linkedin_guest_job,
+    fetch_scraped_jobs,
+    linkedin_throttle_sleep,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +172,11 @@ def enrich_job_description(title: str, company: str, job_url: str | None) -> dic
         search_query = f"{title} {company}"
         linkedin_id = extract_linkedin_id(job_url)
 
-        for board in WIDENING_BOARDS:
+        for idx, board in enumerate(WIDENING_BOARDS):
+            if idx > 0:
+                # Don't fire three JobSpy bursts back-to-back; LinkedIn 429s
+                # the burst pattern even from a residential IP.
+                linkedin_throttle_sleep("LINKEDIN_WIDEN_DELAY_S", 4.0)
             found_jobs = fetch_scraped_jobs(
                 search_term=search_query,
                 location="United States",

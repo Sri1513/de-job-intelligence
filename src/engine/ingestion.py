@@ -1,6 +1,5 @@
 # src/engine/ingestion.py
 import logging
-import time
 
 from src.core.database import get_db_connection
 from src.engine.evaluator import run_backfill_batch
@@ -17,9 +16,10 @@ logger = logging.getLogger(__name__)
 # Guest-API enrichment tuning. LinkedIn has 429/signup-walled JobSpy's
 # per-job description fetch from datacenter IPs since ~2026-10-02 (Indeed
 # descriptions still flow fine, so this is LinkedIn-specific, not a staging
-# bug). One guest request per job needing it; polite delay between attempts;
-# stop after consecutive misses so an IP-level block doesn't burn the run.
-GUEST_ENRICH_DELAY_S = 2.0
+# bug). One guest request per job needing it; stop after consecutive misses
+# so an IP-level block doesn't burn the run. The polite delay between attempts
+# now lives inside fetch_linkedin_guest_job (LINKEDIN_GUEST_DELAY_S) so every
+# caller -- batch, email, JIT -- gets throttled consistently.
 GUEST_ENRICH_MAX_CONSECUTIVE_MISSES = 3
 # Mirrors stage_raw_jobs: shorter than this gets the "Role: ..." placeholder.
 _MISSING_DESC_THRESHOLD = 20
@@ -53,7 +53,6 @@ def _enrich_missing_linkedin_descriptions(jobs: list) -> int:
         linkedin_id = extract_linkedin_id(job.get("job_url"))
         if not linkedin_id:
             continue
-        time.sleep(GUEST_ENRICH_DELAY_S)
         try:
             guest_job = fetch_linkedin_guest_job(linkedin_id)
         except Exception as exc:
