@@ -48,9 +48,9 @@
         "Python", "Teradata", "Oracle OLTP", "AS400", "RentalMan", "Qlik Sense", "Apache Airflow", "SQL Server Agent"
       ],
       "metrics_and_impact": {
-        "rerun_reduction": "Decreased pipeline rerun effort by 30–40% through modular stage design",
-        "runtime_reduction": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
-        "reliability": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+        "rerun_reduction": "Cut pipeline recovery time from ~90 min (full end-to-end chain rerun) to ~20–25 min (single-stage restart) by decoupling a monolithic Databricks transformation notebook into modular, checkpointed Delta Lake stages orchestrated as independent Airflow tasks",
+        "runtime_reduction": "Cut daily rental/inventory/billing Databricks batch from ~90 min to ~65 min (~25–30%) by replacing full-table scans on RentalMan/Oracle extracts with watermark-based incremental loads, tuning spark.sql.shuffle.partitions, and broadcasting lookup dimensions",
+        "reliability": "Processed hundreds of gigabytes of daily incremental operational and JSON/XML telematics data with automated source-to-target row-count, null, and checksum reconciliation before downstream table promotion"
       }
     },
     "blue_yonder": {
@@ -99,7 +99,7 @@
         "PySpark", "Pandas", "Snowflake", "Exasol", "Terraform", "Docker", "Apache Airflow"
       ],
       "metrics_and_impact": {
-        "runtime_reduction": "Reduced batch transformation runtimes by 25–30% through PySpark Catalyst optimization and partition tuning",
+        "runtime_reduction": "Cut daily Azure Databricks supply-chain transformation job from ~55 min to ~40 min (~25–30%) by replacing iterative Python for-loop .withColumn() calls with single-pass vectorized .select() projections and removing redundant repartition() shuffles",
         "cost_and_efficiency": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
       }
     },

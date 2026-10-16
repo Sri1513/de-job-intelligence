@@ -135,9 +135,9 @@
     "Docker"
   ],
   "metrics_and_impact": {
-    "rerun_reduction": "Decreased pipeline rerun effort by 30–40% through modular stage design",
-    "runtime_reduction": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
-    "reliability": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+    "rerun_reduction": "Cut pipeline recovery time from ~90 min (full end-to-end chain rerun) to ~20\u201325 min (single-stage restart) by decoupling a monolithic Databricks transformation notebook into modular, checkpointed Delta Lake stages orchestrated as independent Airflow tasks",
+    "runtime_reduction": "Cut daily rental/inventory/billing Databricks batch from ~90 min to ~65 min (~25\u201330%) by replacing full-table scans on RentalMan/Oracle extracts with watermark-based incremental loads, tuning spark.sql.shuffle.partitions, and broadcasting lookup dimensions",
+    "reliability": "Processed hundreds of gigabytes of daily incremental operational and JSON/XML telematics data with automated source-to-target row-count, null, and checksum reconciliation before downstream table promotion"
   },
   "bullet_bank": [
     {
@@ -217,7 +217,7 @@
     },
     {
       "id": "herc_rentals_metric_0",
-      "text": "Decreased pipeline rerun effort by 30–40% through modular stage design",
+      "text": "Cut pipeline recovery time from ~90 min (full end-to-end chain rerun) to ~20\u201325 min (single-stage restart) by decoupling a monolithic Databricks transformation notebook into modular, checkpointed Delta Lake stages orchestrated as independent Airflow tasks",
       "skills": [
         "AWS (S3, Kinesis, DMS)",
         "Databricks",
@@ -234,7 +234,7 @@
         "SQL Server Agent"
       ],
       "metrics": [
-        "Decreased pipeline rerun effort by 30–40% through modular stage design"
+        "~90 min \u2192 ~20\u201325 min recovery time"
       ],
       "phase": "impact",
       "signals": [
@@ -244,7 +244,7 @@
     },
     {
       "id": "herc_rentals_metric_1",
-      "text": "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization",
+      "text": "Cut daily rental/inventory/billing Databricks batch from ~90 min to ~65 min (~25\u201330%) by replacing full-table scans on RentalMan/Oracle extracts with watermark-based incremental loads, tuning spark.sql.shuffle.partitions, and broadcasting lookup dimensions",
       "skills": [
         "AWS (S3, Kinesis, DMS)",
         "Databricks",
@@ -261,7 +261,7 @@
         "SQL Server Agent"
       ],
       "metrics": [
-        "Reduced daily batch runtimes by 25–30% via PySpark partition tuning and Spark SQL join optimization"
+        "~90 min \u2192 ~65 min (~25\u201330%)"
       ],
       "phase": "impact",
       "signals": [
@@ -271,7 +271,7 @@
     },
     {
       "id": "herc_rentals_metric_2",
-      "text": "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations",
+      "text": "Processed hundreds of gigabytes of daily incremental operational and JSON/XML telematics data with automated source-to-target row-count, null, and checksum reconciliation before downstream table promotion",
       "skills": [
         "AWS (S3, Kinesis, DMS)",
         "Databricks",
@@ -288,7 +288,7 @@
         "SQL Server Agent"
       ],
       "metrics": [
-        "Ensured 0% data loss across multi-terabyte datasets spanning rental, inventory, and billing operations"
+        "hundreds of GB daily, row-count/null/checksum reconciled"
       ],
       "phase": "impact",
       "signals": [
@@ -359,6 +359,6 @@
     "header": "Akkodis (Herc Rentals)",
     "title": "Data Engineer",
     "location": "Florida",
-    "dates": "Nov 2024 – Present"
+    "dates": "Nov 2024 \u2013 Present"
   }
 }
