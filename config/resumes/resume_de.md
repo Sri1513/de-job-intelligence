@@ -44,7 +44,7 @@
 *India | June 2022 – July 2023*
 * Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.
 * Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off.
-* Wrote the transformation logic in PySpark and SQL. Merged scattered enrichment steps into single unified runs. Cut batch runtimes by 25–30%.
+* Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25–30%).
 * Tested transformations before they touched production. Ran them on sample data, checked outputs row by row, then pointed them at the real tables.
 * Built validation into every stage. Duplicate checks, null handling, source-to-target row comparisons. A load that failed a check stopped there instead of corrupting downstream.
 * Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables.

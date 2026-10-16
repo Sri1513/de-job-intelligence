@@ -98,7 +98,7 @@
     "Apache Airflow"
   ],
   "metrics_and_impact": {
-    "runtime_reduction": "Reduced batch transformation runtimes by 25\u201330% through PySpark Catalyst optimization and partition tuning",
+    "runtime_reduction": "Cut daily Azure Databricks supply-chain transformation job from ~55 min to ~40 min (~25\u201330%) by replacing iterative Python for-loop .withColumn() calls with single-pass vectorized .select() projections and removing redundant repartition() shuffles",
     "cost_and_efficiency": "Significantly cut compute expenditure and eliminated latency bottlenecks in Snowflake and Exasol"
   },
   "bullet_bank": [
@@ -136,13 +136,13 @@
     },
     {
       "id": "blue_yonder_resume_02",
-      "text": "Wrote the transformation logic in PySpark and SQL. Merged scattered enrichment steps into single unified runs. Cut batch runtimes by 25\u201330%.",
+      "text": "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
       "skills": [
         "PySpark",
         "SQL"
       ],
       "metrics": [
-        "25\u201330%"
+        "~55 min \u2192 ~40 min (~25\u201330%)"
       ],
       "phase": "Distributed Data Processing & Catalyst Plan Optimization",
       "signals": [
