@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Logs — Job Scout</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/auth.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-emerald-400">📜 Service Logs</h1>
+                <p class="text-sm text-slate-400">Token-gated — log data never leaves the server without your dashboard token.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/" class="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-slate-900 text-slate-400 border border-slate-800 hover:text-white flex items-center gap-2">
+                    ← Dashboard
+                </a>
+                <span id="auth-state" class="text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">checking…</span>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="flex items-center flex-wrap gap-4 mb-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
+            <div class="flex items-center space-x-2">
+                <label for="service" class="text-xs font-semibold text-slate-400">SERVICE:</label>
+                <select id="service" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-emerald-500">
+                    <option value="mcp">mcp</option>
+                    <option value="dashboard">dashboard</option>
+                    <option value="apply-worker">apply-worker</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="tail" class="text-xs font-semibold text-slate-400">LINES:</label>
+                <select id="tail" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-emerald-500">
+                    <option value="100">100</option>
+                    <option value="200" selected>200</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                    <option value="2000">2000</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="refresh" class="text-xs font-semibold text-slate-400">REFRESH:</label>
+                <select id="refresh" class="bg-slate-950 text-slate-300 border border-slate-700 rounded p-1.5 text-xs outline-none focus:border-emerald-500">
+                    <option value="0">off</option>
+                    <option value="5000" selected>5s</option>
+                    <option value="15000">15s</option>
+                    <option value="30000">30s</option>
+                </select>
+            </div>
+            <label class="flex items-center space-x-2 text-xs text-slate-400 cursor-pointer">
+                <input id="follow" type="checkbox" checked class="accent-emerald-500">
+                <span class="font-semibold">FOLLOW</span>
+            </label>
+            <button id="refresh-now" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+                ↻ Refresh now
+            </button>
+            <span id="status" class="text-xs text-slate-500 ml-auto">idle</span>
+        </div>
+
+        <p id="error" class="hidden mb-4 text-sm text-red-400 bg-red-950/40 border border-red-800 rounded-lg px-4 py-2"></p>
+
+        <!-- Log pane -->
+        <div id="log-pane" class="bg-black/60 border border-slate-800 rounded-xl p-4 h-[70vh] overflow-y-auto font-mono text-xs leading-relaxed whitespace-pre-wrap break-all"></div>
+    </div>
+
+    <script>
+        'use strict';
+
+        function djToken() {
+            try { return sessionStorage.getItem('dj_token') || ''; }
+            catch (e) { return ''; }
+        }
+
+        function requireLogin() {
+            const next = encodeURIComponent('/logs');
+            window.location.href = '/login?next=' + next;
+        }
+
+        // Page shell is public; the log data stays behind the Bearer check.
+        if (!djToken()) requireLogin();
+
+        const pane = document.getElementById('log-pane');
+        const statusEl = document.getElementById('status');
+        const errorEl = document.getElementById('error');
+        const authStateEl = document.getElementById('auth-state');
+        const serviceEl = document.getElementById('service');
+        const tailEl = document.getElementById('tail');
+        const refreshEl = document.getElementById('refresh');
+        const followEl = document.getElementById('follow');
+        let timer = null;
+
+        function showError(msg) {
+            errorEl.textContent = msg;
+            errorEl.classList.remove('hidden');
+        }
+        function clearError() {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+        }
+
+        function lineClass(line) {
+            if (/\bERROR\b/.test(line)) return 'text-red-400';
+            if (/\bWARNING\b/.test(line) || /⚠️/.test(line)) return 'text-amber-300';
+            if (/Tool executed/.test(line)) return 'text-emerald-300';
+            return 'text-slate-300';
+        }
+
+        // Render with textContent only — log lines are untrusted text, never HTML.
+        function renderLines(lines) {
+            pane.replaceChildren();
+            const frag = document.createDocumentFragment();
+            for (const line of lines) {
+                const div = document.createElement('div');
+                div.className = lineClass(line);
+                div.textContent = line;
+                frag.appendChild(div);
+            }
+            pane.appendChild(frag);
+            if (followEl.checked) pane.scrollTop = pane.scrollHeight;
+        }
+
+        async function fetchLogs() {
+            const service = serviceEl.value;
+            const tail = tailEl.value;
+            statusEl.textContent = 'loading…';
+            try {
+                const res = await fetch(
+                    '/api/admin/logs?service=' + encodeURIComponent(service) + '&tail=' + encodeURIComponent(tail),
+                    { headers: { 'Authorization': 'Bearer ' + djToken() } }
+                );
+                if (res.status === 404) { requireLogin(); return; } // bad/missing token, or admin API disabled
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                clearError();
+                renderLines(data.lines || []);
+                authStateEl.textContent = '🔒 token ok';
+                authStateEl.className = 'text-xs px-3 py-2 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-300';
+                const when = new Date().toLocaleTimeString();
+                statusEl.textContent = (data.service || service) + '.log — ' + (data.lines_returned || 0) + ' lines — ' + when;
+            } catch (err) {
+                showError('Could not load logs: ' + err.message);
+                statusEl.textContent = 'error';
+            }
+        }
+
+        function armTimer() {
+            if (timer) { clearInterval(timer); timer = null; }
+            const ms = parseInt(refreshEl.value, 10);
+            if (ms > 0) timer = setInterval(() => { if (!document.hidden) fetchLogs(); }, ms);
+        }
+
+        document.getElementById('refresh-now').addEventListener('click', fetchLogs);
+        serviceEl.addEventListener('change', fetchLogs);
+        tailEl.addEventListener('change', fetchLogs);
+        refreshEl.addEventListener('change', armTimer);
+
+        armTimer();
+        fetchLogs();
+    </script>
+</body>
+</html>
