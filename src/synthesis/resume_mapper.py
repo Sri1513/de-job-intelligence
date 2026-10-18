@@ -18,7 +18,7 @@ STATIC_PROFILE = {
     "{{JOB1_COMPANY}}": "Akkodis (Herc Rentals)",
     "{{JOB1_LOCATION}}": "Florida",
     "{{JOB1_TITLE}}": "Data Engineer",
-    "{{JOB1_DATES}}": "Nov 2024 – Present",
+    "{{JOB1_DATES}}": "Nov 2024 – Sep 2025",
     # Job 2 - Blue Yonder
     "{{JOB2_COMPANY}}": "Blue Yonder",
     "{{JOB2_LOCATION}}": "Hyderabad, India",
@@ -176,8 +176,9 @@ def build_replacement_payload(
     Resolves nested experience keys and falls back to verified profile defaults.
 
     slot_headers: optional per-slot header overrides, e.g.
-        {"job1": {"header": "Akkodis (Optum)", "title": "Data Engineer",
-                  "location": "Florida", "dates": "Nov 2024 – Present"}, ...}
+        {"job1": {"header": "Nortek Consulting INC (via Akkodis), Client: Optum",
+                  "title": "Data Engineer", "location": "Florida",
+                  "dates": "Oct 2025 – Present"}, ...}
     Each slot's verified resume_slot block from its selected framework.
     Without it, the STATIC_PROFILE fallback is used (registry default).
     """

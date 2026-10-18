@@ -24,7 +24,7 @@
 ## Professional Experience
 
 ### Data Engineer | Nortek Consulting INC (via Akkodis), Client: Optum
-*Florida | Nov 2024 – Present*
+*Florida | Oct 2025 – Present*
 * Take apart legacy DataStage and SSIS jobs. Map the dependencies, the business logic buried in them, source to target. Figure out what it takes to move them to cloud.
 * Rebuild those jobs as AWS pipelines (S3, Glue, Lambda, Redshift) with proper logging, scheduling, and error handling. Shut the old jobs down once parity checks pass.
 * Migrated 30+ legacy jobs to AWS across two waves. 12 SSIS packages (provider network feeds) first, then 22 DataStage jobs (claims and pharmacy billing). Every one through parallel validation before the old job was shut down.
