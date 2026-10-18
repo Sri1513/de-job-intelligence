@@ -54,7 +54,10 @@ def _require_write_auth(handler):
     async def wrapper(request: Request) -> JSONResponse:
         if not _has_write_auth(request):
             return JSONResponse(
-                {"success": False, "error": "Authentication required. Log in to perform this action."},
+                {
+                    "success": False,
+                    "error": "Authentication required. Log in to perform this action.",
+                },
                 status_code=401,
             )
         return await handler(request)
@@ -90,6 +93,20 @@ async def applications_view(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "applications.html",
+        {},
+    )
+
+
+async def logs_view(request: Request) -> HTMLResponse:
+    """Renders the token-gated service log viewer.
+
+    The page shell is public like other reads; the log data itself stays
+    behind the /api/admin/* Bearer-token check, and the page redirects to
+    /login when no dashboard token is in sessionStorage.
+    """
+    return templates.TemplateResponse(
+        request,
+        "logs.html",
         {},
     )
 
@@ -581,9 +598,7 @@ async def api_queue_application(request: Request) -> JSONResponse:
                 status_code=409,
             )
         if current in ("QUEUED", "IN_PROGRESS"):
-            return JSONResponse(
-                {"success": True, "message": f"Job {job_id} is already queued."}
-            )
+            return JSONResponse({"success": True, "message": f"Job {job_id} is already queued."})
 
         query = """
             UPDATE saved_jobs 
@@ -635,6 +650,7 @@ routes = [
     Route("/api/login", api_login, methods=["POST"]),
     Route("/sw.js", service_worker, methods=["GET"]),
     Route("/applications", applications_view, methods=["GET"]),
+    Route("/logs", logs_view, methods=["GET"]),
     Route("/api/applications", api_applications, methods=["GET"]),
     Route("/api/applications/queue", api_queue_application, methods=["POST"]),
     Route("/api/applications/update-status", api_update_application_status, methods=["POST"]),
@@ -648,7 +664,11 @@ routes = [
     Route("/skills-analytics", skills_analytics_view, methods=["GET"]),
     Route("/api/skills-demographics", api_skills_demographics, methods=["GET"]),
     Mount("/screenshots", app=StaticFiles(directory=str(SCREENSHOTS_DIR)), name="screenshots"),
-    Mount("/static", app=StaticFiles(directory=str(PROJECT_ROOT / "src" / "dashboard" / "static")), name="static"),
+    Mount(
+        "/static",
+        app=StaticFiles(directory=str(PROJECT_ROOT / "src" / "dashboard" / "static")),
+        name="static",
+    ),
     # Remote diagnostics for the AI operator (Friday). Disabled (404) unless
     # ADMIN_API_TOKEN is set; strictly read-only.
     *admin_routes,
