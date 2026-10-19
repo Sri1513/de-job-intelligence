@@ -6,7 +6,7 @@ import time
 import warnings
 from typing import Any, Dict, List, Optional
 
-import google.generativeai as genai
+from google import genai
 
 from src.core.config import settings
 from src.core.database import get_db_connection
@@ -76,7 +76,7 @@ class GeminiKeyRotator:
 
     def _configure_active_key(self):
         active_key = self.keys[self.current_idx]
-        genai.configure(api_key=active_key)
+        self.client = genai.Client(api_key=active_key)
         logger.info(f"Configured Gemini API Key index {self.current_idx + 1} of {len(self.keys)}")
 
     def rotate_key(self) -> bool:
@@ -93,9 +93,10 @@ class GeminiKeyRotator:
             pool = "paid" if self.paid else "free"
             raise RuntimeError(f"No Gemini {pool} API keys available for fallback.")
         self._configure_active_key()
-        model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        response = self.client.models.generate_content(
+            model=settings.GEMINI_MODEL, contents=prompt
+        )
+        return (response.text or "").strip()
 
 
 EVAL_PROMPT = """You are an executive technical recruiter evaluating Data Engineering and DevOps positions.

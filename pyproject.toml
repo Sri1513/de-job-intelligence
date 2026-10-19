@@ -19,13 +19,13 @@ dependencies = [
 
     # AI & MCP Protocols
     "fastmcp",
-    "google-generativeai",
+    "google-genai",
     "google-api-python-client",
     "google-auth",
     "google-auth-oauthlib",
     "langchain-google-genai>=2.0.0",
     "openai",
-    "protobuf<6.0.0,>=4.25.0",       # Prevents Protobuf 6 conflict with google-generativeai
+    "protobuf<6.0.0,>=4.25.0",       # Prevents Protobuf 6 conflict with google-genai
     "grpcio-status<1.75.0",
 
     # Scoring & Data

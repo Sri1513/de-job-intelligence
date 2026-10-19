@@ -258,6 +258,12 @@ def test_evaluator_free_and_paid_pools_separated(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
     monkeypatch.delenv("GEMINI_PAID_API_KEYS", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    # genai.Client() parses proxy env at construction; the sandbox egress
+    # proxy URL and NO_PROXY entries break httpx's parser, so neutralize
+    # them for the unit test.
+    for proxy_var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+                      "http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+        monkeypatch.delenv(proxy_var, raising=False)
     # Avoid picking up a real repo .env during the test.
     monkeypatch.setattr("src.engine.evaluator._load_env_keys", lambda: None)
 
@@ -269,3 +275,54 @@ def test_evaluator_free_and_paid_pools_separated(monkeypatch):
     assert paid.keys == ["paid-key-1"]
     assert not free.paid
     assert paid.paid
+
+
+def test_evaluator_rotator_rebuilds_client_on_new_api(monkeypatch):
+    """google.genai migration: rotation rebuilds genai.Client with the next key,
+    and evaluate_with_gemini calls client.models.generate_content."""
+    import types as pytypes
+
+    monkeypatch.setenv("GEMINI_API_KEY", "free-key-1")
+    monkeypatch.setenv("GEMINI_API_KEY_2", "free-key-2")
+    monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    for proxy_var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+                      "http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+        monkeypatch.delenv(proxy_var, raising=False)
+    monkeypatch.setattr("src.engine.evaluator._load_env_keys", lambda: None)
+
+    created_clients = []
+
+    class FakeModels:
+        def __init__(self, owner):
+            self.owner = owner
+            self.calls = []
+
+        def generate_content(self, model, contents):
+            self.calls.append((model, contents))
+            return pytypes.SimpleNamespace(text="  {\"ok\": true}  ")
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.api_key = api_key
+            self.models = FakeModels(self)
+            created_clients.append(self)
+
+    from src.engine import evaluator
+    monkeypatch.setattr(evaluator.genai, "Client", FakeClient)
+
+    rotator = evaluator.GeminiKeyRotator(paid=False)
+    assert rotator.client.api_key == "free-key-1"
+
+    assert rotator.rotate_key() is True
+    assert rotator.client.api_key == "free-key-2"
+    assert len(created_clients) == 2
+
+    out = rotator.evaluate_with_gemini("hello")
+    assert out == '{"ok": true}'
+    model_used, contents = created_clients[-1].models.calls[0]
+    assert model_used == evaluator.settings.GEMINI_MODEL
+    assert contents == "hello"
+
+    single = evaluator.GeminiKeyRotator(paid=True)
+    assert single.rotate_key() is False
