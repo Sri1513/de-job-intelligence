@@ -73,6 +73,8 @@ def test_mapper_static_fallback_is_truthful():
     assert mapped["{{NAME}}"] == "Sri Omkar D"
     # Default slot-1 fallback follows the registry default (herc_rentals)
     assert mapped["{{JOB1_COMPANY}}"] == "Akkodis (Herc Rentals)"
+    # Timeline split 2026-10-17: Herc ended Sep 2025, Nortek/Optum current from Oct 2025
+    assert mapped["{{JOB1_DATES}}"] == "Nov 2024 – Sep 2025"
     # Unsupported skills must not leak in via the default skills matrix
     assert "dbt" not in mapped["{{SKILLS_DEVOPS}}"].lower()
 
