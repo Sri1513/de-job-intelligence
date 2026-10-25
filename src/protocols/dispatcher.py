@@ -251,9 +251,80 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Background pipeline runs: long-running ingestion/email tools.
+# ---------------------------------------------------------------------------
+# Gmail + JobSpy + LLM evaluation takes minutes, but some MCP client proxies
+# (notably Gemini's) drop the HTTP stream after ~30-60s. The run still
+# completes server-side and stages jobs, so the client sees a timeout for a
+# run that actually succeeded. These tools therefore return immediately with
+# a "started" result while the real work continues in a background task; the
+# client checks staged jobs via search_saved_jobs.
+#
+# One pipeline run at a time, shared across both tools: concurrent
+# ingestion/email runs double the LinkedIn request rate (429s) and duplicate
+# evaluation work. A second call while one is running gets "already_running"
+# instead of starting a duplicate.
+ASYNC_PIPELINE_TOOLS = frozenset({"run_email_pipeline", "run_batch_ingestion"})
+
+_pipeline_task: asyncio.Task | None = None
+_pipeline_tool: str | None = None
+
+
+async def _run_pipeline_in_background(tool_name, handler, arguments) -> None:
+    try:
+        result = await handler(arguments)
+        logger.info("Background pipeline run finished: %s -> %s", tool_name, result)
+    except Exception:
+        logger.exception("Background pipeline run failed: %s", tool_name)
+
+
+def _clear_pipeline_slot(task: asyncio.Task) -> None:
+    """Clear the run slot once a background run finishes (only if current)."""
+    global _pipeline_task, _pipeline_tool
+    if _pipeline_task is task:
+        _pipeline_task = None
+        _pipeline_tool = None
+
+
+def _start_pipeline_run(tool_name, handler, arguments) -> Dict[str, Any]:
+    """Start a pipeline run in the background, or refuse a duplicate.
+
+    Synchronous (no await between the slot check and assignment), so the
+    check-and-claim is atomic on the event loop.
+    """
+    global _pipeline_task, _pipeline_tool
+    if _pipeline_task is not None and not _pipeline_task.done():
+        return {
+            "status": "already_running",
+            "tool": _pipeline_tool,
+            "message": (
+                f"A pipeline run ({_pipeline_tool}) is already in progress; "
+                "this call did not start a duplicate. "
+                "Check staged jobs via search_saved_jobs."
+            ),
+        }
+    _pipeline_tool = tool_name
+    _pipeline_task = asyncio.create_task(
+        _run_pipeline_in_background(tool_name, handler, arguments)
+    )
+    _pipeline_task.add_done_callback(_clear_pipeline_slot)
+    logger.info("Background pipeline run started: %s", tool_name)
+    return {
+        "status": "started",
+        "tool": tool_name,
+        "message": (
+            f"{tool_name} started in the background. Jobs stage as they are "
+            "processed; check them via search_saved_jobs."
+        ),
+    }
+
+
 async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
     """Dispatches a JSON-RPC tool request through the handler registry."""
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
         return {"error": f"Unknown tool: '{tool_name}'"}
+    if tool_name in ASYNC_PIPELINE_TOOLS:
+        return _start_pipeline_run(tool_name, handler, arguments)
     return await handler(arguments)
