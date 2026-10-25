@@ -2,8 +2,9 @@
 """
 MCP server transport layer (Starlette/ASGI).
 
-Implements the MCP JSON-RPC 2.0 surface (protocolVersion 2024-11-05):
-initialize handshake, notifications/initialized, tools/list, tools/call.
+Implements the MCP JSON-RPC 2.0 surface (protocol versions 2024-11-05,
+2025-03-26, 2025-06-18): initialize handshake, notifications/initialized,
+tools/list, tools/call.
 Authentication is enforced by BearerAuthMiddleware (see auth.py); this module
 only speaks protocol. Tool routing lives in dispatcher.py's TOOL_HANDLERS
 registry; business logic lives in engine/, workers/, and synthesis/.
@@ -39,6 +40,18 @@ if not logger.handlers:
     logger.addHandler(_handler)
 logger.propagate = False
 
+# Protocol versions this server speaks. The tools wire format (initialize,
+# tools/list, tools/call, notifications) is identical across these versions,
+# so negotiation is safe: echo the client's requested version when it is one
+# of these, otherwise fall back to 2024-11-05. Some client gateways tag the
+# runtime transport by the negotiated version, so answering a hardcoded
+# 2024-11-05 to a client that asked for 2025-03-26 can break tool execution
+# even though registration (initialize + tools/list) succeeds.
+SUPPORTED_PROTOCOL_VERSIONS = frozenset(
+    {"2024-11-05", "2025-03-26", "2025-06-18"}
+)
+DEFAULT_PROTOCOL_VERSION = "2024-11-05"
+
 
 async def health_check(request: Request) -> JSONResponse:
     """Service health and liveness probe (unauthenticated by design)."""
@@ -66,12 +79,18 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
 
     # 1. MCP Handshake Initialization
     if method == "initialize":
+        requested_version = params.get("protocolVersion")
+        negotiated_version = (
+            requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
+            else DEFAULT_PROTOCOL_VERSION
+        )
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
                 "id": rpc_id,
                 "result": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": negotiated_version,
                     "serverInfo": {"name": "de-job-intelligence", "version": "1.0.0"},
                     "capabilities": {"tools": {}},
                 },
@@ -154,6 +173,10 @@ routes = [
     Route("/health", health_check, methods=["GET"]),
     Route("/", handle_rpc, methods=["POST"]),
     Route("/rpc", handle_rpc, methods=["POST"]),
+    # /mcp is the conventional Streamable HTTP endpoint path (e.g. Dice's
+    # public MCP server lives at /mcp). Same handler and same auth as /rpc;
+    # BearerAuthMiddleware still requires a token or OAuth token here.
+    Route("/mcp", handle_rpc, methods=["POST"]),
     *oauth_routes,
 ]
 
