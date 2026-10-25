@@ -2,6 +2,7 @@
 import pytest
 from starlette.testclient import TestClient
 
+import src.protocols.dispatcher as dispatcher
 from src.protocols.app import app
 from src.protocols.dispatcher import TOOL_HANDLERS, dispatch_tool_call
 from src.protocols.schemas import MCP_TOOLS
@@ -111,6 +112,78 @@ async def test_dispatcher_unknown_tool():
     result = await dispatch_tool_call("non_existent_tool", {})
     assert "error" in result
     assert "Unknown tool" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_tools_run_in_background_with_guard(monkeypatch):
+    # Long pipeline tools must return immediately (client proxies drop the
+    # stream after ~30-60s) while the work continues behind them, and a
+    # second pipeline call while one runs must not start a duplicate.
+    import asyncio
+
+    started = asyncio.Event()
+    finished = asyncio.Event()
+
+    async def fake_pipeline(arguments):
+        started.set()
+        await asyncio.sleep(0.05)
+        finished.set()
+        return {"jobs_staged": 3}
+
+    monkeypatch.setitem(TOOL_HANDLERS, "run_email_pipeline", fake_pipeline)
+    monkeypatch.setitem(TOOL_HANDLERS, "run_batch_ingestion", fake_pipeline)
+    try:
+        first = await dispatch_tool_call("run_email_pipeline", {"limit": 5})
+        assert first["status"] == "started"
+        assert first["tool"] == "run_email_pipeline"
+        # Either pipeline tool is refused while one runs (shared guard:
+        # concurrent ingestion/email runs double the LinkedIn rate).
+        second = await dispatch_tool_call("run_batch_ingestion", {})
+        assert second["status"] == "already_running"
+        assert second["tool"] == "run_email_pipeline"
+        # The background run actually completes, then the slot frees up.
+        await asyncio.wait_for(finished.wait(), timeout=5)
+        for _ in range(100):
+            if dispatcher._pipeline_task is None:
+                break
+            await asyncio.sleep(0.01)
+        assert dispatcher._pipeline_task is None
+        third = await dispatch_tool_call("run_batch_ingestion", {})
+        assert third["status"] == "started"
+        task = dispatcher._pipeline_task
+        if task is not None:
+            await asyncio.wait_for(task, timeout=5)
+    finally:
+        dispatcher._pipeline_task = None
+        dispatcher._pipeline_tool = None
+
+
+@pytest.mark.asyncio
+async def test_failed_pipeline_run_frees_slot(monkeypatch):
+    # A background failure is logged inside the task, never raised to the
+    # caller — and must not poison the slot for the next call.
+    import asyncio
+
+    async def boom(arguments):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setitem(TOOL_HANDLERS, "run_email_pipeline", boom)
+    try:
+        first = await dispatch_tool_call("run_email_pipeline", {})
+        assert first["status"] == "started"
+        for _ in range(100):
+            if dispatcher._pipeline_task is None:
+                break
+            await asyncio.sleep(0.01)
+        assert dispatcher._pipeline_task is None
+        second = await dispatch_tool_call("run_email_pipeline", {})
+        assert second["status"] == "started"
+        task = dispatcher._pipeline_task
+        if task is not None:
+            await asyncio.wait_for(task, timeout=5)
+    finally:
+        dispatcher._pipeline_task = None
+        dispatcher._pipeline_tool = None
 
 
 def test_mcp_logger_emits_info():
