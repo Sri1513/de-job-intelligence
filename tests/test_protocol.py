@@ -44,6 +44,45 @@ def test_mcp_initialize():
     assert "tools" in result["capabilities"]
 
 
+@pytest.mark.parametrize("version", ["2024-11-05", "2025-03-26", "2025-06-18"])
+def test_mcp_initialize_negotiates_requested_version(version):
+    # The server echoes a requested version it speaks, so clients that tag
+    # the runtime transport by negotiated version (e.g. Gemini's gateway)
+    # are not stuck on a hardcoded 2024-11-05.
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": version},
+    }
+    response = client.post("/rpc", json=payload, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json()["result"]["protocolVersion"] == version
+
+
+def test_mcp_initialize_falls_back_on_unknown_version():
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": "2099-01-01"},
+    }
+    response = client.post("/rpc", json=payload, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json()["result"]["protocolVersion"] == "2024-11-05"
+
+
+def test_mcp_route_alias_serves_rpc():
+    # /mcp is the conventional endpoint path; same handler and auth as /rpc.
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    response = client.post("/mcp", json=payload, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json()["result"]["serverInfo"]["name"] == "de-job-intelligence"
+    # And it is NOT an auth exemption: no token still gets 401.
+    response = client.post("/mcp", json=payload)
+    assert response.status_code == 401
+
+
 def test_mcp_notifications_initialized():
     # JSON-RPC notification: no id; server answers 202 with no body.
     payload = {"jsonrpc": "2.0", "method": "notifications/initialized"}
