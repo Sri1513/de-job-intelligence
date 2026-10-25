@@ -17,7 +17,8 @@ Layout follows the production remote-MCP pattern:
 * Tokens compared in constant time (hmac.compare_digest).
 * Fail-closed: the server refuses to start when no static token is configured.
 * GET /health, /.well-known/*, and /oauth/* stay unauthenticated by design
-  (liveness probes and the OAuth dance itself).
+  (liveness probes and the OAuth dance itself), plus GET /favicon.ico so
+  connector directories and favicon crawlers can fetch the server icon.
 * 401 responses carry a WWW-Authenticate header pointing at the RFC 9728
   protected-resource metadata, so spec-compliant clients auto-discover OAuth.
 """
@@ -33,6 +34,7 @@ logger = logging.getLogger("de-job-intelligence.auth")
 def _is_exempt_path(path: str) -> bool:
     return (
         path == "/health"
+        or path == "/favicon.ico"
         or path.startswith("/.well-known/")
         or path.startswith("/oauth/")
     )

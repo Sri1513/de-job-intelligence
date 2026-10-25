@@ -22,6 +22,23 @@ def test_health_endpoint():
     assert data["service"] == "de-job-intelligence-mcp"
 
 
+def test_favicon_is_public():
+    # Connector directories and favicon crawlers fetch without credentials.
+    response = client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert "image/x-icon" in response.headers["content-type"]
+    assert response.content[:4] == b"\x00\x00\x01\x00"  # ICO magic
+    assert len(response.content) > 100
+
+
+def test_favicon_ignores_bad_token():
+    # The exemption is exact-path: a wrong token still gets the icon.
+    response = client.get(
+        "/favicon.ico", headers={"Authorization": "Bearer wrong-token"}
+    )
+    assert response.status_code == 200
+
+
 def test_rpc_rejects_missing_token():
     payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
     response = client.post("/rpc", json=payload)
