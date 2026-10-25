@@ -11,10 +11,11 @@ registry; business logic lives in engine/, workers/, and synthesis/.
 """
 import json
 import logging
+from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
 
 from src.core.config import settings
@@ -58,6 +59,18 @@ async def health_check(request: Request) -> JSONResponse:
     return JSONResponse(
         {"status": "healthy", "service": "de-job-intelligence-mcp", "version": "1.0.0"}
     )
+
+
+_FAVICON_PATH = Path(__file__).resolve().parent / "assets" / "favicon.ico"
+
+
+async def favicon(request: Request) -> FileResponse:
+    """Connector icon (unauthenticated by design: favicon crawlers only).
+
+    The Agni Bolt mark, served as a real .ico so connector directories
+    (e.g. Gemini's) can render it without an authenticated fetch.
+    """
+    return FileResponse(_FAVICON_PATH, media_type="image/x-icon")
 
 
 async def handle_rpc(request: Request) -> JSONResponse | Response:
@@ -171,6 +184,7 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
 # Starlette Application Routes
 routes = [
     Route("/health", health_check, methods=["GET"]),
+    Route("/favicon.ico", favicon, methods=["GET"]),
     Route("/", handle_rpc, methods=["POST"]),
     Route("/rpc", handle_rpc, methods=["POST"]),
     # /mcp is the conventional Streamable HTTP endpoint path (e.g. Dice's
