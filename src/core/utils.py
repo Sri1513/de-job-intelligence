@@ -14,15 +14,18 @@ def get_cached_resume(category_slug: str) -> str:
     """
     slug = category_slug.lower()
     if "devops" in slug:
-        resume_path = RESUMES_DIR / "resume_devops.md"
+        candidates = [RESUMES_DIR / "resume_devops.md"]
     else:
-        resume_path = RESUMES_DIR / "resume_de.md"
+        # Data-engineering roles prefer the wide resume (resume_wide.md,
+        # extracted from Sri_Omkar-2.pdf); resume_de.md stays as fallback.
+        candidates = [RESUMES_DIR / "resume_wide.md", RESUMES_DIR / "resume_de.md"]
 
-    if not resume_path.exists():
-        raise FileNotFoundError(f"Base resume not found at: {resume_path}")
+    for resume_path in candidates:
+        if resume_path.exists():
+            with open(resume_path, "r", encoding="utf-8") as f:
+                return f.read()
 
-    with open(resume_path, "r", encoding="utf-8") as f:
-        return f.read()
+    raise FileNotFoundError(f"Base resume not found at: {candidates[0]}")
 
 
 def clean_text(text: str) -> str:

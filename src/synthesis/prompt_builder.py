@@ -90,6 +90,7 @@ def build_whatsapp_outreach_prompt(
     resume_url: str,
     recruiter_name: str = None,
     framework_context: str = "",
+    verified_bank: str = "",
 ) -> str:
     """
     Builds a precise, structured prompt for Gemini to draft a human-like email
@@ -99,6 +100,11 @@ def build_whatsapp_outreach_prompt(
     framework (e.g. "optum: Healthcare legacy ETL migration ..."). The
     alignment bullets are steered to reflect the framework's angles so the
     email and the tailored resume tell the same story.
+
+    verified_bank: newline-separated verified points (the tailored resume's
+    bullets when tailoring ran, else ranked wide-resume bullets). When given,
+    the alignment bullets MUST be drawn from it — nothing invented. When
+    empty, the prompt behaves exactly as before.
     """
     salutation_target = f"Hi {recruiter_name}," if recruiter_name else "Hi Hiring Team,"
 
@@ -112,6 +118,31 @@ def build_whatsapp_outreach_prompt(
         else ""
     )
 
+    bank_block = (
+        "\n    VERIFIED POINTS BANK (use ONLY these for the alignment bullets):\n"
+        + "\n".join(f"    - {line}" for line in verified_bank.splitlines() if line.strip())
+        + "\n    The 4 alignment bullets MUST be drawn from this bank (reorder and "
+        "trim to fit the role). Do not invent tools, metrics, or experience "
+        "outside it."
+        if verified_bank
+        else ""
+    )
+
+    ai_mcp_block = (
+        "\n    AI/MCP RULE (MANDATORY): if the details/requirements mention AI, MCP, "
+        "LLM, RAG, agents, or anything related to the candidate's current AI/MCP "
+        "project work, at least one alignment bullet MUST cover that work:\n"
+        + "\n".join(f"    - {point}" for point in AI_MCP_BANK)
+        + "\n    Never drop the AI/MCP angle when the JD names it."
+    )
+
+    positivity_block = (
+        "\n    TONE: warm, upbeat, genuinely enthusiastic about THIS role. Tie the "
+        "enthusiasm to a specific requirement or angle from the details above, "
+        "and close looking forward to the conversation. Keep the voice rules "
+        "below (no banned words) — the energy comes from specificity, not hype."
+    )
+
     return f"""
     You are Sri Omkar D, a Senior Data Engineer with 7+ years of experience specializing in PySpark, AWS, distributed lakehouses, and Apache Airflow.
     
@@ -120,7 +151,7 @@ def build_whatsapp_outreach_prompt(
     - Job Title: {job_title}
     - Recruiter First Name: {recruiter_name or "Unknown"}
     - Details/Requirements: {extracted_jd}
-    - Resume Link: {resume_url}{framework_block}
+    - Resume Link: {resume_url}{framework_block}{bank_block}
 
     INSTRUCTIONS FOR EMAIL GENERATION:
     You must structure the email to strictly match Sri Omkar's proven high-converting outreach format:
@@ -150,6 +181,10 @@ def build_whatsapp_outreach_prompt(
          sriomkar.com | linkedin.com/in/sri-omkar-58r4r4r8
 
     - **CRITICAL RULE**: DO NOT mention the helper ({helper_name}) or any referral source in the email body AT ALL. (They are placed in the CC field automatically).
+
+    {ai_mcp_block}
+
+    {positivity_block}
 
     {EMAIL_VOICE_RULES}
 
@@ -213,21 +248,83 @@ def load_target_resume(role_slug: str) -> str:
     resume_file_suffix = "devops" if "devops" in role_slug else "de"
 
     if resume_file_suffix not in _RESUME_CACHE:
-        resume_path = CONFIG_DIR / "resumes" / f"resume_{resume_file_suffix}.md"
-        if resume_path.exists():
-            try:
-                _RESUME_CACHE[resume_file_suffix] = resume_path.read_text(encoding="utf-8")
-            except Exception as e:
-                logger.error(f"Error reading resume at {resume_path}: {e}")
-                _RESUME_CACHE[resume_file_suffix] = ""
+        # Data-engineering roles prefer the wide resume (resume_wide.md,
+        # extracted from Sri_Omkar-2.pdf); resume_de.md stays as fallback and
+        # is never deleted. DevOps roles are unchanged.
+        if resume_file_suffix == "de":
+            candidates = [
+                CONFIG_DIR / "resumes" / "resume_wide.md",
+                CONFIG_DIR / "resumes" / "resume_de.md",
+            ]
         else:
-            logger.warning(f"Resume file not found at {resume_path}")
+            candidates = [CONFIG_DIR / "resumes" / f"resume_{resume_file_suffix}.md"]
+        loaded = ""
+        for resume_path in candidates:
+            if resume_path.exists():
+                try:
+                    loaded = resume_path.read_text(encoding="utf-8")
+                    break
+                except Exception as e:
+                    logger.error(f"Error reading resume at {resume_path}: {e}")
+        if loaded:
+            _RESUME_CACHE[resume_file_suffix] = loaded
+        else:
+            logger.warning(f"Resume file not found at {candidates[0]}")
             _RESUME_CACHE[resume_file_suffix] = (
                 "Senior Data Engineer with 7+ years of experience across Apache Spark, PySpark, "
                 "Python, SQL, AWS, Azure, Snowflake, Databricks, and Lakehouse architectures."
             )
 
     return _RESUME_CACHE[resume_file_suffix]
+
+
+_WIDE_BULLETS_CACHE: list[str] | None = None
+
+# Verified AI/MCP project work (the candidate's current project: the
+# de-job-intelligence MCP server plus production RAG / LangGraph platform
+# work). The wide resume itself carries no AI/MCP section, so these points
+# live here as the outreach email's AI/MCP bank, used only when the JD
+# triggers the AI/MCP rule below.
+AI_MCP_BANK = (
+    "Custom Python MCP servers exposing sanitized schemas through REST APIs, "
+    "containerized with Docker on AWS (de-job-intelligence MCP server, "
+    "mcp.sriomkar.com).",
+    "Production RAG pipelines over enterprise maintenance logs and contracts "
+    "using CDC ingestion, orchestrating vector embedding jobs into pgvector "
+    "on PostgreSQL.",
+    "Agentic telemetry pipeline using LangGraph routing over Databricks "
+    "Streaming and Delta Lake, enabling AI agents to query live analytical "
+    "schemas via REST/SQL tools.",
+)
+
+
+def get_wide_resume_bullets() -> list[str]:
+    """Experience bullets from the wide resume (config/resumes/resume_wide.md).
+
+    Parsed from the Professional Experience section only (role bullets), so
+    summary and skill lines never enter the bank. Returns [] when the file
+    is missing — callers fall back to their previous behavior.
+    """
+    global _WIDE_BULLETS_CACHE
+    if _WIDE_BULLETS_CACHE is None:
+        bullets: list[str] = []
+        wide_path = CONFIG_DIR / "resumes" / "resume_wide.md"
+        try:
+            text = wide_path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"Wide resume not found at {wide_path}: {e}")
+            text = ""
+        in_experience = False
+        for line in text.splitlines():
+            if line.startswith("## Professional Experience"):
+                in_experience = True
+                continue
+            if line.startswith("## ") and in_experience:
+                break
+            if in_experience and line.startswith("- "):
+                bullets.append(line[2:].strip())
+        _WIDE_BULLETS_CACHE = bullets
+    return _WIDE_BULLETS_CACHE
 
 
 _EQUIV_CACHE: dict | None = None
