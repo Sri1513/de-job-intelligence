@@ -2,6 +2,7 @@
 import hashlib
 import json
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from src.core.database import get_db_connection
@@ -14,6 +15,7 @@ from src.synthesis.gmail_client import create_gmail_draft
 from src.synthesis.prompt_builder import (
     build_job_tailoring_prompt,
     build_whatsapp_outreach_prompt,
+    get_wide_resume_bullets,
 )
 
 logger = logging.getLogger("de-job-intelligence.engine")
@@ -85,6 +87,31 @@ Return a STRICT JSON object (no markdown, no backticks) with EXACTLY these keys:
     return json.loads(raw)
 
 
+def _rank_wide_bullets(jd_text: str, limit: int = 8) -> list[str]:
+    """Deterministically rank wide-resume bullets by JD keyword overlap.
+
+    Zero LLM tokens: plain token overlap between the JD and each bullet.
+    Ties keep the bullet's original order in the wide resume. Used as the
+    email's verified bank when no tailored bullets exist (lightweight alerts
+    or a failed tailoring run).
+    """
+    stopwords = {
+        "and", "the", "for", "with", "from", "into", "using", "used", "per",
+        "via", "our", "this", "that", "across", "over", "under",
+    }
+    jd_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]+", (jd_text or "").lower())
+        if token not in stopwords and len(token) > 2
+    }
+    scored = []
+    for idx, bullet in enumerate(get_wide_resume_bullets()):
+        bullet_tokens = set(re.findall(r"[a-z0-9]+", bullet.lower()))
+        scored.append((-len(jd_tokens & bullet_tokens), idx, bullet))
+    scored.sort()
+    return [bullet for _, _, bullet in scored[:limit]]
+
+
 def process_whatsapp_job_alert(
     whatsapp_text: str,
     helper_name: str,
@@ -147,6 +174,7 @@ def process_whatsapp_job_alert(
 
     # 4. Real framework-aware tailoring vs Quota Saver
     resume_url = DEFAULT_MASTER_RESUME_URL
+    tailored = None
     if has_jd:
         try:
             logger.info("✨ Rich JD detected: running framework-aware tailoring...")
@@ -195,7 +223,17 @@ def process_whatsapp_job_alert(
     else:
         logger.info("⚡ Lightweight alert detected: Using default master resume to save quota.")
 
-    # 5. Build framework-aware email prompt using extracted recruiter name
+    # 5. Build framework-aware email prompt using extracted recruiter name.
+    # Verified bank for the email: the tailored bullets when tailoring ran
+    # (dynamic, wide-resume based), else deterministically ranked wide-resume
+    # bullets. The email model draws its alignment bullets ONLY from this bank.
+    if tailored and tailored.get("experience_bullets"):
+        bank_lines: list[str] = []
+        for slot in ("job1", "job2", "job3", "job4"):
+            bank_lines.extend(tailored["experience_bullets"].get(slot, []) or [])
+        verified_bank = "\n".join(bank_lines[:12])
+    else:
+        verified_bank = "\n".join(_rank_wide_bullets(extracted_jd))
     email_prompt = build_whatsapp_outreach_prompt(
         company_name=company_name,
         job_title=job_title,
@@ -204,6 +242,7 @@ def process_whatsapp_job_alert(
         resume_url=resume_url,
         recruiter_name=recruiter_name,
         framework_context=framework_context,
+        verified_bank=verified_bank,
     )
 
     try:
