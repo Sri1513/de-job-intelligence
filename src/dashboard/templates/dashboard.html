@@ -408,7 +408,7 @@
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
                                 job.sponsorship === 'Available' 
                                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
-                                    : job.sponsorship === 'Not Available' 
+                                    : (job.sponsorship === 'Not Available' || job.sponsorship === 'No Sponsorship')
                                     ? 'bg-rose-950 text-rose-300 border border-rose-800' 
                                     : 'bg-blue-950 text-blue-300 border border-blue-800'
                             }">
