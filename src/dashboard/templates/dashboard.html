@@ -371,13 +371,17 @@
                             <div class="mt-1 whitespace-pre-wrap">${escapeHtml(job.description)}</div>
                         </details>` : ''}
 
-                        <!-- 2. Clickable Personal Notes Box -->
+                        <!-- 2. Clickable Personal Notes Box: green ONLY when a note exists,
+                             neutral when empty, so the two states are distinguishable at a glance.
+                             Filled: just the note text. Empty: label only, no placeholder sentence. -->
                         <div onclick="openNotesModal('${job.job_id}', \`${(job.personal_notes || '').replace(/["']/g, "&#39;")}\`)" 
-                             class="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/40 text-emerald-200 group cursor-pointer hover:border-emerald-600 transition-colors"
+                             class="text-xs p-2.5 rounded-lg border group cursor-pointer transition-colors ${job.personal_notes
+                                ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-100'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-600'}"
                              title="Click to add/edit personal notes">
                             <div class="flex justify-between items-center">
-                                <span>📝 Personal Notes: "${job.personal_notes || 'Click to add personal notes to review in the future...'}"</span>
-                                <span class="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-semibold">✏️ Edit</span>
+                                <span>${job.personal_notes ? `📝 ${escapeHtml(job.personal_notes)}` : '📝 Personal Notes'}</span>
+                                <span class="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-semibold">✏️ Edit</span>
                             </div>
                         </div>
                         
@@ -404,7 +408,7 @@
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
                                 job.sponsorship === 'Available' 
                                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
-                                    : job.sponsorship === 'Not Available' 
+                                    : (job.sponsorship === 'Not Available' || job.sponsorship === 'No Sponsorship')
                                     ? 'bg-rose-950 text-rose-300 border border-rose-800' 
                                     : 'bg-blue-950 text-blue-300 border border-blue-800'
                             }">
