@@ -106,6 +106,9 @@
                         <tr><td colspan="5" class="p-6 text-center text-slate-500">Loading records...</td></tr>
                     </tbody>
                 </table>
+                <div class="p-4 text-center">
+                    <button id="load-more-jobs" onclick="loadMoreJobs()" class="hidden px-4 py-2 rounded-lg font-semibold text-sm bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition-colors">Load more jobs (older)</button>
+                </div>
             </div>
         </div>
     </div>
@@ -128,10 +131,17 @@
 
     <script>
         let currentCategory = 'data_engineering';
-        let allJobs = []; 
+        let allJobs = [];
+        // Keyset pagination state: 50 newest-first jobs per page. Filters
+        // apply to loaded jobs only; Load more appends older pages.
+        let jobsNextCursor = null;
+        let jobsHasMore = false;
+        let jobsLoadingMore = false;
 
         async function fetchJobs(category = 'data_engineering') {
             currentCategory = category;
+            jobsNextCursor = null;
+            jobsHasMore = false;
             
             const deBtn = document.getElementById('tab-de');
             const devopsBtn = document.getElementById('tab-devops');
@@ -148,14 +158,57 @@
             tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Loading ${category.replace('_', ' ')} records...</td></tr>`;
 
             try {
-                const response = await fetch(`/api/jobs?category=${category}`);
+                const response = await fetch(`/api/jobs?category=${category}&limit=50`);
                 const data = await response.json();
-                
-                allJobs = Array.isArray(data) ? data : (data.jobs || data.data || []);
+
+                if (Array.isArray(data)) {
+                    // Legacy unpaginated response (older server): everything at once.
+                    allJobs = data;
+                    jobsHasMore = false;
+                } else {
+                    allJobs = data.jobs || [];
+                    jobsNextCursor = data.next_cursor || null;
+                    jobsHasMore = !!data.has_more;
+                }
                 filterAndRenderJobs();
+                updateLoadMore();
             } catch (err) {
                 console.error('Failed to load jobs:', err);
                 tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-red-400">Error loading job records.</td></tr>`;
+                updateLoadMore();
+            }
+        }
+
+        async function loadMoreJobs() {
+            if (!jobsHasMore || jobsLoadingMore || !jobsNextCursor) return;
+            jobsLoadingMore = true;
+            const btn = document.getElementById('load-more-jobs');
+            if (btn) { btn.disabled = true; btn.innerText = 'Loading…'; }
+            try {
+                const response = await fetch(`/api/jobs?category=${currentCategory}&limit=50&cursor=${encodeURIComponent(jobsNextCursor)}`);
+                const data = await response.json();
+                const pageJobs = Array.isArray(data) ? data : (data.jobs || []);
+                allJobs = allJobs.concat(pageJobs);
+                jobsNextCursor = Array.isArray(data) ? null : (data.next_cursor || null);
+                jobsHasMore = Array.isArray(data) ? false : !!data.has_more;
+                filterAndRenderJobs();
+            } catch (err) {
+                console.error('Failed to load more jobs:', err);
+            } finally {
+                jobsLoadingMore = false;
+                updateLoadMore();
+            }
+        }
+
+        function updateLoadMore() {
+            const btn = document.getElementById('load-more-jobs');
+            if (!btn) return;
+            if (jobsHasMore) {
+                btn.classList.remove('hidden');
+                btn.disabled = false;
+                btn.innerText = 'Load more jobs (older)';
+            } else {
+                btn.classList.add('hidden');
             }
         }
 
@@ -319,7 +372,7 @@
             const tbody = document.getElementById('job-table-body');
             const stats = document.getElementById('stats');
             
-            stats.innerText = `Showing ${jobs.length} of ${allJobs.length} ${currentCategory.replace('_', ' ')} Jobs`;
+            stats.innerText = `Showing ${jobs.length} of ${allJobs.length} loaded ${currentCategory.replace('_', ' ')} Jobs`;
 
             if (jobs.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">No jobs match your filter criteria.</td></tr>`;

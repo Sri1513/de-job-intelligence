@@ -1,4 +1,6 @@
 # src/dashboard/app.py
+import base64
+import contextlib
 import functools
 import hmac
 import json
@@ -214,23 +216,43 @@ async def api_update_application_status(request: Request) -> JSONResponse:
 
 
 async def api_jobs(request: Request) -> JSONResponse:
-    """Returns jobs with isolated AI evaluation notes and metadata personal notes."""
-    category = request.query_params.get("category", "data_engineering")
+    """Returns jobs with isolated AI evaluation notes and metadata personal notes.
 
+    Paginated with keyset cursors: pass `limit` (default 50 when present,
+    clamped to 1..100) to get `{jobs, next_cursor, has_more}` newest-first;
+    pass `cursor` (from a previous page's `next_cursor`) for the next page.
+    Without `limit`, the legacy full-list array is returned unchanged, so
+    existing consumers keep working. Newly ingested jobs appear on refresh,
+    not mid-paging (keyset stability).
+    """
+    category = request.query_params.get("category", "data_engineering")
+    limit, cursor_saved_at, cursor_job_id = _jobs_page_params(request)
+    keyset_sql, keyset_params = _jobs_keyset_clause(cursor_saved_at, cursor_job_id)
+
+    params: list = [f"%{category}%", *keyset_params]
     query = """
         SELECT job_id, title, company, location, employment_type, sponsorship,
                fit_score, status, metadata, job_url, saved_at, notes, applied_at,
                apply_status, description
         FROM saved_jobs
         WHERE job_category ILIKE %s
-        ORDER BY saved_at DESC NULLS LAST;
     """
+    query += keyset_sql
+    query += """
+        ORDER BY saved_at DESC NULLS LAST, job_id DESC
+    """
+    if limit is not None:
+        query += " LIMIT %s"
+        params.append(limit + 1)
 
     jobs = []
     try:
         with get_db_connection() as conn, conn.cursor() as cur:
-            cur.execute(query, (f"%{category}%",))
+            cur.execute(query, tuple(params))
             rows = cur.fetchall()
+            has_more = limit is not None and len(rows) > limit
+            if has_more:
+                rows = rows[:limit]
 
             for row in rows:
                 meta = row.get("metadata") or {}
@@ -280,9 +302,109 @@ async def api_jobs(request: Request) -> JSONResponse:
                 )
     except Exception as exc:
         logger.error(f"Error querying /api/jobs: {exc}", exc_info=True)
+        if limit is not None:
+            return JSONResponse(
+                {"jobs": [], "next_cursor": None, "has_more": False}, status_code=500
+            )
         return JSONResponse([], status_code=500)
 
-    return JSONResponse(jobs)
+    if limit is None:
+        return JSONResponse(jobs)
+
+    next_cursor = None
+    if has_more and rows:
+        next_cursor = _encode_jobs_cursor(
+            serialize_for_json(rows[-1].get("saved_at")), rows[-1].get("job_id")
+        )
+    return JSONResponse({"jobs": jobs, "next_cursor": next_cursor, "has_more": has_more})
+
+
+# Keyset pagination for /api/jobs (newest-first, 50 per page by default).
+# job_id is unique (ON CONFLICT (job_id) DO NOTHING), so (saved_at, job_id)
+# is a stable keyset even though many rows share one insert timestamp
+# (CURRENT_TIMESTAMP is per-transaction). Rows with NULL saved_at sort last
+# (NULLS LAST) and are handled explicitly below.
+JOBS_PAGE_SIZE_DEFAULT = 50
+JOBS_PAGE_SIZE_MAX = 100
+JOBS_PAGINATION_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_saved_jobs_category_saved_at "
+    "ON saved_jobs (job_category, saved_at DESC NULLS LAST, job_id DESC)"
+)
+
+
+def _encode_jobs_cursor(saved_at_iso, job_id) -> str:
+    """Opaque page cursor: the last returned row's (saved_at, job_id) pair."""
+    payload = json.dumps({"saved_at": saved_at_iso, "job_id": job_id})
+    return base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+
+
+def _decode_jobs_cursor(cursor: str):
+    """Decodes a cursor to (saved_at datetime|None, job_id str|None).
+
+    Invalid cursors fail open to the first page (None, None) instead of
+    erroring, so a stale bookmarked cursor never breaks the list.
+    """
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded).decode())
+        saved_at_raw = data.get("saved_at")
+        saved_at = (
+            datetime.fromisoformat(saved_at_raw).replace(tzinfo=None)
+            if saved_at_raw
+            else None
+        )
+        job_id = data.get("job_id")
+        if not job_id:
+            return None, None
+        return saved_at, job_id
+    except Exception:
+        return None, None
+
+
+def _jobs_page_params(request: Request):
+    """Parses limit/cursor query params. Returns (limit|None, saved_at, job_id).
+
+    limit None means the legacy unpaginated response (no `limit` param given).
+    """
+    raw_limit = request.query_params.get("limit")
+    if raw_limit is None:
+        return None, None, None
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        limit = JOBS_PAGE_SIZE_DEFAULT
+    limit = max(1, min(JOBS_PAGE_SIZE_MAX, limit))
+    raw_cursor = request.query_params.get("cursor")
+    saved_at, job_id = _decode_jobs_cursor(raw_cursor) if raw_cursor else (None, None)
+    return limit, saved_at, job_id
+
+
+def _jobs_keyset_clause(saved_at, job_id):
+    """WHERE fragment + params selecting rows sorting after the cursor in
+    (saved_at DESC NULLS LAST, job_id DESC) order."""
+    if job_id is None:
+        return "", ()
+    if saved_at is None:
+        return "AND saved_at IS NULL AND job_id < %s", (job_id,)
+    return (
+        "AND (saved_at < %s OR (saved_at = %s AND job_id < %s) OR saved_at IS NULL)",
+        (saved_at, saved_at, job_id),
+    )
+
+
+def _ensure_jobs_pagination_index():
+    """Best-effort: create the keyset-pagination index so /api/jobs pages
+    stay fast as saved_jobs grows. Never blocks startup: any failure (e.g.
+    the DB user lacks CREATE rights) is logged and the dashboard serves
+    normally — pagination works without the index, just slower at large
+    table sizes. CI deploy does not run migrations, so this is what actually
+    lands the index; migrations/003_* records it (plus a manual fallback)."""
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(JOBS_PAGINATION_INDEX_SQL)
+            conn.commit()
+    except Exception as exc:
+        logger.warning(f"Jobs pagination index not created (serving without it): {exc}")
 
 
 @_require_write_auth
@@ -674,4 +796,14 @@ routes = [
     *admin_routes,
 ]
 
-app = Starlette(debug=settings.DASHBOARD_DEBUG, routes=routes)
+@contextlib.asynccontextmanager
+async def _dashboard_lifespan(app):
+    _ensure_jobs_pagination_index()
+    yield
+
+
+app = Starlette(
+    debug=settings.DASHBOARD_DEBUG,
+    routes=routes,
+    lifespan=_dashboard_lifespan,
+)
