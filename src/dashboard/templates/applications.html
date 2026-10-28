@@ -87,34 +87,41 @@
         <option value="QUEUED">Queued</option>
         <option value="SUBMITTED">Submitted</option>
         <option value="FAILED">Failed</option>
+    <option value="MANUAL">Manual</option>
       </select>
     </div>
   </div>
 
   <!-- Metric Badges -->
   <div class="row g-3 mb-4">
-    <div class="col-md-3">
+    <div class="col">
       <div class="metric-card">
         <div class="text-secondary small fw-semibold">PENDING REVIEW</div>
         <div class="metric-value text-warning" id="countPending">0</div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="metric-card">
         <div class="text-secondary small fw-semibold">QUEUED</div>
         <div class="metric-value text-info" id="countQueued">0</div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="metric-card">
         <div class="text-secondary small fw-semibold">SUBMITTED</div>
         <div class="metric-value text-success" id="countSubmitted">0</div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="metric-card">
         <div class="text-secondary small fw-semibold">FAILED</div>
         <div class="metric-value text-danger" id="countFailed">0</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="metric-card">
+        <div class="text-secondary small fw-semibold">MANUAL</div>
+        <div class="metric-value text-primary" id="countManual">0</div>
       </div>
     </div>
   </div>
@@ -142,6 +149,7 @@ async function fetchApplications() {
     document.getElementById("countQueued").innerText = data.stats.queued || 0;
     document.getElementById("countSubmitted").innerText = data.stats.submitted || 0;
     document.getElementById("countFailed").innerText = data.stats.failed || 0;
+    document.getElementById("countManual").innerText = data.stats.manual || 0;
 
     if (!data.applications || data.applications.length === 0) {
       container.innerHTML = `<div class="text-center py-5 text-secondary"><i class="fa fa-inbox fa-3x mb-3"></i><p>No applications found matching status '${filter}'.</p></div>`;
@@ -153,7 +161,8 @@ async function fetchApplications() {
         'PENDING_REVIEW': 'bg-warning text-dark',
         'QUEUED': 'bg-info text-dark',
         'SUBMITTED': 'bg-success',
-        'FAILED': 'bg-danger'
+        'FAILED': 'bg-danger',
+        'MANUAL': 'bg-primary'
       }[app.apply_status] || 'bg-secondary';
 
       const screenshotHtml = app.screenshot_url 
@@ -185,6 +194,7 @@ async function fetchApplications() {
                 <p class="mb-2"><strong>Target Link:</strong> <a href="${app.job_url}" target="_blank" class="text-decoration-none text-info">${app.job_url} <i class="fa fa-arrow-up-right-from-square small"></i></a></p>
                 <p class="mb-2"><strong>Fit Score:</strong> <span class="badge bg-dark border border-secondary">${app.fit_score}%</span></p>
                 <p class="mb-3"><strong>Timestamp:</strong> <span class="text-secondary">${app.applied_at || 'Not yet processed'}</span></p>
+                ${app.manual_application ? `<p class="mb-2"><strong>Applied manually:</strong> <span class="text-info">${[app.manual_application.portal, app.manual_application.work_type].filter(Boolean).join(' · ')}</span>${app.manual_application.recruiter ? ` · ${app.manual_application.recruiter}` : ''}${app.manual_application.rate ? ` · ${app.manual_application.rate}` : ''}</p>${app.manual_application.notes ? `<p class="mb-2 small text-secondary">${app.manual_application.notes}</p>` : ''}` : ''}
                 
                 <div class="p-3 bg-dark rounded border border-secondary mb-3">
                   <div class="small fw-bold text-secondary mb-1">Agent Notes:</div>

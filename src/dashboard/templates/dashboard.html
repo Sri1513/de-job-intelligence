@@ -129,6 +129,57 @@
         </div>
     </div>
 
+    <!-- Manual application log: records a human application (portal, work
+         type, recruiter, rate) so it never mixes with engine submissions. -->
+    <div id="manual-apply-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-blue-400">✓ Log Manual Application</h3>
+                <button onclick="closeManualApplyModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+            </div>
+            <input type="hidden" id="manual-job-id">
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="text-xs text-slate-400">Portal
+                        <select id="manual-portal" class="mt-1 w-full bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none">
+                            <option value="">—</option>
+                            <option>Indeed</option>
+                            <option>Dice</option>
+                            <option>ZipRecruiter</option>
+                            <option>LinkedIn</option>
+                            <option>Company site</option>
+                            <option>Other</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-slate-400">Work type
+                        <select id="manual-work-type" class="mt-1 w-full bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none">
+                            <option value="">—</option>
+                            <option>C2C</option>
+                            <option>W-2</option>
+                            <option>Full-time</option>
+                            <option>Contract</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="text-xs text-slate-400">Recruiter
+                        <input id="manual-recruiter" type="text" class="mt-1 w-full bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none" placeholder="Name / company">
+                    </label>
+                    <label class="text-xs text-slate-400">Rate
+                        <input id="manual-rate" type="text" class="mt-1 w-full bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none" placeholder="$ / hr or salary">
+                    </label>
+                </div>
+                <label class="text-xs text-slate-400">Notes
+                    <textarea id="manual-notes" rows="2" class="mt-1 w-full bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none" placeholder="Anything worth remembering about this application..."></textarea>
+                </label>
+            </div>
+            <div class="mt-4 flex justify-end gap-2">
+                <button onclick="closeManualApplyModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
+                <button onclick="saveManualApplication()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold">Log Application</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentCategory = 'data_engineering';
         let allJobs = [];
@@ -314,15 +365,24 @@
             renderTable(filtered);
         }
 
-        async function updateJobStatus(jobId, newStatus) {
+        async function updateJobStatus(jobId, newStatus, details) {
             try {
-                const response = await djWrite('/api/jobs/update-status', { job_id: jobId, status: newStatus });
+                const body = { job_id: jobId, status: newStatus };
+                if (details) body.application = details;
+                const response = await djWrite('/api/jobs/update-status', body);
                 const res = await response.json();
                 if (res.status === 'success') {
                     const job = allJobs.find(j => j.job_id === jobId);
                     if (job) {
                         job.status = newStatus;
                         job.applied_at = newStatus === 'applied' ? new Date().toISOString() : null;
+                        if (newStatus === 'applied') {
+                            job.apply_status = 'MANUAL';
+                            if (details) {
+                                job.metadata = job.metadata || {};
+                                job.metadata.manual_application = details;
+                            }
+                        }
                     }
                     filterAndRenderJobs();
                 }
@@ -354,6 +414,33 @@
             const modal = document.getElementById('notes-modal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+
+        function openManualApplyModal(jobId) {
+            document.getElementById('manual-job-id').value = jobId;
+            for (const id of ['manual-portal', 'manual-work-type', 'manual-recruiter', 'manual-rate', 'manual-notes']) {
+                document.getElementById(id).value = '';
+            }
+            const modal = document.getElementById('manual-apply-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeManualApplyModal() {
+            const modal = document.getElementById('manual-apply-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function saveManualApplication() {
+            const jobId = document.getElementById('manual-job-id').value;
+            const details = {};
+            for (const [field, id] of [['portal', 'manual-portal'], ['work_type', 'manual-work-type'], ['recruiter', 'manual-recruiter'], ['rate', 'manual-rate'], ['notes', 'manual-notes']]) {
+                const v = document.getElementById(id).value.trim();
+                if (v) details[field] = v;
+            }
+            closeManualApplyModal();
+            await updateJobStatus(jobId, 'applied', details);
         }
 
         async function saveJobNotes() {
@@ -485,6 +572,7 @@
                                 Applied At: ${formatAppliedTimestamp(job.applied_at)}
                             </div>
                         ` : ''}
+                        ${job.metadata?.manual_application ? `<div class="text-[10px] text-blue-300">✓ Manual${job.metadata.manual_application.portal ? ` via ${escapeHtml(job.metadata.manual_application.portal)}` : ''}${job.metadata.manual_application.work_type ? ` · ${escapeHtml(job.metadata.manual_application.work_type)}` : ''}${job.metadata.manual_application.recruiter ? ` · ${escapeHtml(job.metadata.manual_application.recruiter)}` : ''}${job.metadata.manual_application.rate ? ` · ${escapeHtml(job.metadata.manual_application.rate)}` : ''}</div>` : ''}
                         <div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                                 ${job.metadata?.source || 'JobSpy'}
@@ -519,7 +607,7 @@
 
                             <!-- Manual Applied Fallback Button with Guard -->
                             ${!isApplied ? `
-                                <button onclick="updateJobStatus('${job.job_id}', 'applied')" 
+                                <button onclick="openManualApplyModal('${job.job_id}')" 
                                     class="bg-indigo-600/40 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-200 hover:text-white font-medium px-3 py-1 rounded-lg text-xs transition-colors text-center">
                                     ✓ Mark Applied
                                 </button>
@@ -546,7 +634,13 @@
 
         function getAutoApplyButtonHtml(job) {
             const status = (job.apply_status || '').toUpperCase();
-            if (status === 'QUEUED') {
+            if (status === 'MANUAL') {
+                return `
+                    <span class="bg-blue-950/60 border border-blue-600/40 text-blue-300 font-medium px-2.5 py-1 rounded-lg text-xs flex items-center justify-center gap-1">
+                        ✓ Applied (manual)
+                    </span>
+                `;
+            } else if (status === 'QUEUED') {
                 return `
                     <span class="bg-amber-950/70 border border-amber-500/50 text-amber-300 font-semibold px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 animate-pulse">
                         ⏳ Queued

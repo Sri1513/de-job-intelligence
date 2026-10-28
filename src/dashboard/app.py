@@ -151,7 +151,8 @@ async def api_applications(request: Request) -> JSONResponse:
     query = """
         SELECT 
             job_id, title, company, location, job_url, fit_score,
-            apply_status, applied_at, review_screenshot_path, apply_notes, saved_at
+            apply_status, applied_at, review_screenshot_path, apply_notes, saved_at,
+            metadata
         FROM saved_jobs
         WHERE (%s = 'ALL' OR apply_status = %s)
           AND (apply_status IS NOT NULL AND apply_status != 'IDLE')
@@ -163,12 +164,13 @@ async def api_applications(request: Request) -> JSONResponse:
             COUNT(*) FILTER (WHERE apply_status = 'PENDING_REVIEW') AS pending,
             COUNT(*) FILTER (WHERE apply_status = 'QUEUED') AS queued,
             COUNT(*) FILTER (WHERE apply_status = 'SUBMITTED') AS submitted,
-            COUNT(*) FILTER (WHERE apply_status = 'FAILED') AS failed
+            COUNT(*) FILTER (WHERE apply_status = 'FAILED') AS failed,
+            COUNT(*) FILTER (WHERE apply_status = 'MANUAL') AS manual
         FROM saved_jobs;
     """
 
     applications = []
-    stats = {"pending": 0, "queued": 0, "submitted": 0, "failed": 0}
+    stats = {"pending": 0, "queued": 0, "submitted": 0, "failed": 0, "manual": 0}
 
     try:
         with get_db_connection() as conn, conn.cursor() as cur:
@@ -182,6 +184,20 @@ async def api_applications(request: Request) -> JSONResponse:
 
             for row in rows:
                 r_dict = dict(row)
+                # Surface ONLY the manual-application details: the rest of
+                # metadata (personal notes etc.) stays out of this response,
+                # since this page is not behind the token gate.
+                raw_meta = r_dict.get("metadata")
+                if isinstance(raw_meta, str):
+                    try:
+                        meta = json.loads(raw_meta)
+                    except Exception:
+                        meta = {}
+                elif isinstance(raw_meta, dict):
+                    meta = raw_meta
+                else:
+                    meta = {}
+                manual_application = meta.get("manual_application")
                 screenshot = r_dict.get("review_screenshot_path")
 
                 # Verify file actually exists on disk before generating URL
@@ -207,6 +223,7 @@ async def api_applications(request: Request) -> JSONResponse:
                         if has_valid_file
                         else None,
                         "apply_notes": r_dict.get("apply_notes") or "No notes available.",
+                        "manual_application": manual_application,
                     }
                 )
     except Exception as exc:
@@ -494,19 +511,51 @@ async def api_update_job_status(request: Request) -> JSONResponse:
     Writes BOTH the legacy display column `status` (read by dashboard UI) and
     the worker state-machine column `apply_status` so the two can never
     disagree. See MIGRATION_NOTES.md.
+
+    The dashboard button is the manual path: marking 'applied' records
+    apply_status='MANUAL' (never 'SUBMITTED', which is reserved for engine
+    submissions), so the review pool stops mixing his applications with
+    the engine's. Optional `application` details (portal, work_type,
+    recruiter, rate, notes) are merged into metadata JSON — no migration
+    needed — and surface on both dashboards.
     """
     try:
         data = await request.json()
         job_id = data.get("job_id")
         new_status = data.get("status", "applied")
+        details = data.get("application") or {}
+        details = {k: v for k, v in details.items() if v} if isinstance(details, dict) else {}
 
         with get_db_connection() as conn, conn.cursor() as cur:
             if new_status.lower() == "applied":
                 cur.execute(
-                    "UPDATE saved_jobs SET status = %s, apply_status = 'SUBMITTED', "
-                    "applied_at = CURRENT_TIMESTAMP WHERE job_id = %s;",
-                    (new_status, job_id),
+                    "SELECT metadata FROM saved_jobs WHERE job_id = %s;", (job_id,)
                 )
+                row = cur.fetchone()
+                meta = None
+                if row:
+                    meta = row.get("metadata") if isinstance(row, dict) else row[0]
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta)
+                        except Exception:
+                            meta = {}
+                    elif not isinstance(meta, dict):
+                        meta = {}
+                    if details:
+                        meta["manual_application"] = details
+                if meta is not None:
+                    cur.execute(
+                        "UPDATE saved_jobs SET status = %s, apply_status = 'MANUAL', "
+                        "applied_at = CURRENT_TIMESTAMP, metadata = %s WHERE job_id = %s;",
+                        (new_status, json.dumps(meta), job_id),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE saved_jobs SET status = %s, apply_status = 'MANUAL', "
+                        "applied_at = CURRENT_TIMESTAMP WHERE job_id = %s;",
+                        (new_status, job_id),
+                    )
             else:
                 cur.execute(
                     "UPDATE saved_jobs SET status = %s, apply_status = %s, "

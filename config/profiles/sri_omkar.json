@@ -10,7 +10,7 @@
   "resume_path": "config/resumes/default_resume.pdf",
   "work_authorization": {
     "authorized_in_us": true,
-    "requires_sponsorship_now_or_future": false
+    "requires_sponsorship_now_or_future": true
   },
   "custom_answers": {
     "notice_period": "Immediate / 2 weeks",
