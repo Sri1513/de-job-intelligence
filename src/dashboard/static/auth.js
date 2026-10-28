@@ -1,8 +1,11 @@
 /* Job Scout dashboard auth helper.
- * Reads stay public. Write endpoints need the dashboard token, kept in
- * sessionStorage (cleared when the tab closes). Include this file on any
- * page with action buttons, and call djWrite() instead of fetch() for
- * mutating API calls.
+ * Reads stay public except private fields (personal notes, visa, applied
+ * state, WhatsApp message bodies), which are only returned when the token
+ * is present — so reads send it too when logged in. Write endpoints need
+ * the dashboard token, kept in sessionStorage (cleared when the tab
+ * closes). Include this file on any page with action buttons, and call
+ * djWrite() instead of fetch() for mutating API calls, djRead() for reads
+ * whose response depends on login state.
  */
 (function () {
     'use strict';
@@ -13,6 +16,13 @@
     }
 
     function djIsLoggedIn() { return djToken().length > 0; }
+
+    async function djRead(url) {
+        const headers = {};
+        const token = djToken();
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        return fetch(url, { headers });
+    }
 
     async function djWrite(url, body) {
         const res = await fetch(url, {
@@ -59,6 +69,7 @@
     }
 
     window.djWrite = djWrite;
+    window.djRead = djRead;
     window.djIsLoggedIn = djIsLoggedIn;
     window.djLogout = djLogout;
     if (document.readyState === 'loading') {

@@ -158,7 +158,7 @@
             tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Loading ${category.replace('_', ' ')} records...</td></tr>`;
 
             try {
-                const response = await fetch(`/api/jobs?category=${category}&limit=50`);
+                const response = await djRead(`/api/jobs?category=${category}&limit=50`);
                 const data = await response.json();
 
                 if (Array.isArray(data)) {
@@ -185,7 +185,7 @@
             const btn = document.getElementById('load-more-jobs');
             if (btn) { btn.disabled = true; btn.innerText = 'Loading…'; }
             try {
-                const response = await fetch(`/api/jobs?category=${currentCategory}&limit=50&cursor=${encodeURIComponent(jobsNextCursor)}`);
+                const response = await djRead(`/api/jobs?category=${currentCategory}&limit=50&cursor=${encodeURIComponent(jobsNextCursor)}`);
                 const data = await response.json();
                 const pageJobs = Array.isArray(data) ? data : (data.jobs || []);
                 allJobs = allJobs.concat(pageJobs);
@@ -338,6 +338,11 @@
         }
 
         function openNotesModal(jobId, currentNotes) {
+            if (!djIsLoggedIn()) {
+                const next = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = '/login?next=' + next;
+                return;
+            }
             document.getElementById('modal-job-id').value = jobId;
             document.getElementById('modal-notes-input').value = currentNotes === 'Click to add personal notes to review in the future...' ? '' : currentNotes;
             const modal = document.getElementById('notes-modal');
@@ -459,18 +464,20 @@
                         </div>
                         <div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
-                                job.sponsorship === 'Available' 
+                                job.sponsorship == null
+                                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                                    : job.sponsorship === 'Available' 
                                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
                                     : (job.sponsorship === 'Not Available' || job.sponsorship === 'No Sponsorship')
                                     ? 'bg-rose-950 text-rose-300 border border-rose-800' 
                                     : 'bg-blue-950 text-blue-300 border border-blue-800'
                             }">
-                                Visa: ${job.sponsorship || 'Not Mentioned'}
+                                Visa: ${job.sponsorship == null ? '🔒' : (job.sponsorship || 'Not Mentioned')}
                             </span>
                         </div>
                         <div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                                Status: <span class="${isApplied ? 'text-emerald-400 font-bold' : 'text-slate-300'}">${job.status || 'saved'}</span>
+                                Status: <span class="${job.status == null ? 'text-slate-400' : (isApplied ? 'text-emerald-400 font-bold' : 'text-slate-300')}">${job.status == null ? '🔒' : (job.status || 'saved')}</span>
                             </span>
                         </div>
                         ${isApplied && job.applied_at ? `

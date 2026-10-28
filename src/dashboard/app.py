@@ -67,6 +67,37 @@ def _require_write_auth(handler):
     return wrapper
 
 
+def redact_job_for_public(job: dict) -> dict:
+    """Strips private job state for unauthenticated readers.
+
+    The dashboard link is public, so anything revealing Omkar's own
+    actions or notes stays behind the dashboard token: personal notes,
+    the visa/sponsorship analysis, and the applied state (status,
+    pipeline status, applied timestamp). Public fields (title, company,
+    fit, description, AI notes) are untouched. A non-'saved' status
+    becomes None so the frontend renders a locked badge instead of
+    inventing a neutral value.
+    """
+    job = dict(job)
+    job["personal_notes"] = ""
+    job["sponsorship"] = None
+    job["apply_status"] = None
+    job["applied_at"] = None
+    if job.get("status") != "saved":
+        job["status"] = None
+    return job
+
+
+def redact_alert_for_public(alert: dict) -> dict:
+    """Strips the WhatsApp message body for unauthenticated readers.
+
+    The alert list itself stays public; opening a message needs the token.
+    """
+    alert = dict(alert)
+    alert["whatsapp_raw"] = None
+    return alert
+
+
 def serialize_for_json(obj):
     """Recursively serializes timestamps and decimals for JSON transport."""
     if isinstance(obj, (datetime, date)):
@@ -218,6 +249,9 @@ async def api_update_application_status(request: Request) -> JSONResponse:
 async def api_jobs(request: Request) -> JSONResponse:
     """Returns jobs with isolated AI evaluation notes and metadata personal notes.
 
+    Unauthenticated readers get the showcase fields only; personal notes,
+    visa, and applied state need the dashboard token (redact_job_for_public).
+
     Paginated with keyset cursors: pass `limit` (default 50 when present,
     clamped to 1..100) to get `{jobs, next_cursor, has_more}` newest-first;
     pass `cursor` (from a previous page's `next_cursor`) for the next page.
@@ -307,6 +341,11 @@ async def api_jobs(request: Request) -> JSONResponse:
                 {"jobs": [], "next_cursor": None, "has_more": False}, status_code=500
             )
         return JSONResponse([], status_code=500)
+
+    if not _has_write_auth(request):
+        # _has_write_auth doubles as the logged-in check here: same token,
+        # read-only use. Public readers get the showcase fields only.
+        jobs = [redact_job_for_public(job) for job in jobs]
 
     if limit is None:
         return JSONResponse(jobs)
@@ -532,7 +571,10 @@ async def whatsapp_alerts_view(request: Request) -> HTMLResponse:
 
 
 async def api_whatsapp_alerts(request: Request) -> JSONResponse:
-    """Returns active WhatsApp outreach tracking records."""
+    """Returns active WhatsApp outreach tracking records.
+
+    The list is public; message bodies need the dashboard token
+    (redact_alert_for_public)."""
     query = """
         SELECT o.outreach_id, o.short_id, o.company_name, o.job_title, 
                o.recruiter_name, o.status, o.created_at, o.resume_doc_url, 
@@ -585,6 +627,11 @@ async def api_whatsapp_alerts(request: Request) -> JSONResponse:
     except Exception as exc:
         logger.error(f"Error fetching WhatsApp alerts: {exc}", exc_info=True)
         return JSONResponse([], status_code=500)
+
+    if not _has_write_auth(request):
+        # Same token as the logged-in check. The alert list stays public;
+        # message bodies need the token.
+        alerts = [redact_alert_for_public(alert) for alert in alerts]
 
     return JSONResponse(alerts)
 
