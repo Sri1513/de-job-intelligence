@@ -118,7 +118,7 @@
 
         async function fetchAlerts() {
             try {
-                const response = await fetch('/api/whatsapp-alerts');
+                const response = await djRead('/api/whatsapp-alerts');
                 allAlerts = await response.json();
                 
                 // Sort latest first
@@ -399,6 +399,11 @@
 
         function openModal(outreachId) {
             const alert = allAlerts.find(a => a.outreach_id === outreachId);
+            if (alert && !alert.whatsapp_raw) {
+                const next = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = '/login?next=' + next;
+                return;
+            }
             const content = document.getElementById('modal-msg-content');
             if (alert) {
                 content.innerText = alert.whatsapp_raw;
