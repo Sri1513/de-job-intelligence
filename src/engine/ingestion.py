@@ -8,7 +8,11 @@ from src.engine.pipeline_utils import (
     extract_linkedin_id,
     stage_raw_jobs,
 )
-from src.engine.scraper import fetch_linkedin_guest_job, fetch_scraped_jobs
+from src.engine.scraper import (
+    fetch_linkedin_guest_job,
+    fetch_scraped_jobs,
+    is_c2c_arrangement,
+)
 from src.ingestion.dice_client import DiceJobClient
 
 logger = logging.getLogger(__name__)
@@ -79,8 +83,16 @@ def run_batch_ingestion_workflow(
     results_wanted: int = 10,
     hours_old: int = 48,
     job_category: str = "data_engineering",
+    c2c_only: bool = False,
 ) -> dict:
-    """Executes multi-source scraping (JobSpy + Dice), deduplication, and initial local match scoring."""
+    """Executes multi-source scraping (JobSpy + Dice), deduplication, and initial local match scoring.
+
+    When c2c_only is True, JobSpy is asked for contract roles only and,
+    after description enrichment, only rows whose title/description
+    confirms a Corp-to-Corp arrangement (is_c2c_arrangement) are staged.
+    Rows with no C2C confirmation — including rows whose description
+    could not be fetched — are dropped and counted, never staged as C2C.
+    """
 
     # 1. Fetch from JobSpy (LinkedIn, Indeed, Google Jobs)
     logger.info(f"🌐 Fetching JobSpy listings for '{search_term}'...")
@@ -90,6 +102,7 @@ def run_batch_ingestion_workflow(
         results_wanted=results_wanted,
         hours_old=hours_old,
         is_remote=True,
+        c2c_only=c2c_only,
     )
 
     # 2. Fetch from Dice using your custom REST client
@@ -113,6 +126,22 @@ def run_batch_ingestion_workflow(
     if enriched:
         logger.info(f"✨ Guest-API enriched {enriched} LinkedIn description(s).")
 
+    # C2C text confirmation runs here, not at scrape time: LinkedIn
+    # descriptions are only reliably present after the enrichment above,
+    # and Dice descriptions arrive with the MCP payload. Filtering
+    # earlier would drop LinkedIn rows before their text exists.
+    c2c_dropped = 0
+    if c2c_only:
+        pre_filter = len(raw_jobs)
+        raw_jobs = [job for job in raw_jobs if is_c2c_arrangement(job)]
+        c2c_dropped = pre_filter - len(raw_jobs)
+        logger.info(
+            "C2C filter kept %d of %d jobs (%d dropped: no C2C confirmation in title/description).",
+            len(raw_jobs),
+            pre_filter,
+            c2c_dropped,
+        )
+
     if not raw_jobs:
         return {
             "status": "warning",
@@ -131,12 +160,17 @@ def run_batch_ingestion_workflow(
         logger.info(f"🤖 Evaluating {stats['saved']} newly ingested jobs with AI...")
         eval_summary = run_backfill_batch(limit=stats["saved"], job_category=job_category)
 
+    # Counts are computed from the post-filter list so a c2c_only run
+    # reports what was actually staged, not what was scraped.
+    dice_count = sum(1 for job in raw_jobs if job.get("source") == "dice")
     return {
         "status": "success",
         "search_term": search_term,
         "total_scraped": len(raw_jobs),
-        "jobspy_count": len(jobspy_jobs),
-        "dice_count": len(dice_jobs),
+        "jobspy_count": len(raw_jobs) - dice_count,
+        "dice_count": dice_count,
+        "c2c_only": c2c_only,
+        "c2c_dropped": c2c_dropped,
         "new_jobs_saved": stats.get("saved", 0),
         "ai_evaluated": eval_summary.get("successful", 0) if eval_summary else 0,
         "location_variants_added": stats.get("updated", 0),

@@ -100,6 +100,11 @@ MCP_TOOLS = [
                 "results_wanted": {"type": "integer", "default": 5},
                 "hours_old": {"type": "integer", "default": 48},
                 "job_category": {"type": "string", "default": "data_engineering"},
+                "c2c_only": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, restrict to Corp-to-Corp arrangements: JobSpy requests contract roles only, and after description enrichment only rows whose title/description confirms C2C are staged.",
+                },
             },
         },
     },
