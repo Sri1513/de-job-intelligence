@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import random
+import re
 import socket
 import time
 from datetime import datetime, timedelta, timezone
@@ -198,6 +199,46 @@ def is_unwanted_job(title: str) -> bool:
     return any(keyword in title_lower for keyword in BLACKLIST_KEYWORDS)
 
 
+# Corp-to-Corp (C2C) arrangement detection. JobSpy has no native C2C
+# filter: its job_type taxonomy stops at "contract", and a C2C engagement
+# only ever appears in posting text (title/body) on Indeed/LinkedIn/Dice.
+# So a c2c_only run narrows at the source with job_type="contract" and
+# then keeps only rows whose title/description positively confirms C2C.
+# Exclusions are checked first: a posting that says "no C2C" or "W-2
+# only" is dropped even if it mentions C2C elsewhere (e.g. "No
+# sponsorship or C2C"). 1099 alone is NOT C2C and is not a positive.
+_C2C_POSITIVE_PATTERNS = (
+    re.compile(r"\bc\s*@\s*c\b", re.IGNORECASE),  # C@C
+    re.compile(r"\bc2c\b", re.IGNORECASE),
+    re.compile(r"\bcorp[-\s]?to[-\s]?corp\b", re.IGNORECASE),
+    re.compile(r"\bc\s+to\s+c\b", re.IGNORECASE),
+)
+_C2C_EXCLUSION_PATTERNS = (
+    re.compile(r"\bno\b[^.\n]{0,40}?\bc2c\b", re.IGNORECASE),
+    re.compile(r"\bno\b[^.\n]{0,40}?corp[-\s]?to[-\s]?corp\b", re.IGNORECASE),
+    re.compile(r"not\s+open\s+to[^.\n]{0,40}?c2c", re.IGNORECASE),
+    re.compile(r"\bw-?2\s+only\b", re.IGNORECASE),
+    re.compile(r"\bw-?2\s+basis\b", re.IGNORECASE),
+    re.compile(r"must\s+be\s+(a\s+)?w-?2\b", re.IGNORECASE),
+    re.compile(r"\bw-?2\s+employee\b", re.IGNORECASE),
+)
+
+
+def is_c2c_arrangement(job: dict) -> bool:
+    """True when a job record's title/description confirms a C2C arrangement.
+
+    Strict by design: rows with no C2C confirmation (including rows whose
+    description is missing or a placeholder) return False, so a c2c_only
+    run never stages an unverified row as C2C.
+    """
+    text = f"{job.get('title') or ''}\n{job.get('description') or ''}"
+    if not text.strip():
+        return False
+    if any(pattern.search(text) for pattern in _C2C_EXCLUSION_PATTERNS):
+        return False
+    return any(pattern.search(text) for pattern in _C2C_POSITIVE_PATTERNS)
+
+
 def fetch_scraped_jobs(
     search_term: str = "Data Engineer",
     location: str = "United States",
@@ -205,8 +246,19 @@ def fetch_scraped_jobs(
     hours_old: int = 48,
     is_remote: bool = True,
     site_name: list = None,
+    c2c_only: bool = False,
 ) -> list:
-    """Scrapes job listings strictly from LinkedIn and Indeed."""
+    """Scrapes job listings strictly from LinkedIn and Indeed.
+
+    When c2c_only is True, JobSpy is asked for contract roles only
+    (job_type="contract" — the closest native filter; C2C itself is not
+    a JobSpy taxonomy). The C2C text confirmation itself is NOT applied
+    here: LinkedIn descriptions are often empty at scrape time and only
+    get filled by the guest-API enrichment in run_batch_ingestion_workflow,
+    so filtering here would drop rows before their text exists. Callers
+    that need the text filter should apply is_c2c_arrangement after
+    enrichment (run_batch_ingestion_workflow does this).
+    """
     if site_name is None:
         site_name = ["linkedin", "indeed"]
 
@@ -231,6 +283,7 @@ def fetch_scraped_jobs(
                     location=location,
                     results_wanted=results_wanted,
                     is_remote=is_remote,
+                    job_type="contract" if c2c_only else None,
                     country_indeed="usa",  # Always pass 'usa' so JobSpy never encounters None.strip()
                 )
 

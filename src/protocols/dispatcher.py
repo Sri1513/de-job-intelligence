@@ -200,6 +200,7 @@ async def _handle_run_batch_ingestion(arguments: Dict[str, Any]) -> Any:
     results_wanted = int(arguments.get("results_wanted", 5))
     hours_old = int(arguments.get("hours_old", 48))
     job_category = arguments.get("job_category", "data_engineering")
+    c2c_only = bool(arguments.get("c2c_only", False))
 
     return await asyncio.to_thread(
         run_batch_ingestion_workflow,
@@ -208,6 +209,7 @@ async def _handle_run_batch_ingestion(arguments: Dict[str, Any]) -> Any:
         results_wanted=results_wanted,
         hours_old=hours_old,
         job_category=job_category,
+        c2c_only=c2c_only,
     )
 
 
