@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="theme-color" content="#10b981">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Job Scout">
+  <meta charset="UTF-8">
+  <title>Friday Engine Progress — DE Job Intelligence</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .navbar {
+      background-color: #1e293b;
+      border-bottom: 1px solid #334155;
+    }
+    .metric-card {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      min-width: 110px;
+    }
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .track-card {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      padding: 20px;
+    }
+    .badge-stage {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+    }
+    /* Modal: same fixed-overlay pattern as the dashboard's manual-apply modal. */
+    .tracker-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1050;
+      overflow-y: auto;
+    }
+    .tracker-modal.open { display: flex; }
+    .tracker-modal-box {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 20px;
+      width: 100%;
+      max-width: 560px;
+    }
+  </style>
+    <script src="/static/auth.js?v=2"></script>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark px-4 mb-4">
+  <a class="navbar-brand fw-bold text-info" href="/">DE Job Intelligence</a>
+  <div class="navbar-nav ms-auto">
+    <a class="nav-link" href="/"><i class="fa fa-list"></i> Jobs Feed</a>
+    <a class="nav-link" href="/applications"><i class="fa fa-shield-halved"></i> Review Gate</a>
+    <a class="nav-link active" href="/engine-progress"><i class="fa fa-rocket"></i> Engine Progress</a>
+    <a class="nav-link" href="/audit"><i class="fa fa-chart-pie"></i> Skill Audit</a>
+    <a class="nav-link" href="/skills-analytics"><i class="fa fa-chart-line"></i> Demographics</a>
+    <a class="nav-link" href="/whatsapp-alerts"><i class="fa fa-paper-plane"></i> WhatsApp Alerts</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="fw-bold mb-1"><i class="fa fa-rocket text-info"></i> Friday Engine Progress</h2>
+      <p class="text-secondary mb-0">Roles found by browsing LinkedIn / Indeed sessions (not the scraped feed), tracked from pick to outcome — so the next applications learn from the last ones.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <select id="stageFilter" class="form-select bg-dark text-white border-secondary" onchange="fetchProgress()">
+        <option value="ALL">All stages</option>
+        <option value="picked">Picked</option>
+        <option value="sponsorship-checked">Sponsorship-checked</option>
+        <option value="tailored">Tailored</option>
+        <option value="applied">Applied</option>
+        <option value="recruiter-contacted">Recruiter-contacted</option>
+        <option value="responded">Responded</option>
+        <option value="rejected">Rejected</option>
+        <option value="offer">Offer</option>
+      </select>
+      <button class="btn btn-info btn-sm px-3 text-nowrap" onclick="openTrackerModal(null)">
+        <i class="fa fa-plus"></i> Track new role
+      </button>
+    </div>
+  </div>
+
+  <!-- Stage counts -->
+  <div id="stageCounts" class="d-flex flex-wrap gap-3 mb-4"></div>
+
+  <!-- Card List -->
+  <div id="progressContainer">
+    <div class="text-center py-5 text-secondary">
+      <div class="spinner-border text-info" role="status"></div>
+      <p class="mt-2">Loading tracked roles...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Update / track modal -->
+<div id="tracker-modal" class="tracker-modal">
+  <div class="tracker-modal-box">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <h4 class="fw-bold mb-0" id="tracker-modal-title">Update progress</h4>
+      <button onclick="closeTrackerModal()" class="btn-close btn-close-white"></button>
+    </div>
+    <input type="hidden" id="tracker-job-id">
+    <div id="tracker-new-fields">
+      <div class="mb-2">
+        <label class="small text-secondary">Title *</label>
+        <input id="tracker-title" type="text" class="form-control bg-dark text-white border-secondary" placeholder="Senior Data Engineer">
+      </div>
+      <div class="mb-2">
+        <label class="small text-secondary">Company *</label>
+        <input id="tracker-company" type="text" class="form-control bg-dark text-white border-secondary" placeholder="Acme Corp">
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col">
+          <label class="small text-secondary">Location</label>
+          <input id="tracker-location" type="text" class="form-control bg-dark text-white border-secondary" placeholder="Remote">
+        </div>
+        <div class="col">
+          <label class="small text-secondary">Posting URL</label>
+          <input id="tracker-url" type="text" class="form-control bg-dark text-white border-secondary" placeholder="https://...">
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="small text-secondary">Stage</label>
+        <select id="tracker-stage" class="form-select bg-dark text-white border-secondary">
+          <option value="picked">Picked</option>
+          <option value="sponsorship-checked">Sponsorship-checked</option>
+          <option value="tailored">Tailored</option>
+          <option value="applied">Applied</option>
+          <option value="recruiter-contacted">Recruiter-contacted</option>
+          <option value="responded">Responded</option>
+          <option value="rejected">Rejected</option>
+          <option value="offer">Offer</option>
+        </select>
+      </div>
+      <div class="col">
+        <label class="small text-secondary">Source portal</label>
+        <select id="tracker-portal" class="form-select bg-dark text-white border-secondary">
+          <option value="Indeed">Indeed</option>
+          <option value="Dice">Dice</option>
+          <option value="LinkedIn-discovery">LinkedIn-discovery</option>
+          <option value="career page">Career page</option>
+          <option value="recruiter">Recruiter</option>
+        </select>
+      </div>
+    </div>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="small text-secondary">Resume version used</label>
+        <input id="tracker-resume" type="text" class="form-control bg-dark text-white border-secondary" placeholder="SoFi-tailored-resume.md">
+      </div>
+      <div class="col d-flex align-items-end pb-2">
+        <div class="form-check">
+          <input id="tracker-cover" type="checkbox" class="form-check-input">
+          <label class="form-check-label small" for="tracker-cover">Cover letter sent</label>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="small text-secondary">Recruiter</label>
+        <input id="tracker-recruiter" type="text" class="form-control bg-dark text-white border-secondary" placeholder="Name / company">
+      </div>
+      <div class="col">
+        <label class="small text-secondary">Recruiter contacted date</label>
+        <input id="tracker-contacted" type="date" class="form-control bg-dark text-white border-secondary">
+      </div>
+    </div>
+    <div class="mb-2">
+      <label class="small text-secondary">Response (what came back)</label>
+      <textarea id="tracker-response" rows="2" class="form-control bg-dark text-white border-secondary" placeholder="Recruiter reply, interview invite, rejection note..."></textarea>
+    </div>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="small text-secondary">Responded date</label>
+        <input id="tracker-responded" type="date" class="form-control bg-dark text-white border-secondary">
+      </div>
+      <div class="col">
+        <label class="small text-secondary">Outcome (blank = derived from stage)</label>
+        <select id="tracker-outcome" class="form-select bg-dark text-white border-secondary">
+          <option value="">Derive from stage</option>
+          <option value="open">Open</option>
+          <option value="responded">Responded</option>
+          <option value="rejected">Rejected</option>
+          <option value="offer">Offer</option>
+        </select>
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="small text-secondary">Rejection reason</label>
+      <textarea id="tracker-rejection" rows="2" class="form-control bg-dark text-white border-secondary" placeholder="What the rejection said, if anything..."></textarea>
+    </div>
+    <div class="d-flex gap-2 justify-content-end">
+      <button onclick="closeTrackerModal()" class="btn btn-secondary btn-sm px-3">Cancel</button>
+      <button onclick="saveTracker()" class="btn btn-info btn-sm px-3">Save progress</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STAGE_BADGES = {
+  'picked': 'bg-secondary',
+  'sponsorship-checked': 'bg-info text-dark',
+  'tailored': 'bg-primary',
+  'applied': 'bg-warning text-dark',
+  'recruiter-contacted': 'bg-dark border border-info',
+  'responded': 'bg-success',
+  'rejected': 'bg-danger',
+  'offer': 'bg-success'
+};
+
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function fetchProgress() {
+  const filter = document.getElementById("stageFilter").value;
+  const container = document.getElementById("progressContainer");
+  const countsEl = document.getElementById("stageCounts");
+  try {
+    const res = await djRead(`/api/engine-progress?stage=${filter}`);
+    const data = await res.json();
+
+    countsEl.innerHTML = Object.entries(data.stage_counts || {}).map(([stage, n]) =>
+      `<div class="metric-card"><div class="text-secondary small fw-semibold">${esc(stage.toUpperCase())}</div><div class="metric-value">${n}</div></div>`
+    ).join("");
+
+    if (!data.roles || data.roles.length === 0) {
+      if (!djIsLoggedIn()) {
+        container.innerHTML = `<div class="text-center py-5 text-secondary"><i class="fa fa-lock fa-3x mb-3"></i><p>Stage counts above are public. Log in to see the tracked roles and update progress.</p></div>`;
+      } else {
+        container.innerHTML = `<div class="text-center py-5 text-secondary"><i class="fa fa-inbox fa-3x mb-3"></i><p>No tracked roles matching stage '${esc(filter)}'. Use "Track new role" to add one.</p></div>`;
+      }
+      return;
+    }
+
+    container.innerHTML = data.roles.map(role => {
+      const t = role.engine_tracker || {};
+      const badgeClass = STAGE_BADGES[t.stage] || 'bg-secondary';
+      const line = (label, val) => val ? `<p class="mb-1"><strong>${label}:</strong> ${esc(val)}</p>` : '';
+      return `
+        <div class="track-card">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h4 class="fw-bold mb-0 text-white">${esc(role.title)}</h4>
+            <span class="badge ${badgeClass} badge-stage">${esc(t.stage || 'picked')}</span>
+          </div>
+          <h6 class="text-info mb-3">${esc(role.company)} &bull; <span class="text-secondary">${esc(role.location)}</span></h6>
+          <p class="mb-2"><strong>Target Link:</strong> <a href="${esc(role.job_url)}" target="_blank" class="text-decoration-none text-info">${esc(role.job_url)} <i class="fa fa-arrow-up-right-from-square small"></i></a></p>
+          ${line('Source portal', t.source_portal)}
+          ${line('Resume version', t.resume_version)}
+          <p class="mb-1"><strong>Cover letter:</strong> ${t.cover_letter ? 'Yes' : 'No'}</p>
+          ${line('Recruiter', t.recruiter)}
+          ${line('Recruiter contacted', t.recruiter_contacted_at)}
+          ${line('Response', t.response)}
+          ${line('Responded', t.responded_at)}
+          ${line('Outcome', t.outcome)}
+          ${line('Rejection reason', t.rejection_reason)}
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-outline-info btn-sm px-3" onclick='openTrackerModal(${JSON.stringify(role.job_id)}, ${JSON.stringify(t)})'>
+              <i class="fa fa-pen"></i> Update progress
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="alert alert-danger">Error loading progress: ${esc(err.message)}</div>`;
+  }
+}
+
+function openTrackerModal(jobId, tracker) {
+  const isNew = !jobId;
+  document.getElementById("tracker-modal-title").innerText = isNew ? "Track new role" : "Update progress";
+  document.getElementById("tracker-job-id").value = jobId || "";
+  document.getElementById("tracker-new-fields").style.display = isNew ? "block" : "none";
+  const t = tracker || {};
+  document.getElementById("tracker-title").value = "";
+  document.getElementById("tracker-company").value = "";
+  document.getElementById("tracker-location").value = "";
+  document.getElementById("tracker-url").value = "";
+  document.getElementById("tracker-stage").value = t.stage || "picked";
+  document.getElementById("tracker-portal").value = t.source_portal || "Indeed";
+  document.getElementById("tracker-resume").value = t.resume_version || "";
+  document.getElementById("tracker-cover").checked = !!t.cover_letter;
+  document.getElementById("tracker-recruiter").value = t.recruiter || "";
+  document.getElementById("tracker-contacted").value = t.recruiter_contacted_at || "";
+  document.getElementById("tracker-response").value = t.response || "";
+  document.getElementById("tracker-responded").value = t.responded_at || "";
+  document.getElementById("tracker-outcome").value = t.outcome || "";
+  document.getElementById("tracker-rejection").value = t.rejection_reason || "";
+  document.getElementById("tracker-modal").classList.add("open");
+}
+
+function closeTrackerModal() {
+  document.getElementById("tracker-modal").classList.remove("open");
+}
+
+async function saveTracker() {
+  const jobId = document.getElementById("tracker-job-id").value;
+  const tracker = {
+    stage: document.getElementById("tracker-stage").value,
+    source_portal: document.getElementById("tracker-portal").value,
+    resume_version: document.getElementById("tracker-resume").value,
+    cover_letter: document.getElementById("tracker-cover").checked,
+    recruiter: document.getElementById("tracker-recruiter").value,
+    recruiter_contacted_at: document.getElementById("tracker-contacted").value,
+    response: document.getElementById("tracker-response").value,
+    responded_at: document.getElementById("tracker-responded").value,
+    outcome: document.getElementById("tracker-outcome").value,
+    rejection_reason: document.getElementById("tracker-rejection").value
+  };
+  const body = { job_id: jobId, tracker: tracker };
+  if (!jobId) {
+    body.title = document.getElementById("tracker-title").value;
+    body.company = document.getElementById("tracker-company").value;
+    body.location = document.getElementById("tracker-location").value;
+    body.job_url = document.getElementById("tracker-url").value;
+    // New-role job_id: derive a stable id from company + title so the same
+    // browser-found role maps to one tracker row on re-entry.
+    body.job_id = 'friday-' + (body.company + '-' + body.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  try {
+    const res = await djWrite("/api/jobs/update-tracker", body);
+    if (res.ok) {
+      closeTrackerModal();
+      fetchProgress();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert("Failed to save progress: " + (data.message || res.status));
+    }
+  } catch (err) {
+    if (err.message !== 'auth-required') alert("Failed to save progress: " + err.message);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", fetchProgress);
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

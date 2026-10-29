@@ -147,6 +147,9 @@ async def logs_view(request: Request) -> HTMLResponse:
 async def api_applications(request: Request) -> JSONResponse:
     """Returns application review records and high-level status counts."""
     status_filter = request.query_params.get("status", "ALL")
+    # Tracker detail is private: only logged-in readers see it (PR #50
+    # gating). Public readers get engine_tracker=None on every row.
+    authed = _has_write_auth(request)
 
     query = """
         SELECT 
@@ -224,6 +227,7 @@ async def api_applications(request: Request) -> JSONResponse:
                         else None,
                         "apply_notes": r_dict.get("apply_notes") or "No notes available.",
                         "manual_application": manual_application,
+                        "engine_tracker": meta.get("engine_tracker") if authed else None,
                     }
                 )
     except Exception as exc:
@@ -571,6 +575,283 @@ async def api_update_job_status(request: Request) -> JSONResponse:
         return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
 
+# ---------------------------------------------------------------------------
+# Friday-engine progress tracker.
+#
+# The Friday-first apply engine finds roles by browsing Omkar's own
+# LinkedIn/Indeed sessions (notifications, recommendations, profile-filtered
+# searches) instead of the JobSpy-scraped pipeline feed, then filters JDs,
+# picks a top 5, tailors resumes, drafts cover letters, and messages
+# recruiters. This tracker records each pursued role's progress so he can
+# see what is working and improve the next applications.
+#
+# Storage follows the MANUAL-lane precedent: one `engine_tracker` key
+# inside the existing metadata JSON column — no migration. A tracker row
+# may be a pipeline job (existing saved_jobs row) or a browser-found role
+# (upserted as a minimal row with job_category='friday_engine', which
+# never matches the data_engineering/devops feeds, so it cannot pollute
+# the main jobs views).
+#
+# Gating follows PR #50: tracker detail (recruiter, response content,
+# rejection reasons) is private. Unauthenticated reads of
+# /api/engine-progress get stage counts only; /api/applications carries
+# the tracker only for logged-in readers. Writes need the Bearer token
+# via @_require_write_auth, same as every other mutating endpoint.
+# ---------------------------------------------------------------------------
+
+ENGINE_TRACKER_STAGES = (
+    "picked",
+    "sponsorship-checked",
+    "tailored",
+    "applied",
+    "recruiter-contacted",
+    "responded",
+    "rejected",
+    "offer",
+)
+
+ENGINE_TRACKER_PORTALS = (
+    "Indeed",
+    "Dice",
+    "LinkedIn-discovery",
+    "career page",
+    "recruiter",
+)
+
+ENGINE_TRACKER_OUTCOMES = ("open", "responded", "rejected", "offer")
+
+ENGINE_TRACKER_FIELDS = (
+    "source_portal",
+    "stage",
+    "resume_version",
+    "cover_letter",
+    "recruiter",
+    "recruiter_contacted_at",
+    "response",
+    "responded_at",
+    "outcome",
+    "rejection_reason",
+)
+
+
+def _parse_metadata(raw) -> dict:
+    """Parses a metadata column value (dict, JSON string, or other)."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _sanitize_tracker(payload) -> dict:
+    """Whitelists tracker fields and validates the enums.
+
+    Raises ValueError on an unknown stage, portal, or outcome. Empty
+    strings/None are dropped (so sending "" clears a field); cover_letter
+    is coerced to bool and False is kept, since "no cover letter" is a
+    meaningful value, not an absence.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("tracker must be an object")
+    clean = {}
+    for field in ENGINE_TRACKER_FIELDS:
+        if field not in payload:
+            continue
+        value = payload[field]
+        if field == "cover_letter":
+            clean[field] = bool(value)
+            continue
+        if value is None or value == "":
+            continue
+        clean[field] = value
+    stage = clean.get("stage")
+    if stage is not None and stage not in ENGINE_TRACKER_STAGES:
+        raise ValueError(
+            f"unknown stage '{stage}'; expected one of {', '.join(ENGINE_TRACKER_STAGES)}"
+        )
+    portal = clean.get("source_portal")
+    if portal is not None and portal not in ENGINE_TRACKER_PORTALS:
+        raise ValueError(
+            f"unknown source_portal '{portal}'; expected one of {', '.join(ENGINE_TRACKER_PORTALS)}"
+        )
+    outcome = clean.get("outcome")
+    if outcome is not None and outcome not in ENGINE_TRACKER_OUTCOMES:
+        raise ValueError(
+            f"unknown outcome '{outcome}'; expected one of {', '.join(ENGINE_TRACKER_OUTCOMES)}"
+        )
+    return clean
+
+
+def _tracker_outcome(stage, outcome):
+    """Derives outcome from stage when the caller did not set one."""
+    if outcome:
+        return outcome
+    if stage == "rejected":
+        return "rejected"
+    if stage == "offer":
+        return "offer"
+    if stage == "responded":
+        return "responded"
+    return "open"
+
+
+async def api_engine_progress(request: Request) -> JSONResponse:
+    """Returns Friday-engine tracked roles and stage counts.
+
+    Authenticated readers get full tracker detail; public readers get
+    stage counts only (no per-role rows, so recruiter/response/rejection
+    detail never leaks to the showcase view).
+    """
+    stage_filter = request.query_params.get("stage", "ALL")
+    authed = _has_write_auth(request)
+
+    query = """
+        SELECT job_id, title, company, location, job_url, fit_score,
+               apply_status, applied_at, saved_at, metadata
+        FROM saved_jobs
+        WHERE metadata IS NOT NULL;
+    """
+    roles = []
+    stage_counts = {stage: 0 for stage in ENGINE_TRACKER_STAGES}
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+    except Exception as exc:
+        logger.error(f"Error querying /api/engine-progress: {exc}", exc_info=True)
+        return JSONResponse({"stage_counts": stage_counts, "roles": []}, status_code=500)
+
+    for row in rows:
+        r_dict = dict(row)
+        meta = _parse_metadata(r_dict.get("metadata"))
+        tracker = meta.get("engine_tracker")
+        if not isinstance(tracker, dict):
+            continue
+        stage = tracker.get("stage") or "picked"
+        if stage in stage_counts:
+            stage_counts[stage] += 1
+        if not authed:
+            continue
+        if stage_filter != "ALL" and stage != stage_filter:
+            continue
+        roles.append(
+            {
+                "job_id": r_dict.get("job_id"),
+                "title": r_dict.get("title") or "Untitled",
+                "company": r_dict.get("company") or "Unknown Company",
+                "location": r_dict.get("location") or "Remote",
+                "job_url": r_dict.get("job_url") or "#",
+                "fit_score": r_dict.get("fit_score") or 0,
+                "apply_status": r_dict.get("apply_status") or "IDLE",
+                "applied_at": serialize_for_json(r_dict.get("applied_at")),
+                "engine_tracker": tracker,
+            }
+        )
+
+    # Newest tracker activity first; rows without updated_at sort last.
+    roles.sort(key=lambda r: r["engine_tracker"].get("updated_at") or "", reverse=True)
+    if not authed:
+        return JSONResponse({"stage_counts": stage_counts, "roles": []})
+    return JSONResponse({"stage_counts": stage_counts, "roles": roles})
+
+
+@_require_write_auth
+async def api_update_tracker(request: Request) -> JSONResponse:
+    """Creates or patches the engine_tracker metadata for one job.
+
+    PATCH semantics: only the tracker fields present in the request are
+    changed; everything else in metadata (personal_notes,
+    manual_application, other tracker fields) is preserved. A job_id with
+    no saved_jobs row is upserted as a minimal friday_engine row when
+    title and company are supplied — that is how browser-found roles
+    (never scraped into the pipeline) enter the tracker.
+    """
+    try:
+        data = await request.json()
+        job_id = data.get("job_id")
+        if not job_id:
+            return JSONResponse(
+                {"status": "error", "message": "job_id is required"}, status_code=400
+            )
+        try:
+            patch = _sanitize_tracker(data.get("tracker") or {})
+        except ValueError as exc:
+            return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
+
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT metadata FROM saved_jobs WHERE job_id = %s;", (job_id,))
+            row = cur.fetchone()
+            if row:
+                meta = _parse_metadata(
+                    row.get("metadata") if isinstance(row, dict) else row[0]
+                )
+                tracker = meta.get("engine_tracker")
+                if not isinstance(tracker, dict):
+                    tracker = {}
+                tracker.update(patch)
+                tracker["outcome"] = _tracker_outcome(
+                    tracker.get("stage"), tracker.get("outcome")
+                )
+                tracker["updated_at"] = datetime.now().isoformat()
+                meta["engine_tracker"] = tracker
+                cur.execute(
+                    "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
+                    (json.dumps(meta), job_id),
+                )
+            else:
+                title = data.get("title")
+                company = data.get("company")
+                if not title or not company:
+                    return JSONResponse(
+                        {
+                            "status": "error",
+                            "message": "job not found; provide title and company to track a new role",
+                        },
+                        status_code=404,
+                    )
+                tracker = dict(patch)
+                tracker["outcome"] = _tracker_outcome(
+                    tracker.get("stage"), tracker.get("outcome")
+                )
+                tracker["updated_at"] = datetime.now().isoformat()
+                meta = {"engine_tracker": tracker}
+                cur.execute(
+                    "INSERT INTO saved_jobs (job_id, title, company, location, "
+                    "job_url, job_category, status, metadata, saved_at) VALUES "
+                    "(%s, %s, %s, %s, %s, 'friday_engine', 'saved', %s, "
+                    "CURRENT_TIMESTAMP);",
+                    (
+                        job_id,
+                        title,
+                        company,
+                        data.get("location") or "Remote",
+                        data.get("job_url") or "#",
+                        json.dumps(meta),
+                    ),
+                )
+            conn.commit()
+
+        return JSONResponse(
+            {"status": "success", "job_id": job_id, "engine_tracker": tracker}
+        )
+    except Exception as exc:
+        logger.error(f"Error updating engine tracker: {exc}", exc_info=True)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+async def engine_progress_view(request: Request) -> HTMLResponse:
+    """Renders the Friday-engine progress board (stage counts + tracked roles)."""
+    return templates.TemplateResponse(
+        request,
+        "engine_progress.html",
+        {},
+    )
+
+
 async def audit_view(request: Request) -> HTMLResponse:
     """Renders the Skill Audit & Gap Analysis view."""
     category = request.query_params.get("category", "data_engineering")
@@ -868,6 +1149,9 @@ routes = [
     Route("/api/login", api_login, methods=["POST"]),
     Route("/sw.js", service_worker, methods=["GET"]),
     Route("/applications", applications_view, methods=["GET"]),
+    Route("/engine-progress", engine_progress_view, methods=["GET"]),
+    Route("/api/engine-progress", api_engine_progress, methods=["GET"]),
+    Route("/api/jobs/update-tracker", api_update_tracker, methods=["POST"]),
     Route("/logs", logs_view, methods=["GET"]),
     Route("/api/applications", api_applications, methods=["GET"]),
     Route("/api/applications/queue", api_queue_application, methods=["POST"]),
