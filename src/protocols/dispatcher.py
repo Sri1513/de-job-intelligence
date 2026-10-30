@@ -14,8 +14,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Dict
 
 from src.core.database import get_db_connection, get_job_by_id
-from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.agent_bridge import stage_agent_jobs_workflow
+from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_job_tailoring_prompt
