@@ -200,7 +200,7 @@ def test_workflow_refreshes_already_present_rows_and_evaluates_them(
         },
     )
     job = dict(LINKEDIN_JOB)
-    job["sponsorship"] = "No C2C, 1099, or visa sponsorship/transfer candidates will be considered."
+    job["sponsorship"] = "No Sponsorship"
     result = stage_agent_jobs_workflow([job])
     assert result["staged"] == []
     assert result["already_present"] == ["li-4485232781"]
@@ -265,3 +265,29 @@ def test_workflow_refresh_evaluation_failure_keeps_staging(mock_stage, mock_eval
     assert result["status"] == "success"
     assert result["refreshed"] == ["li-4485232781"]
     assert "groq down" in result["evaluation_error"]
+
+
+@patch("src.engine.agent_bridge.get_db_connection")
+@patch("src.engine.agent_bridge.run_backfill_batch", return_value={"successful": 1})
+@patch("src.engine.agent_bridge.stage_raw_jobs")
+def test_workflow_refresh_keeps_long_sponsorship_out_of_varchar_column(
+    mock_stage, mock_eval, mock_db
+):
+    mock_stage.return_value = {"staged_jobs": [], "saved": 0, "updated": 1, "skipped": 0}
+    cur = _mock_refresh_cursor(
+        mock_db,
+        {"job_category": "friday_engine", "metadata": {}, "sponsorship": None},
+    )
+    job = dict(LINKEDIN_JOB)
+    job["sponsorship"] = (
+        "No C2C, 1099, or visa sponsorship/transfer candidates will be considered."
+    )
+    result = stage_agent_jobs_workflow([job])
+    assert result["refreshed"] == ["li-4485232781"]
+    updates = [c for c in cur.execute.call_args_list if "UPDATE saved_jobs" in str(c.args[0])]
+    assert len(updates) == 1
+    sql, params = updates[0].args[0], updates[0].args[1]
+    assert "sponsorship = %s" not in sql  # 76 chars would not fit varchar(50)
+    stored = json.loads(params[1])
+    assert stored["sponsorship_note"] == job["sponsorship"]  # full wording preserved
+    assert params[0] == "data_engineering"

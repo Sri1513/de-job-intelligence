@@ -152,6 +152,13 @@ _REFRESH_PROTECTED_METADATA = frozenset(
 )
 
 
+# Short-text columns in saved_jobs are varchar(50) (proven live: a 76-char
+# sponsorship sentence raised StringDataRightTruncation and failed the
+# whole staging call). Never let a caller string crash the call: values
+# over this length stay out of the column and land in metadata instead.
+_MAX_SHORT_COLUMN = 50
+
+
 def _refresh_existing_rows(conn, jobs_by_id, job_category):
     """Refresh already-present rows in place; return refreshed job_ids.
 
@@ -159,8 +166,10 @@ def _refresh_existing_rows(conn, jobs_by_id, job_category):
     refreshed when at least one of these actually changes: job_category
     to the caller's category, metadata merged with the caller's detail
     fields (protected keys above excluded), or the sponsorship column
-    when the caller supplied one. Unchanged rows are left alone, so a
-    repeat call with the same data is a no-op for them.
+    when the caller supplied a short value. A sponsorship wording longer
+    than the column holds is preserved in full as metadata
+    sponsorship_note instead of failing the call. Unchanged rows are
+    left alone, so a repeat call with the same data is a no-op for them.
     """
     refreshed = []
     with conn.cursor() as cur:
@@ -191,9 +200,15 @@ def _refresh_existing_rows(conn, jobs_by_id, job_category):
                 **{k: v for k, v in incoming.items() if k not in _REFRESH_PROTECTED_METADATA},
             }
             new_sponsorship = str(job.get("sponsorship") or "").strip()
+            if len(new_sponsorship) > _MAX_SHORT_COLUMN:
+                # Too long for the varchar(50) column: keep the full
+                # wording in metadata instead of failing the call.
+                if cur_meta.get("sponsorship_note") != new_sponsorship:
+                    merged["sponsorship_note"] = new_sponsorship
+                new_sponsorship = ""
             updates = []
             params = []
-            if cur_category != job_category:
+            if cur_category != job_category and len(job_category) <= _MAX_SHORT_COLUMN:
                 updates.append("job_category = %s")
                 params.append(job_category)
             if merged != cur_meta:
