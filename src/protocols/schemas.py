@@ -109,6 +109,70 @@ MCP_TOOLS = [
         },
     },
     {
+        "name": "stage_agent_jobs",
+        "description": (
+            "Stage jobs found by browsing a job portal as the user into the main dashboard feed. "
+            "Use AFTER you have read the full posting pages yourself (LinkedIn, Indeed, Dice, or a "
+            "company career page) at human pace in a logged-in session, so the portal's own filters "
+            "actually apply. Pass one object per posting with its title, company, posting URL, "
+            "location, portal, and full description text. Rows are deduplicated against existing "
+            "jobs (same LinkedIn ID, or same company+title+URL), scored locally at zero API cost, "
+            "and appear in the main dashboard feed under the given job category — there is no "
+            "separate board. Any extra detail fields you captured (workplace, duration, rate text, "
+            "poster/recruiter, apply method) are preserved into the row's metadata. "
+            "Set run_evaluation=true (default) to also run the Groq-primary AI evaluation on just "
+            "the newly staged jobs; for batches over ~25 jobs, pass run_evaluation=false and call "
+            "retry_job_evaluations afterwards to stay inside client stream timeouts. "
+            "Do NOT use this tool for scraped/JobSpy rows — that path is run_batch_ingestion, "
+            "unchanged. Do not run two staging calls at once for the same jobs."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "jobs": {
+                    "type": "array",
+                    "description": (
+                        "Postings you read yourself, at most 100 per call. Each needs title, "
+                        "company, and job_url (the full posting URL — required for dedupe and the "
+                        "dashboard link); location, source (portal name, e.g. linkedin, indeed, "
+                        "dice), and the full description text are strongly recommended."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "company": {"type": "string"},
+                            "job_url": {"type": "string"},
+                            "location": {"type": "string"},
+                            "source": {"type": "string"},
+                            "description": {"type": "string"},
+                            "employment_type": {"type": "string"},
+                            "sponsorship": {"type": "string"},
+                            "date_posted": {"type": "string"},
+                        },
+                        "required": ["title", "company", "job_url"],
+                    },
+                },
+                "job_category": {
+                    "type": "string",
+                    "description": "Dashboard category the rows appear under (e.g. data_engineering).",
+                    "default": "data_engineering",
+                },
+                "run_evaluation": {
+                    "type": "boolean",
+                    "description": "Also AI-evaluate just the newly staged jobs (Groq primary, Gemini fallback).",
+                    "default": True,
+                },
+                "default_source": {
+                    "type": "string",
+                    "description": "Source label for postings that name no portal.",
+                    "default": "Agent",
+                },
+            },
+            "required": ["jobs"],
+        },
+    },
+    {
         "name": "process_job_alert_draft",
         "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, tailors/generates the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer', creates a dynamic Gmail draft with the helper in CC, and logs everything to PostgreSQL.",
         "inputSchema": {
