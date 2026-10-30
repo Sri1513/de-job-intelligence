@@ -228,6 +228,34 @@ def _refresh_existing_rows(conn, jobs_by_id, job_category):
     return refreshed
 
 
+def _pending_touched_ids(conn, job_ids):
+    """Return the subset of job_ids whose rows still await AI evaluation.
+
+    A repeat stage call with identical data refreshes nothing, so without
+    this the rows it touched would never get evaluated even when the
+    caller asked for evaluation (e.g. an earlier call's evaluation was
+    cut short by a deploy restart). Only PENDING rows are included:
+    rows that already processed, or failed and need a deliberate retry,
+    are left alone.
+    """
+    if not job_ids:
+        return []
+    pending = []
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT job_id, ai_status FROM saved_jobs WHERE job_id = ANY(%s);",
+            (list(job_ids),),
+        )
+        for row in cur.fetchall():
+            if isinstance(row, dict):
+                job_id, ai_status = row.get("job_id"), row.get("ai_status")
+            else:
+                job_id, ai_status = row[0], row[1]
+            if ai_status == "PENDING":
+                pending.append(job_id)
+    return pending
+
+
 def stage_agent_jobs_workflow(
     jobs: List[Dict[str, Any]],
     job_category: str = "data_engineering",
@@ -288,6 +316,7 @@ def stage_agent_jobs_workflow(
             jid for jid in valid_ids if jid not in {s["job_id"] for s in stats.get("staged_jobs", [])}
         ]
         refreshed_ids = _refresh_existing_rows(conn, {jid: jobs_by_id[jid] for jid in already_present_ids}, job_category)
+        pending_ids = _pending_touched_ids(conn, already_present_ids) if run_evaluation else []
 
     staged_ids = [s["job_id"] for s in stats.get("staged_jobs", [])]
     staged_set = set(staged_ids)
@@ -295,7 +324,7 @@ def stage_agent_jobs_workflow(
 
     evaluated = 0
     evaluation_error: Optional[str] = None
-    evaluate_ids = sorted(set(staged_ids) | set(refreshed_ids))
+    evaluate_ids = sorted(set(staged_ids) | set(refreshed_ids) | set(pending_ids))
     if run_evaluation and evaluate_ids:
         try:
             summary = run_backfill_batch(
