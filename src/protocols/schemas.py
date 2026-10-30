@@ -125,7 +125,7 @@ MCP_TOOLS = [
             "(pipeline-computed locations, source, and fit scores are never overwritten), and "
             "the sponsorship column updates when you supplied one. "
             "Set run_evaluation=true (default) to also run the Groq-primary AI evaluation on the "
-            "newly staged AND refreshed jobs; for batches over ~25 jobs, pass run_evaluation=false and call "
+            "newly staged, refreshed, and already-present jobs still pending evaluation; for batches over ~25 jobs, pass run_evaluation=false and call "
             "retry_job_evaluations afterwards to stay inside client stream timeouts. "
             "Do NOT use this tool for scraped/JobSpy rows — that path is run_batch_ingestion, "
             "unchanged. Do not run two staging calls at once for the same jobs."

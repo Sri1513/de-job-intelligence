@@ -10,7 +10,7 @@ import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
-from src.engine.agent_bridge import MAX_AGENT_JOBS, stage_agent_jobs_workflow
+from src.engine.agent_bridge import MAX_AGENT_JOBS, _normalize_job, stage_agent_jobs_workflow
 from src.engine.pipeline_utils import stage_raw_jobs
 from src.protocols.dispatcher import TOOL_HANDLERS, dispatch_tool_call
 from src.protocols.schemas import MCP_TOOLS
@@ -291,3 +291,30 @@ def test_workflow_refresh_keeps_long_sponsorship_out_of_varchar_column(
     stored = json.loads(params[1])
     assert stored["sponsorship_note"] == job["sponsorship"]  # full wording preserved
     assert params[0] == "data_engineering"
+
+
+@patch("src.engine.agent_bridge.get_db_connection")
+@patch("src.engine.agent_bridge.run_backfill_batch", return_value={"successful": 1})
+@patch("src.engine.agent_bridge.stage_raw_jobs")
+def test_workflow_evaluates_untouched_pending_row_on_repeat_stage(
+    mock_stage, mock_eval, mock_db
+):
+    mock_stage.return_value = {"staged_jobs": [], "saved": 0, "updated": 1, "skipped": 0}
+    job = dict(LINKEDIN_JOB)
+    normalized, _ = _normalize_job(job, "Agent")
+    # Row already carries exactly what this call would merge, in the
+    # target category: the refresh itself is a no-op.
+    cur = _mock_refresh_cursor(
+        mock_db,
+        {
+            "job_category": "data_engineering",
+            "metadata": dict(normalized["metadata"]),
+            "sponsorship": None,
+        },
+    )
+    cur.fetchall.return_value = [{"job_id": "li-4485232781", "ai_status": "PENDING"}]
+    result = stage_agent_jobs_workflow([job])
+    assert result["refreshed"] == []
+    assert result["evaluated"] == 1
+    _, kwargs = mock_eval.call_args
+    assert kwargs["job_ids"] == ["li-4485232781"]
