@@ -43,7 +43,7 @@ def _mock_stage_with(staged_ids):
 @patch("src.engine.agent_bridge.get_db_connection")
 @patch("src.engine.agent_bridge.run_backfill_batch", return_value={"successful": 1})
 @patch("src.engine.agent_bridge.stage_raw_jobs")
-def test_workflow_stages_valid_reports_invalid_and_evaluates_new_only(
+def test_workflow_stages_valid_reports_invalid_and_evaluates_touched_ids(
     mock_stage, mock_eval, mock_db
 ):
     mock_stage.side_effect = lambda conn, jobs, job_category, default_source: {
@@ -171,3 +171,97 @@ def test_dispatch_routes_to_bridge(mock_workflow):
     assert result["staged"] == ["li-4485232781"]
     _, kwargs = mock_workflow.call_args
     assert kwargs["run_evaluation"] is False
+
+
+def _mock_refresh_cursor(mock_db, row):
+    conn = mock_db.return_value.__enter__.return_value
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchone.return_value = row
+    return cur
+
+
+@patch("src.engine.agent_bridge.get_db_connection")
+@patch("src.engine.agent_bridge.run_backfill_batch", return_value={"successful": 1})
+@patch("src.engine.agent_bridge.stage_raw_jobs")
+def test_workflow_refreshes_already_present_rows_and_evaluates_them(
+    mock_stage, mock_eval, mock_db
+):
+    mock_stage.return_value = {"staged_jobs": [], "saved": 0, "updated": 1, "skipped": 0}
+    cur = _mock_refresh_cursor(
+        mock_db,
+        {
+            "job_category": "friday_engine",
+            "metadata": {
+                "locations": [
+                    {"city": "Remote", "url": "https://www.linkedin.com/jobs/view/4485232781"}
+                ]
+            },
+            "sponsorship": None,
+        },
+    )
+    job = dict(LINKEDIN_JOB)
+    job["sponsorship"] = "No C2C, 1099, or visa sponsorship/transfer candidates will be considered."
+    result = stage_agent_jobs_workflow([job])
+    assert result["staged"] == []
+    assert result["already_present"] == ["li-4485232781"]
+    assert result["refreshed"] == ["li-4485232781"]
+    assert result["evaluated"] == 1
+    # Evaluation covers staged AND refreshed ids.
+    _, kwargs = mock_eval.call_args
+    assert kwargs["job_ids"] == ["li-4485232781"]
+    updates = [c for c in cur.execute.call_args_list if "UPDATE saved_jobs" in str(c.args[0])]
+    assert len(updates) == 1
+    sql, params = updates[0].args[0], updates[0].args[1]
+    assert "job_category = %s" in sql
+    assert "metadata = %s" in sql
+    assert "sponsorship = %s" in sql
+    assert params[0] == "data_engineering"
+    stored = json.loads(params[1])
+    assert stored["workplace"] == "Remote"  # caller detail merged
+    assert stored["duration"] == "Not stated"
+    assert stored["found_via"] == "agent"
+    assert stored["locations"] == [  # pipeline-computed key never overwritten
+        {"city": "Remote", "url": "https://www.linkedin.com/jobs/view/4485232781"}
+    ]
+    assert params[2] == job["sponsorship"]
+    assert params[3] == "li-4485232781"
+
+
+@patch("src.engine.agent_bridge.get_db_connection")
+@patch("src.engine.agent_bridge.run_backfill_batch")
+@patch("src.engine.agent_bridge.stage_raw_jobs")
+def test_workflow_refresh_skips_unchanged_rows(mock_stage, mock_eval, mock_db):
+    mock_stage.return_value = {"staged_jobs": [], "saved": 0, "updated": 0, "skipped": 1}
+    cur = _mock_refresh_cursor(
+        mock_db,
+        {
+            "job_category": "data_engineering",
+            "metadata": {
+                "workplace": "Remote",
+                "duration": "Not stated",
+                "found_via": "agent",
+                "agent_portal": "linkedin",
+            },
+            "sponsorship": None,
+        },
+    )
+    result = stage_agent_jobs_workflow([LINKEDIN_JOB])
+    assert result["refreshed"] == []
+    updates = [c for c in cur.execute.call_args_list if "UPDATE saved_jobs" in str(c.args[0])]
+    assert updates == []
+    mock_eval.assert_not_called()
+
+
+@patch("src.engine.agent_bridge.get_db_connection")
+@patch("src.engine.agent_bridge.run_backfill_batch", side_effect=RuntimeError("groq down"))
+@patch("src.engine.agent_bridge.stage_raw_jobs")
+def test_workflow_refresh_evaluation_failure_keeps_staging(mock_stage, mock_eval, mock_db):
+    mock_stage.return_value = {"staged_jobs": [], "saved": 0, "updated": 1, "skipped": 0}
+    _mock_refresh_cursor(
+        mock_db,
+        {"job_category": "friday_engine", "metadata": {}, "sponsorship": None},
+    )
+    result = stage_agent_jobs_workflow([LINKEDIN_JOB])
+    assert result["status"] == "success"
+    assert result["refreshed"] == ["li-4485232781"]
+    assert "groq down" in result["evaluation_error"]
