@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 from src.core.database import get_db_connection, get_job_by_id
 from src.engine.alert_pipeline import process_whatsapp_job_alert
+from src.engine.agent_bridge import stage_agent_jobs_workflow
 from src.engine.ingestion import run_batch_ingestion_workflow
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_job_tailoring_prompt
@@ -233,6 +234,26 @@ async def _handle_run_email_pipeline(arguments: Dict[str, Any]) -> Any:
     )
 
 
+async def _handle_stage_agent_jobs(arguments: Dict[str, Any]) -> Any:
+    jobs = arguments.get("jobs", [])
+    if isinstance(jobs, str):
+        try:
+            jobs = json.loads(jobs)
+        except Exception:
+            return {
+                "status": "error",
+                "message": "jobs must be a list of job objects, not a non-JSON string.",
+            }
+
+    return await asyncio.to_thread(
+        stage_agent_jobs_workflow,
+        jobs=jobs,
+        job_category=arguments.get("job_category", "data_engineering"),
+        run_evaluation=bool(arguments.get("run_evaluation", True)),
+        default_source=arguments.get("default_source", "Agent"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Registry: the single source of truth mapping MCP tool names to handlers.
 # ---------------------------------------------------------------------------
@@ -248,6 +269,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {
     "run_application_worker": _handle_run_application_worker,
     "retry_job_evaluations": _handle_retry_job_evaluations,
     "run_batch_ingestion": _handle_run_batch_ingestion,
+    "stage_agent_jobs": _handle_stage_agent_jobs,
     "process_job_alert_draft": _handle_process_job_alert_draft,
     "run_email_pipeline": _handle_run_email_pipeline,
 }

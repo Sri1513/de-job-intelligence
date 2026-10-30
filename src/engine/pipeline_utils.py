@@ -227,6 +227,14 @@ def stage_raw_jobs(
                 "skill_match": local_eval.get("skill_match", 0),
             }
 
+            # Callers may attach extra detail fields on job["metadata"]
+            # (the agent bridge does this for portal-captured details).
+            # Preserve them; computed keys win, so caller metadata can never
+            # override locations, source, or fit scores. Callers that pass
+            # no metadata — every existing ingestion path — see zero change.
+            incoming_meta = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+            initial_metadata = {**incoming_meta, **initial_metadata}
+
             cur.execute(
                 """
                 INSERT INTO saved_jobs (
