@@ -87,6 +87,22 @@ class Settings(BaseSettings):
     # URL the dashboard's admin health check uses to probe the MCP server.
     MCP_HEALTH_URL: str = "http://localhost:8000/health"
 
+    # "Ask Market Intelligence" drawer: the dashboard's MCP-client URL for
+    # the public MCP surface. In compose the MCP server is reachable by
+    # service name (see docker-compose.yml); localhost is the local-dev
+    # default. No token is needed: /public/mcp is unauthenticated by
+    # design and serves the reader pool only.
+    MARKET_CHAT_MCP_URL: str = "http://localhost:8000/public/mcp"
+
+    # Optional LLM synthesis for the drawer (Ollama-compatible /api/chat).
+    # Empty by default: the drawer then answers from a deterministic
+    # template over the same MCP data. Set these only once VM2 exposes
+    # an authenticated model endpoint; the key is a service token for
+    # that gatekeeper, never a user password, and it lives in .env only.
+    MARKET_CHAT_LLM_URL: str = ""
+    MARKET_CHAT_LLM_MODEL: str = "qwen2.5:3b"
+    MARKET_CHAT_LLM_KEY: str = ""
+
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
     LOGS_DIR: Path = BASE_DIR / "logs"

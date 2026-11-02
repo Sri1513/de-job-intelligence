@@ -45,6 +45,7 @@ services:
     environment:
       # In compose the MCP server is reachable by service name.
       - MCP_HEALTH_URL=http://mcp-server:8000/health
+      - MARKET_CHAT_MCP_URL=http://mcp-server:8000/public/mcp
     ports:
       - "5001:5001"
     depends_on:
