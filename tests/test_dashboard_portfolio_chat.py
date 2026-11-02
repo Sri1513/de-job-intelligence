@@ -328,6 +328,21 @@ def test_prompts_require_third_person_about_omkar():
         assert "Portfolio Assistant" in prompt
 
 
+def test_contact_includes_phone_and_each_link_once():
+    contact = PROFILE["contact"]
+    assert contact["phone"] == "+1 (951) 545-2146"
+    assert contact["github"] == "https://github.com/sri1513"
+    assert contact["linkedin"] == "https://linkedin.com/in/sri-omkar-58r4r4r8"
+    assert contact["website"] == "https://sriomkar.com"
+    values = list(contact.values())
+    assert len(values) == len(set(values))
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "never repeat a URL" in prompt
+    rendered = portfolio_chat._template_answer("how to contact Omkar?", PROFILE)
+    for value in values:
+        assert rendered.count(value) == 1
+
+
 def test_llm_path_used_when_configured(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat")
     result = portfolio_chat.answer_question("What experience does Omkar have?", "1.2.3.4")
