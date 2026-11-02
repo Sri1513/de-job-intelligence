@@ -184,7 +184,11 @@ def _fetch_skill_count(conn, skill):
             (skill,),
         )
         row = cur.fetchone()
-        return row["job_count"] if row else 0
+        if not row:
+            return 0
+        # Same tuple-vs-dict reality as _rows_to_json: the reader cursor
+        # returns plain tuples, so accept both shapes.
+        return row["job_count"] if isinstance(row, dict) else row[0]
 
 
 def _query_jobs(conn, skill, min_score, limit):

@@ -103,6 +103,47 @@ def _is_off_topic(message: str) -> bool:
     return any(pattern.search(lowered) for pattern in _OFF_TOPIC_PATTERNS)
 
 
+def _normalize_rows(rows, columns):
+    """Coerce MCP payload rows to dicts.
+
+    The public MCP surface serializes plain psycopg rows, so a row
+    arrives as a JSON array in the SELECT column order, NOT as an
+    object. Dict-shaped rows (e.g. a future dict-cursor change) pass
+    through untouched. Column orders must match the SQL in
+    src/protocols/dashboard_mcp.py exactly.
+    """
+    normalized = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            normalized.append(row)
+        elif isinstance(row, (list, tuple)):
+            normalized.append(dict(zip(columns, row)))
+    return normalized
+
+
+_OVERVIEW_COLUMNS = [
+    "job_category",
+    "total_jobs_tracked",
+    "average_fit_score",
+    "high_match_jobs",
+    "unique_hiring_companies",
+    "last_ingested_at",
+]
+_TOP_SKILL_COLUMNS = ["skill", "job_count"]
+_JOB_COLUMNS = [
+    "job_id",
+    "title",
+    "company",
+    "location",
+    "job_category",
+    "fit_score",
+    "saved_at",
+    "job_url",
+    "description_preview",
+    "match_score",
+]
+
+
 def _find_skill(message: str, top_skills):
     lowered = message.lower()
     for entry in top_skills:
@@ -219,7 +260,9 @@ def answer_question(message: str, client_ip: str) -> dict:
         trace.append({"method": "resources/read", "request": req, "response": resp})
         contents = (resp.get("result") or {}).get("contents") or []
         if contents:
-            overview = json.loads(contents[0].get("text") or "[]")
+            overview = _normalize_rows(
+                json.loads(contents[0].get("text") or "[]"), _OVERVIEW_COLUMNS
+            )
     except Exception as exc:
         logger.warning("Market-chat overview fetch failed: %s", exc)
         trace.append({"method": "resources/read", "error": str(exc)[:200]})
@@ -228,7 +271,9 @@ def answer_question(message: str, client_ip: str) -> dict:
         trace.append({"method": "resources/read", "request": req, "response": resp})
         contents = (resp.get("result") or {}).get("contents") or []
         if contents:
-            top_skills = json.loads(contents[0].get("text") or "[]")
+            top_skills = _normalize_rows(
+                json.loads(contents[0].get("text") or "[]"), _TOP_SKILL_COLUMNS
+            )
     except Exception as exc:
         logger.warning("Market-chat top-skills fetch failed: %s", exc)
         trace.append({"method": "resources/read", "error": str(exc)[:200]})
@@ -246,7 +291,9 @@ def answer_question(message: str, client_ip: str) -> dict:
             trace.append({"method": "tools/call", "request": req, "response": resp})
             content = (resp.get("result") or {}).get("content") or []
             if content:
-                job_rows = json.loads(content[0].get("text") or "[]")
+                job_rows = _normalize_rows(
+                    json.loads(content[0].get("text") or "[]"), _JOB_COLUMNS
+                )
         except Exception as exc:
             logger.warning("Market-chat tool call failed: %s", exc)
             trace.append({"method": "tools/call", "error": str(exc)[:200]})
