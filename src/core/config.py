@@ -94,11 +94,13 @@ class Settings(BaseSettings):
     # design and serves the reader pool only.
     MARKET_CHAT_MCP_URL: str = "http://localhost:8000/public/mcp"
 
-    # Optional LLM synthesis for the drawer (Ollama-compatible /api/chat).
-    # Empty by default: the drawer then answers from a deterministic
-    # template over the same MCP data. Set these only once VM2 exposes
-    # an authenticated model endpoint; the key is a service token for
-    # that gatekeeper, never a user password, and it lives in .env only.
+    # Optional LLM synthesis for the drawer (OpenAI-compatible
+    # chat-completions). Empty by default: the drawer then answers from a
+    # deterministic template over the same MCP data. To enable, set the
+    # URL to Open WebUI's route -- https://llm.sriomkar.com/api/chat/completions
+    # -- and the KEY to an API key created in an Open WebUI account's
+    # settings (not the browser session JWT, which expires). The key is a
+    # service credential for that account and lives in .env only.
     MARKET_CHAT_LLM_URL: str = ""
     MARKET_CHAT_LLM_MODEL: str = "qwen2.5:3b"
     MARKET_CHAT_LLM_KEY: str = ""

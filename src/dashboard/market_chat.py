@@ -20,10 +20,11 @@ to the database. Abuse protection is deliberately boring and server-side:
   ever waking the model or the MCP layer.
 
 LLM synthesis is env-gated and OFF by default: it activates only when
-MARKET_CHAT_LLM_URL is set (an Ollama-compatible /api/chat endpoint).
-Until VM2 exposes such an endpoint behind a service token, the drawer
-answers from a deterministic template over the same MCP data -- same
-facts, no hallucinated prose. An LLM failure never fails the request:
+MARKET_CHAT_LLM_URL is set (Open WebUI's /api/chat/completions route on
+llm.sriomkar.com, authenticated with an API key from an Open WebUI
+account's settings). Until that is configured, the drawer answers from
+a deterministic template over the same MCP data -- same facts, no
+hallucinated prose. An LLM failure never fails the request:
 the template answer is returned with llm_error set.
 """
 import json
@@ -143,8 +144,16 @@ def _template_answer(message, overview, top_skills, job_rows, skill):
 
 
 def _llm_answer(message, overview, top_skills, job_rows):
-    """Ask the configured Ollama-compatible endpoint. Returns (text, error).
-    Any failure yields (None, 'unavailable') so the caller falls back."""
+    """Ask the configured model endpoint. Returns (text, error).
+
+    The endpoint is Open WebUI's OpenAI-compatible chat-completions route
+    (https://llm.sriomkar.com/api/chat/completions), authenticated with an
+    API key created in an Open WebUI account's settings -- the key acts as
+    that account, and it lives only in the jobs VM's .env, never in the
+    browser. The response parser also accepts Ollama's native
+    /api/chat shape, so the same code works if the URL ever points at
+    Ollama directly. Any failure yields (None, 'unavailable') so the
+    caller falls back to the template answer."""
     url = settings.MARKET_CHAT_LLM_URL
     if not url:
         return None, None
@@ -163,14 +172,20 @@ def _llm_answer(message, overview, top_skills, job_rows):
             },
         ],
         "stream": False,
-        "options": {"temperature": 0.0, "num_predict": LLM_MAX_TOKENS},
+        "temperature": 0.0,
+        "max_tokens": LLM_MAX_TOKENS,
     }
     headers = {}
     if settings.MARKET_CHAT_LLM_KEY:
         headers["Authorization"] = f"Bearer {settings.MARKET_CHAT_LLM_KEY}"
     try:
         response = _post_json(url, payload, LLM_TIMEOUT_S, headers)
-        text = (response.get("message") or {}).get("content", "")
+        # OpenAI-compatible shape first, Ollama-native shape second.
+        choices = response.get("choices") or []
+        if choices:
+            text = ((choices[0].get("message") or {}).get("content") or "").strip()
+        else:
+            text = ((response.get("message") or {}).get("content") or "").strip()
         if not text:
             return None, "empty"
         return text, None

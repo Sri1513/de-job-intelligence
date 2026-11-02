@@ -52,7 +52,7 @@ def _fake_post_json(url, payload, timeout, headers=None):
                 "result": {"content": [{"text": json.dumps(JOB_ROWS)}]},
             }
     if "llm.test" in url:
-        return {"message": {"content": "LLM-grounded answer."}}
+        return {"choices": [{"message": {"content": "LLM-grounded answer."}}]}
     raise AssertionError(f"unexpected url {url}")
 
 
@@ -93,6 +93,20 @@ def test_llm_path_used_when_configured(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat")
     result = market_chat.answer_question("Which skills are most in demand?", "1.2.3.4")
     assert result["answer"] == "LLM-grounded answer."
+    assert result["llm_used"] is True
+
+
+def test_llm_ollama_shape_also_parsed(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat")
+
+    def _ollama_shape(url, payload, timeout, headers=None):
+        if "llm.test" in url:
+            return {"message": {"content": "Ollama-native answer."}}
+        return _fake_post_json(url, payload, timeout, headers)
+
+    monkeypatch.setattr(market_chat, "_post_json", _ollama_shape)
+    result = market_chat.answer_question("Which skills are most in demand?", "1.2.3.4")
+    assert result["answer"] == "Ollama-native answer."
     assert result["llm_used"] is True
 
 

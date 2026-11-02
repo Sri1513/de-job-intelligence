@@ -795,6 +795,12 @@
                         return;
                     }
                     thinking.textContent = data.answer;
+                    if (data.llm_used) {
+                        const tag = document.createElement('p');
+                        tag.textContent = 'Answered by the live model, grounded in the dashboard data.';
+                        tag.className = 'text-xs text-emerald-400';
+                        messages.appendChild(tag);
+                    }
                     if (data.trace && data.trace.length) {
                         const details = document.createElement('details');
                         details.className = 'text-xs text-slate-400';
