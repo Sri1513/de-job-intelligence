@@ -1,0 +1,143 @@
+{
+  "contact": {
+    "github": "https://github.com/sri1513",
+    "linkedin": "https://linkedin.com/in/sri-omkar-58r4r4r8",
+    "website": "https://sriomkar.com"
+  },
+  "education": [
+    {
+      "degree": "Master's in Information Technology Management",
+      "school": "California Baptist University"
+    }
+  ],
+  "experience": [
+    {
+      "client": "Optum",
+      "highlights": [
+        "Own, monitor, and optimize Databricks and PySpark pipelines feeding daily KPI reporting layers.",
+        "Cut nightly load runtime by about 50% (7:30 AM to 3:00 AM) via re-partitioning and query tuning."
+      ],
+      "period": "Oct 2025 - Present",
+      "role": "Data Engineer"
+    },
+    {
+      "client": "Herc Rentals",
+      "employer": "Akkodis",
+      "highlights": [
+        "Built Python ingestion from rental, ERP, and OLTP sources into an AWS S3 data lake.",
+        "Near-real-time telematics pipelines using AWS Kinesis and Databricks Streaming.",
+        "Cut daily batch runtimes by 25-30% via partition tuning and incremental loads in PySpark and Databricks."
+      ],
+      "period": "Nov 2024 - Sep 2025",
+      "role": "Data Engineer"
+    },
+    {
+      "client": "Blue Yonder",
+      "employer": "Quess Corp",
+      "highlights": [
+        "Built high-throughput Azure Databricks pipelines, reducing batch transformation runtimes by 25-30% through unified PySpark transformations.",
+        "Built Python, FastAPI, and SQLAlchemy ingestion frameworks for enterprise ERP payloads into Azure Data Lake Storage Gen2."
+      ],
+      "period": "Jun 2022 - Jul 2023",
+      "role": "Data Engineer"
+    },
+    {
+      "client": "Accenture",
+      "employer": "Trigent Software",
+      "highlights": [
+        "Built dbt Core models (staging, intermediate, and marts layers) for KYC risk scoring and loan ledger reconciliations, with schema and custom SQL tests and incremental loads.",
+        "Cut runtime on large-scale financial pipelines by about 30-35% via Spark UI analysis, data salting, Adaptive Query Execution, and broadcast joins."
+      ],
+      "period": "Jan 2020 - Jun 2022",
+      "role": "Data Engineer"
+    },
+    {
+      "client": "Thomson Reuters",
+      "employer": "Experis IT",
+      "highlights": [
+        "Built AWS Glue and PySpark pipelines processing sales, subscription, and revenue data for Redshift and Athena analytics.",
+        "Extracted enterprise SQL Server legacy data into S3 data lakes using Apache Sqoop on AWS EMR."
+      ],
+      "period": "Jun 2017 - Sep 2019",
+      "role": "ETL Developer"
+    }
+  ],
+  "frameworks": [
+    {
+      "description": "Databricks and Delta Lake lakehouse pipelines with curated layers, partition tuning, and incremental loads.",
+      "name": "Lakehouse / Medallion architecture",
+      "used_in": [
+        "Optum",
+        "Herc Rentals"
+      ]
+    },
+    {
+      "description": "Reverse-engineering legacy ETL workflows and re-platforming them onto AWS-native services with source-to-target reconciliation.",
+      "name": "Legacy ETL modernization",
+      "used_in": [
+        "Accenture"
+      ]
+    },
+    {
+      "description": "High-frequency JSON and XML telemetry ingestion via AWS Kinesis into Databricks Streaming and curated Delta layers.",
+      "name": "Streaming ingestion",
+      "used_in": [
+        "Herc Rentals"
+      ]
+    },
+    {
+      "description": "dbt Core models in staging, intermediate, and marts layers with schema and custom SQL tests and incremental loads on composite keys.",
+      "name": "dbt modeling",
+      "used_in": [
+        "Accenture"
+      ]
+    },
+    {
+      "description": "A production data platform that ingests job postings into PostgreSQL, scores fit, tailors resumes, and serves results over a JSON-RPC MCP API with a human review gate on outbound actions.",
+      "name": "MCP-served job intelligence platform",
+      "used_in": [
+        "Personal project"
+      ]
+    },
+    {
+      "description": "Custom MCP servers, retrieval-augmented generation over pgvector, and LangGraph agents.",
+      "name": "AI / MCP systems",
+      "used_in": [
+        "Personal project"
+      ]
+    }
+  ],
+  "name": "Sri Omkar",
+  "projects": [
+    {
+      "description": "A production data platform ingesting job postings into PostgreSQL with fit scoring, tailored resumes, and a JSON-RPC MCP serving layer, behind a human review gate on every outbound action.",
+      "links": {
+        "dashboard": "https://jobs.sriomkar.com"
+      },
+      "name": "de-job-intelligence platform"
+    },
+    {
+      "description": "Recruiter-facing portfolio site presenting experience, architectural case studies, and technical competencies.",
+      "links": {
+        "website": "https://sriomkar.com"
+      },
+      "name": "Portfolio site"
+    }
+  ],
+  "skills": [
+    "Python",
+    "SQL",
+    "PySpark",
+    "Databricks",
+    "Delta Lake",
+    "Apache Airflow",
+    "dbt",
+    "Snowflake",
+    "AWS",
+    "Azure",
+    "MCP servers",
+    "RAG over pgvector",
+    "LangGraph agents"
+  ],
+  "summary": "Senior Data Engineer with 7+ years of experience building enterprise ETL pipelines and cloud data platforms."
+}

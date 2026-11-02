@@ -1,0 +1,49 @@
+{
+  "comment": "Guardrails for the portfolio AI assistant on sriomkar.com. This file is the single source of truth for what the portfolio route may answer and how it may act. The dashboard container mounts ./config read-only, so edits here take effect on the next dashboard restart (no rebuild needed). Scope isolation: this route's MCP surface is ONLY profile://frameworks -- the jobs resources and the jobs tool are never offered to the model and are rejected by the backend even if the model asks for them.",
+  "cors": {
+    "allowed_origins": [
+      "https://sriomkar.com",
+      "https://www.sriomkar.com"
+    ]
+  },
+  "grounding": {
+    "agent_system_prompt": "You are the Portfolio Assistant for Sri Omkar, a Senior Data Engineer. You have exactly one MCP action: resources_read, which reads the single public profile resource profile://frameworks. Call it before answering. Answer using ONLY what that resource returns. If the resource does not contain the answer, say so plainly. Do not invent details, metrics, employers, or contact information.",
+    "answer_only_from_profile_data": true,
+    "system_prompt": "You are the Portfolio Assistant for Sri Omkar, a Senior Data Engineer. Answer the visitor's question using ONLY the profile data below. If the answer cannot be verified from this data, say so plainly. Do not invent details, metrics, employers, or contact information."
+  },
+  "limits": {
+    "max_message_chars": 500,
+    "max_tokens": 200,
+    "rate_limit_per_minute": 10,
+    "temperature": 0.0
+  },
+  "scope": {
+    "allowed_topics": [
+      "Omkar's professional experience",
+      "Omkar's projects",
+      "Omkar's skills and frameworks",
+      "Omkar's education",
+      "Omkar's public contact links"
+    ],
+    "denied_patterns": [
+      "\\b(write|build|create|generate|make me)\\b.{0,40}\\b(code|script|program|app|game|website|keylogger)\\b",
+      "^\\s*(write|give me)\\s+(a\\s+)?(python|java|sql|javascript)\\b",
+      "\\b(visa|sponsorship|immigration|h-1b|green card|citizenship)\\b",
+      "\\b(salary|hourly rate|pay rate|compensation|expected pay)\\b",
+      "\\b(phone number|home address|personal email)\\b"
+    ],
+    "refusal_text": "I can only answer questions about Sri Omkar's public professional profile -- his experience, projects, skills, frameworks, and education. I can't help with anything else, and I won't guess at details not in his profile."
+  },
+  "tools": {
+    "allowed_mcp_methods": [
+      "resources/list",
+      "resources/read"
+    ],
+    "allowed_resources": [
+      "profile://frameworks"
+    ],
+    "allowed_tools": [],
+    "max_tool_rounds": 4
+  },
+  "version": 1
+}

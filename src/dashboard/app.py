@@ -21,6 +21,11 @@ from src.core.config import settings
 from src.core.database import get_db_connection
 from src.dashboard.admin import admin_routes
 from src.dashboard.market_chat import market_chat_stream_view, market_chat_view
+from src.dashboard.portfolio_chat import (
+    portfolio_chat_preflight,
+    portfolio_chat_stream_view,
+    portfolio_chat_view,
+)
 
 logger = logging.getLogger("de-job-intelligence.dashboard")
 
@@ -1160,6 +1165,10 @@ routes = [
     Route("/api/jobs", api_jobs, methods=["GET"]),
     Route("/api/market-chat", market_chat_view, methods=["POST"]),
     Route("/api/market-chat/stream", market_chat_stream_view, methods=["POST"]),
+    Route("/api/portfolio-chat", portfolio_chat_view, methods=["POST"]),
+    Route("/api/portfolio-chat/stream", portfolio_chat_stream_view, methods=["POST"]),
+    Route("/api/portfolio-chat", portfolio_chat_preflight, methods=["OPTIONS"]),
+    Route("/api/portfolio-chat/stream", portfolio_chat_preflight, methods=["OPTIONS"]),
     Route("/api/jobs/update-status", api_update_job_status, methods=["POST"]),
     Route("/api/jobs/update-notes", api_update_job_notes, methods=["POST"]),
     Route("/audit", audit_view, methods=["GET"]),
