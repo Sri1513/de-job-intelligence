@@ -26,6 +26,22 @@ account's settings). Until that is configured, the drawer answers from
 a deterministic template over the same MCP data -- same facts, no
 hallucinated prose. An LLM failure never fails the request:
 the template answer is returned with llm_error set.
+
+The four-part architecture this module implements:
+1. LLM connection profile: the dashboard owns one authenticated
+   connection to the model (endpoint + model + API key, all from
+   .env; the key never leaves the server). See llm_profile().
+2. JSON guardrails: config/market_chat_guardrails.json is the single
+   source of truth for scope, refusal text, tool allowlist, and
+   limits. The system prompts and the scope guard are built from it.
+3. True MCP surface: the model is given the MCP server's own
+   JSON-RPC interface -- resources_read (resources/read) and
+   tools_call (tools/call) -- discovered live via resources/list
+   and tools/list, with a static mirror as fallback. The backend is
+   a thin JSON-RPC transport, not a renamed tool layer.
+4. Agentic loop: the model picks actions, the backend executes them
+   against the read-only reader pool, results go back to the model,
+   and only the final answer streams to the drawer.
 """
 import json
 import logging
@@ -34,6 +50,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
@@ -42,84 +59,166 @@ from src.core.config import settings
 
 logger = logging.getLogger("de-job-intelligence.market-chat")
 
-MAX_MESSAGE_CHARS = 500
-RATE_LIMIT_WINDOW_S = 60
-RATE_LIMIT_MAX = 10
-MCP_TIMEOUT_S = 10
-LLM_TIMEOUT_S = 60
-LLM_MAX_TOKENS = 200
-
-SYSTEM_PROMPT = (
-    "You are the Job Market Analyst for Sri Omkar's data platform. "
-    "Answer the user's question using ONLY the market data below. "
-    "If the answer cannot be verified from this data, say so plainly. "
-    "Do not invent details, companies, numbers, or trends."
-)
-
-# Agentic drawer: the model itself picks MCP tools based on the question;
-# the dashboard backend only executes the calls against the public MCP
-# surface (read-only reader pool) and returns results to the model.
-AGENT_SYSTEM_PROMPT = (
-    "You are the Job Market Analyst for Sri Omkar's data platform. "
-    "You have read-only tools that query the tracked job market database: "
-    "a market overview, top skills, and jobs matching criteria. "
-    "Use the tools to answer the user's question; call the tools you need "
-    "before answering. Answer using ONLY what the tools return. "
-    "If the tools do not contain the answer, say so plainly. "
-    "Do not invent details, companies, numbers, or trends."
-)
-
-_MCP_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_market_overview",
+# ---------------------------------------------------------------- guardrails
+# Static mirror of the MCP server's public surface (src/protocols/
+# dashboard_mcp.py PUBLIC_RESOURCES / PUBLIC_TOOLS). Used only when
+# live discovery fails; the live list methods are authoritative.
+_STATIC_SURFACE = {
+    "resources": [
+        {
+            "uri": "jobs://metrics/overview",
+            "name": "Market overview",
             "description": (
-                "Total tracked postings, average fit, high-match counts, "
-                "and hiring-company counts per job category."
+                "Aggregate job-market metrics per category: jobs tracked, "
+                "average fit score, high-match jobs, hiring companies, and "
+                "last ingestion time. No personal or application data."
             ),
-            "parameters": {"type": "object", "properties": {}},
+            "mimeType": "application/json",
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_top_skills",
-            "description": "The most frequent skills across tracked postings, with job counts.",
-            "parameters": {"type": "object", "properties": {}},
+        {
+            "uri": "jobs://metrics/top-skills",
+            "name": "Top skills in demand",
+            "description": (
+                "Most frequent skills across tracked postings, counted from "
+                "the sanitized skills view. No personal or application data."
+            ),
+            "mimeType": "application/json",
         },
-    },
-    {
-        "type": "function",
-        "function": {
+    ],
+    "tools": [
+        {
             "name": "query_jobs_by_criteria",
-            "description": "Top postings matching a skill, optionally filtered by minimum fit score.",
-            "parameters": {
+            "description": (
+                "Read-only search over sanitized public postings. Filter by "
+                "skill and/or minimum fit score. Returns public fields only: "
+                "no status, sponsorship, notes, metadata, or application state."
+            ),
+            "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "skill": {"type": "string", "description": "Skill to match, e.g. python."},
-                    "min_score": {"type": "number", "description": "Minimum fit score 0-100."},
-                    "limit": {"type": "integer", "description": "Max postings, 1-50."},
+                    "skill": {
+                        "type": "string",
+                        "description": "Skill to match, e.g. Databricks. Case-insensitive.",
+                    },
+                    "min_score": {
+                        "type": "number",
+                        "description": "Minimum fit score, 0-100. Defaults to 0.",
+                        "default": 0,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum rows, 1-50. Defaults to 20.",
+                        "default": 20,
+                    },
                 },
             },
         },
+    ],
+}
+
+_DEFAULT_GUARDRAILS = {
+    "version": 0,
+    "scope": {
+        "allowed_topics": ["tracked job postings", "skills in demand", "fit scores"],
+        "denied_patterns": [
+            r"\b(write|build|create|generate|make me)\b.{0,40}\b(code|script|program|app|game|website|keylogger)\b",
+            r"^\s*(write|give me)\s+(a\s+)?(python|java|sql|javascript)\b",
+        ],
+        "refusal_text": (
+            "I can only answer questions about the job market data on "
+            "this dashboard (tracked postings, skills in demand, and "
+            "fit scores). I can't help with coding or general requests."
+        ),
     },
+    "grounding": {
+        "answer_only_from_tool_results": True,
+        "system_prompt": (
+            "You are the Job Market Analyst for Sri Omkar's data platform. "
+            "Answer the user's question using ONLY the market data below. "
+            "If the answer cannot be verified from this data, say so plainly. "
+            "Do not invent details, companies, numbers, or trends."
+        ),
+        "agent_system_prompt": (
+            "You are the Job Market Analyst for Sri Omkar's data platform. "
+            "You have MCP actions that speak JSON-RPC to the platform's "
+            "read-only MCP server. Use them to answer the user's question; "
+            "call the actions you need before answering. Answer using ONLY "
+            "what the actions return. If the actions do not contain the "
+            "answer, say so plainly. Do not invent details, companies, "
+            "numbers, or trends."
+        ),
+    },
+    "tools": {
+        "allowed_mcp_methods": ["resources/list", "resources/read", "tools/list", "tools/call"],
+        "max_tool_rounds": 4,
+    },
+    "limits": {
+        "max_message_chars": 500,
+        "max_tokens": 200,
+        "rate_limit_per_minute": 10,
+        "temperature": 0.0,
+    },
+}
+
+
+def _load_guardrails():
+    """Load config/market_chat_guardrails.json; fall back to the
+    built-in defaults (with a warning) when it is missing or broken,
+    so a bad edit never kills the drawer."""
+    path = Path(__file__).resolve().parent.parent.parent / "config" / "market_chat_guardrails.json"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        # Shallow-merge over defaults so a partial file still yields
+        # every key the code reads.
+        merged = {**_DEFAULT_GUARDRAILS}
+        for section in ("scope", "grounding", "tools", "limits"):
+            if isinstance(data.get(section), dict):
+                merged[section] = {**_DEFAULT_GUARDRAILS[section], **data[section]}
+        if "version" in data:
+            merged["version"] = data["version"]
+        return merged
+    except Exception as exc:
+        logger.warning("Market-chat guardrails unreadable (%s); using defaults", exc)
+        return _DEFAULT_GUARDRAILS
+
+
+_GUARDRAILS = _load_guardrails()
+
+MAX_MESSAGE_CHARS = int(_GUARDRAILS["limits"]["max_message_chars"])
+RATE_LIMIT_WINDOW_S = 60
+RATE_LIMIT_MAX = int(_GUARDRAILS["limits"]["rate_limit_per_minute"])
+MCP_TIMEOUT_S = 10
+LLM_TIMEOUT_S = 60
+LLM_MAX_TOKENS = int(_GUARDRAILS["limits"]["max_tokens"])
+
+SYSTEM_PROMPT = _GUARDRAILS["grounding"]["system_prompt"]
+AGENT_SYSTEM_PROMPT = _GUARDRAILS["grounding"]["agent_system_prompt"]
+REFUSAL_TEXT = _GUARDRAILS["scope"]["refusal_text"]
+MAX_TOOL_ROUNDS = int(_GUARDRAILS["tools"]["max_tool_rounds"])
+
+# Deterministic scope guard, built from the guardrails file: requests
+# matching a denied pattern are refused before any MCP or LLM call.
+_OFF_TOPIC_PATTERNS = [
+    re.compile(pattern) for pattern in _GUARDRAILS["scope"]["denied_patterns"]
 ]
 
-MAX_TOOL_ROUNDS = 4
+
+def llm_profile():
+    """The dashboard's LLM connection profile. Describes the
+    authenticated connection without ever exposing the key."""
+    return {
+        "endpoint": settings.MARKET_CHAT_LLM_URL,
+        "model": settings.MARKET_CHAT_LLM_MODEL,
+        "authenticated": bool(settings.MARKET_CHAT_LLM_KEY),
+        "enabled": bool(settings.MARKET_CHAT_LLM_URL),
+    }
 
 
 class _ToolsUnsupported(Exception):
     """The model endpoint rejected tool calling before any tool event
     was emitted, so the drawer falls back to grounded answering."""
 
-# Deterministic scope guard: code and general-assistant requests are
-# refused before any MCP or LLM call. Kept narrow on purpose so real
-# market questions ("how do I break into data engineering?") still pass.
-_OFF_TOPIC_PATTERNS = [
-    re.compile(r"\b(write|build|create|generate|make me)\b.{0,40}\b(code|script|program|app|game|website|keylogger)\b"),
-    re.compile(r"^\s*(write|give me)\s+(a\s+)?(python|java|sql|javascript)\b"),
-]
 
 # ip -> deque of request timestamps (single-worker in-memory store).
 _rate_buckets: dict[str, deque] = {}
@@ -386,11 +485,7 @@ def answer_question(message: str, client_ip: str) -> dict:
         return {"answer": "Ask a question about the job market data.", "trace": [], "llm_used": False}
     if _is_off_topic(message):
         return {
-            "answer": (
-                "I can only answer questions about the job market data on "
-                "this dashboard (tracked postings, skills in demand, and "
-                "fit scores). I can't help with coding or general requests."
-            ),
+            "answer": REFUSAL_TEXT,
             "trace": [],
             "llm_used": False,
             "refused": True,
@@ -463,23 +558,95 @@ def _stream_llm_tokens(messages):
                     yield text
 
 
-def _execute_mcp_tool(name, arguments, trace):
-    """Run one model-chosen tool against the public MCP surface.
-    Returns the text handed back to the model. Tool failures become
-    text too, so the model can recover instead of the request dying.
-    Trace entries keep the same shape as the pre-fetch path, so the
-    drawer renders model-triggered calls identically."""
-    if name == "get_market_overview":
-        mcp_method, params = "resources/read", {"uri": "jobs://metrics/overview"}
-    elif name == "get_top_skills":
-        mcp_method, params = "resources/read", {"uri": "jobs://metrics/top-skills"}
-    elif name == "query_jobs_by_criteria":
+def _discover_mcp_surface():
+    """Ask the MCP server what it actually offers (resources/list +
+    tools/list). Returns (surface, trace_entries). On any failure,
+    falls back to the static mirror with an empty trace, so a
+    list-method outage never blocks the drawer."""
+    try:
+        req_r, resp_r = _mcp_rpc("resources/list", {})
+        req_t, resp_t = _mcp_rpc("tools/list", {})
+        resources = (resp_r.get("result") or {}).get("resources") or []
+        tools = (resp_t.get("result") or {}).get("tools") or []
+        if resources and tools:
+            return {"resources": resources, "tools": tools}, [
+                {"method": "resources/list", "request": req_r, "response": resp_r},
+                {"method": "tools/list", "request": req_t, "response": resp_t},
+            ]
+        raise ValueError("empty surface")
+    except Exception as exc:
+        logger.warning("Market-chat MCP discovery failed (%s); using static surface", exc)
+        return _STATIC_SURFACE, []
+
+
+def _mcp_dispatch_tools(surface):
+    """The two JSON-RPC dispatch actions the model is given. This is
+    the MCP server's own interface, not a renamed copy: resources_read
+    performs a JSON-RPC resources/read, tools_call performs a JSON-RPC
+    tools/call. Enums come from live discovery, so the model can only
+    ask for URIs and tools the server actually offers."""
+    resource_uris = [r.get("uri") for r in surface.get("resources") or []]
+    tool_names = [t.get("name") for t in surface.get("tools") or []]
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "resources_read",
+                "description": (
+                    "Perform a JSON-RPC resources/read against the MCP server. "
+                    "Returns the resource's JSON text."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "uri": {"type": "string", "enum": resource_uris},
+                    },
+                    "required": ["uri"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "tools_call",
+                "description": (
+                    "Perform a JSON-RPC tools/call against the MCP server. "
+                    "Returns the tool's JSON text."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "enum": tool_names},
+                        "arguments": {"type": "object"},
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
+    ]
+
+
+def _execute_mcp_action(name, arguments, trace, surface):
+    """Run one model-chosen MCP action by forwarding it as JSON-RPC to
+    the MCP server. Returns the text handed back to the model. Unknown
+    URIs/names and tool failures become text too, so the model can
+    recover instead of the request dying. The backend adds no data of
+    its own: it is a transport plus trace, not a second tool layer."""
+    if name == "resources_read":
+        uri = (arguments or {}).get("uri") or ""
+        if uri not in [r.get("uri") for r in surface.get("resources") or []]:
+            return f"Unknown resource uri: {uri}"
+        mcp_method, params = "resources/read", {"uri": uri}
+    elif name == "tools_call":
+        tool_name = (arguments or {}).get("name") or ""
+        if tool_name not in [t.get("name") for t in surface.get("tools") or []]:
+            return f"Unknown tool: {tool_name}"
         mcp_method, params = "tools/call", {
-            "name": "query_jobs_by_criteria",
-            "arguments": arguments,
+            "name": tool_name,
+            "arguments": (arguments or {}).get("arguments") or {},
         }
     else:
-        return f"Unknown tool: {name}"
+        return f"Unknown MCP action: {name}"
     try:
         req, resp = _mcp_rpc(mcp_method, params)
         trace.append({"method": mcp_method, "request": req, "response": resp})
@@ -489,30 +656,40 @@ def _execute_mcp_tool(name, arguments, trace):
             return contents[0].get("text") or ""
         return "No data returned."
     except Exception as exc:
-        logger.warning("Market-chat tool execution failed (%s): %s", name, exc)
+        logger.warning("Market-chat MCP action failed (%s): %s", name, exc)
         trace.append({"method": mcp_method, "error": str(exc)[:200]})
         return f"Tool error: {exc}"
 
 
 def _agent_stream_events(message):
-    """Agentic loop: the model picks MCP tools, the backend executes
-    them, results go back to the model, and only the final answer
-    streams to the drawer. Yields SSE strings. Raises
-    _ToolsUnsupported only when the very first tools call fails, so
-    the caller can fall back to grounded answering before anything
-    was emitted; later failures degrade to answering from whatever
-    the model already gathered."""
+    """Agentic loop on the true MCP surface: discover what the server
+    offers, give the model the JSON-RPC dispatch actions, let the
+    model pick actions, forward them verbatim as JSON-RPC, return
+    results to the model, and stream only the final answer to the
+    drawer. Yields SSE strings. Raises _ToolsUnsupported only when
+    the very first tools call fails, so the caller can fall back to
+    grounded answering before anything was emitted; later failures
+    degrade to answering from whatever the model already gathered."""
+    surface, trace = _discover_mcp_surface()
+    logger.info("Market-chat LLM profile: %s", llm_profile())
     messages = [
-        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": (
+                AGENT_SYSTEM_PROMPT
+                + "\n\nMCP SURFACE (live from the server):\n"
+                + json.dumps(surface, default=str)
+            ),
+        },
         {"role": "user", "content": message},
     ]
-    trace = []
+    tools = _mcp_dispatch_tools(surface)
     url = settings.MARKET_CHAT_LLM_URL
     for round_no in range(MAX_TOOL_ROUNDS):
         payload = {
             "model": settings.MARKET_CHAT_LLM_MODEL,
             "messages": messages,
-            "tools": _MCP_TOOLS,
+            "tools": tools,
             "tool_choice": "auto",
             "stream": False,
             "temperature": 0.0,
@@ -546,7 +723,7 @@ def _agent_stream_events(message):
             if not isinstance(args, dict):
                 args = {}
             yield _sse({"type": "tool_call", "tool": name, "arguments": args})
-            result_text = _execute_mcp_tool(name, args, trace)
+            result_text = _execute_mcp_action(name, args, trace, surface)
             messages.append(
                 {
                     "role": "tool",
@@ -565,7 +742,7 @@ def _agent_stream_events(message):
                 ),
             }
         )
-    logger.info("Market-chat agent loop finished with %d tool calls", len(trace))
+    logger.info("Market-chat agent loop finished with %d trace entries", len(trace))
     streamed_any = False
     stream_clean = False
     try:
@@ -647,14 +824,7 @@ def stream_answer(message: str):
         yield _sse({"type": "done", "llm_used": False})
         return
     if _is_off_topic(message):
-        yield _sse({
-            "type": "token",
-            "text": (
-                "I can only answer questions about the job market data on "
-                "this dashboard (tracked postings, skills in demand, and "
-                "fit scores). I can't help with coding or general requests."
-            ),
-        })
+        yield _sse({"type": "token", "text": REFUSAL_TEXT})
         yield _sse({"type": "done", "llm_used": False, "refused": True})
         return
     if not settings.MARKET_CHAT_LLM_URL:

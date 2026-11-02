@@ -42,6 +42,15 @@ def _fake_post_json(url, payload, timeout, headers=None):
     if "public/mcp" in url:
         method = payload.get("method")
         params = payload.get("params") or {}
+        if method == "resources/list":
+            return {"jsonrpc": "2.0", "id": 1, "result": {"resources": [
+                {"uri": "jobs://metrics/overview", "name": "Market overview"},
+                {"uri": "jobs://metrics/top-skills", "name": "Top skills in demand"},
+            ]}}
+        if method == "tools/list":
+            return {"jsonrpc": "2.0", "id": 1, "result": {"tools": [
+                {"name": "query_jobs_by_criteria", "description": "Search postings."},
+            ]}}
         if method == "resources/read":
             if params.get("uri") == "jobs://metrics/overview":
                 text = json.dumps(OVERVIEW)
@@ -260,8 +269,11 @@ def test_stream_agent_picks_tool(monkeypatch):
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [{"id": "call_1", "type": "function", "function": {
-                    "name": "query_jobs_by_criteria",
-                    "arguments": json.dumps({"skill": "python"}),
+                    "name": "tools_call",
+                    "arguments": json.dumps({
+                        "name": "query_jobs_by_criteria",
+                        "arguments": {"skill": "python"},
+                    }),
                 }}],
             }}]}
         return {"choices": [{"message": {"role": "assistant", "content": "final"}}]}
@@ -277,8 +289,8 @@ def test_stream_agent_picks_tool(monkeypatch):
     events = _parse_sse(res.text)
     tool_events = [e for e in events if e["type"] == "tool_call"]
     assert len(tool_events) == 1
-    assert tool_events[0]["tool"] == "query_jobs_by_criteria"
-    assert tool_events[0]["arguments"]["skill"] == "python"
+    assert tool_events[0]["tool"] == "tools_call"
+    assert tool_events[0]["arguments"]["name"] == "query_jobs_by_criteria"
     text = "".join(e["text"] for e in events if e["type"] == "token")
     assert text == "Done."
     trace = [e for e in events if e["type"] == "trace"][0]["trace"]
@@ -286,6 +298,25 @@ def test_stream_agent_picks_tool(monkeypatch):
     done = [e for e in events if e["type"] == "done"][0]
     assert done["llm_used"] is True
     assert "llm_error" not in done
+
+
+def test_agent_rejects_unknown_resource_and_tool():
+    surface, _ = market_chat._discover_mcp_surface()
+    trace = []
+    assert "Unknown resource" in market_chat._execute_mcp_action(
+        "resources_read", {"uri": "jobs://nope"}, trace, surface
+    )
+    assert "Unknown tool" in market_chat._execute_mcp_action(
+        "tools_call", {"name": "drop_table", "arguments": {}}, trace, surface
+    )
+    assert trace == []
+
+
+def test_guardrails_file_loads():
+    assert market_chat._GUARDRAILS["version"] == 1
+    assert market_chat._GUARDRAILS["tools"]["max_tool_rounds"] == 4
+    assert market_chat.llm_profile()["model"] == "qwen2.5:3b"
+    assert "key" not in json.dumps(market_chat.llm_profile()).lower()
 
 
 def test_stream_tools_rejected_falls_back_to_grounded(monkeypatch):
