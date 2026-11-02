@@ -18,7 +18,12 @@ Layout follows the production remote-MCP pattern:
 * Fail-closed: the server refuses to start when no static token is configured.
 * GET /health, /.well-known/*, and /oauth/* stay unauthenticated by design
   (liveness probes and the OAuth dance itself), plus GET /favicon.ico so
-  connector directories and favicon crawlers can fetch the server icon.
+  connector directories and favicon crawlers can fetch the server icon,
+  plus POST /public/mcp -- the read-only public MCP surface. That last
+  exemption is safe ONLY because its handler (dashboard_mcp.py) queries
+  exclusively through the mcp_dashboard_reader pool, which holds SELECT
+  on sanitized views and nothing else. Never exempt another JSON-RPC
+  path here: the private tools behind /rpc and /mcp stay bearer-gated.
 * 401 responses carry a WWW-Authenticate header pointing at the RFC 9728
   protected-resource metadata, so spec-compliant clients auto-discover OAuth.
 """
@@ -35,6 +40,7 @@ def _is_exempt_path(path: str) -> bool:
     return (
         path == "/health"
         or path == "/favicon.ico"
+        or path == "/public/mcp"
         or path.startswith("/.well-known/")
         or path.startswith("/oauth/")
     )
