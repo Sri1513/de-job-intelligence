@@ -50,7 +50,7 @@
         if (document.getElementById('dj-auth-btn')) return;
         const btn = document.createElement('button');
         btn.id = 'dj-auth-btn';
-        btn.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;' +
+        btn.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;' +
             'background:#0f172a;border:1px solid #334155;color:#e2e8f0;' +
             'font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer;';
         if (djIsLoggedIn()) {
