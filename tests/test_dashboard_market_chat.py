@@ -17,20 +17,20 @@ from src.dashboard import market_chat
 from src.dashboard.app import app
 
 OVERVIEW = [
-    {
-        "job_category": "data_engineering",
-        "total_jobs_tracked": 1748,
-        "average_fit_score": 49.6,
-        "high_match_jobs": 12,
-        "unique_hiring_companies": 300,
-    }
+    # Real MCP shape: plain psycopg rows serialized as JSON arrays, in
+    # the SELECT column order (job_category, total_jobs_tracked,
+    # average_fit_score, high_match_jobs, unique_hiring_companies,
+    # last_ingested_at). The drawer must normalize these; dict-shaped
+    # fakes masked the production 500 this test file now guards.
+    ["data_engineering", 1748, 49.6, 12, 300, "2026-11-01T00:00:00"]
 ]
 TOP_SKILLS = [
-    {"skill": "python", "job_count": 900},
-    {"skill": "sql", "job_count": 800},
+    ["python", 900],
+    ["sql", 800],
 ]
 JOB_ROWS = [
-    {"title": "Data Engineer", "company": "Acme", "location": "Remote", "fit_score": 88}
+    ["li-1", "Data Engineer", "Acme", "Remote", "data_engineering", 88,
+     "2026-11-01T00:00:00", "https://example.com/j", "Preview", 88]
 ]
 
 
@@ -74,6 +74,33 @@ def test_happy_path_returns_answer_and_trace():
         "tools/call",
     ]
     assert result["llm_used"] is False
+
+
+def test_dict_shaped_rows_still_work(monkeypatch):
+    def _dict_rows(url, payload, timeout, headers=None):
+        if "public/mcp" in url:
+            params = payload.get("params") or {}
+            if payload.get("method") == "resources/read":
+                text = json.dumps(
+                    [{"job_category": "data_engineering", "total_jobs_tracked": 5,
+                      "average_fit_score": 50, "high_match_jobs": 1,
+                      "unique_hiring_companies": 2}]
+                    if params.get("uri") == "jobs://metrics/overview"
+                    else [{"skill": "python", "job_count": 9}]
+                )
+                return {"jsonrpc": "2.0", "id": 1, "result": {"contents": [{"text": text}]}}
+            return {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {"content": [{"text": json.dumps(
+                    [{"title": "Data Engineer", "company": "Acme",
+                      "location": "Remote", "fit_score": 88}])}]},
+            }
+        raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(market_chat, "_post_json", _dict_rows)
+    result = market_chat.answer_question("How is python demand?", "1.2.3.4")
+    assert "Acme" in result["answer"]
 
 
 def test_off_topic_refused_without_mcp_calls():
