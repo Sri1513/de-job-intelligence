@@ -736,12 +736,101 @@
             updateReviewGateCount();
         });
     </script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("/sw.js").catch(function () {});
-  });
-}
-</script>
+    <!-- Ask Market Intelligence drawer: grounded on the public MCP surface.
+         Answers and wire traces are rendered as text (textContent), never
+         as HTML, so model or server output cannot inject markup here. -->
+    <button id="market-chat-open" class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-full font-semibold text-sm bg-emerald-600 text-white shadow-lg hover:bg-emerald-500">Ask Market Intelligence</button>
+    <div id="market-chat-panel" class="fixed bottom-24 right-6 z-50 hidden w-[380px] max-w-[calc(100vw-2rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <span class="font-semibold text-sm text-slate-100">Ask Market Intelligence</span>
+            <button id="market-chat-close" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
+        </div>
+        <div id="market-chat-messages" class="px-4 py-3 space-y-3 max-h-[320px] overflow-y-auto text-sm text-slate-200">
+            <p class="text-slate-400">Ask about the tracked market: which skills are in demand, how many jobs are tracked, or how a skill is trending.</p>
+        </div>
+        <div class="px-4 pb-2 flex flex-wrap gap-2">
+            <button class="market-chat-chip px-2 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">Which skills are most in demand?</button>
+            <button class="market-chat-chip px-2 py-1 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">How many data engineering jobs are tracked?</button>
+        </div>
+        <div class="flex gap-2 p-3 border-t border-slate-800">
+            <input id="market-chat-input" maxlength="500" placeholder="Ask about the market..." class="flex-1 min-w-0 bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-200 text-sm outline-none focus:border-emerald-500">
+            <button id="market-chat-send" class="px-3 py-2 rounded-lg font-semibold text-sm bg-emerald-600 text-white hover:bg-emerald-500">Send</button>
+        </div>
+    </div>
+    <script>
+        (function () {
+            const panel = document.getElementById('market-chat-panel');
+            const openBtn = document.getElementById('market-chat-open');
+            const closeBtn = document.getElementById('market-chat-close');
+            const messages = document.getElementById('market-chat-messages');
+            const input = document.getElementById('market-chat-input');
+            const sendBtn = document.getElementById('market-chat-send');
+            openBtn.addEventListener('click', () => panel.classList.toggle('hidden'));
+            closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
+            function addMessage(text, who) {
+                const p = document.createElement('p');
+                p.textContent = text;
+                p.className = who === 'you'
+                    ? 'bg-slate-800 rounded-lg px-3 py-2 text-right'
+                    : 'bg-slate-950 rounded-lg px-3 py-2 whitespace-pre-wrap';
+                messages.appendChild(p);
+                messages.scrollTop = messages.scrollHeight;
+                return p;
+            }
+            async function ask() {
+                const question = input.value.trim();
+                if (!question) return;
+                input.value = '';
+                addMessage(question, 'you');
+                const thinking = addMessage('Checking the market data...', 'assistant');
+                try {
+                    const res = await fetch('/api/market-chat', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({message: question}),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        thinking.textContent = data.error || 'Something went wrong. Please try again.';
+                        return;
+                    }
+                    thinking.textContent = data.answer;
+                    if (data.llm_used) {
+                        const tag = document.createElement('p');
+                        tag.textContent = 'Answered by the live model, grounded in the dashboard data.';
+                        tag.className = 'text-xs text-emerald-400';
+                        messages.appendChild(tag);
+                    }
+                    if (data.trace && data.trace.length) {
+                        const details = document.createElement('details');
+                        details.className = 'text-xs text-slate-400';
+                        const summary = document.createElement('summary');
+                        summary.textContent = 'View MCP wire trace';
+                        summary.className = 'cursor-pointer hover:text-slate-200';
+                        const pre = document.createElement('pre');
+                        pre.textContent = JSON.stringify(data.trace, null, 2);
+                        pre.className = 'mt-2 bg-slate-950 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-words';
+                        details.appendChild(summary);
+                        details.appendChild(pre);
+                        messages.appendChild(details);
+                    }
+                    if (data.llm_error) {
+                        const note = document.createElement('p');
+                        note.textContent = 'Live model was unavailable; this answer is grounded directly in the dashboard data.';
+                        note.className = 'text-xs text-amber-400';
+                        messages.appendChild(note);
+                    }
+                    messages.scrollTop = messages.scrollHeight;
+                } catch (err) {
+                    thinking.textContent = 'Could not reach the server. Please try again.';
+                }
+            }
+            sendBtn.addEventListener('click', ask);
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+            document.querySelectorAll('.market-chat-chip').forEach((chip) => {
+                chip.addEventListener('click', () => { input.value = chip.textContent; ask(); });
+            });
+        })();
+    </script>
 </body>
 </html>
