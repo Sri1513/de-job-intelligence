@@ -81,10 +81,24 @@ def _check_rate_limit(ip: str) -> bool:
 
 def _post_json(url, payload, timeout, headers=None):
     """POST a JSON body, return the parsed JSON response. Stdlib only:
-    httpx is not a runtime dependency of this project."""
+    httpx is not a runtime dependency of this project.
+
+    A browser-like User-Agent is mandatory: llm.sriomkar.com sits behind
+    Cloudflare, which blocks non-browser signatures (error 1010) before
+    the request ever reaches Open WebUI. The internal MCP calls are
+    unaffected by the extra header."""
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json", **(headers or {})}
+        url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            ),
+            **(headers or {}),
+        },
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -230,6 +244,17 @@ def _llm_answer(message, overview, top_skills, job_rows):
         if not text:
             return None, "empty"
         return text, None
+    except urllib.error.HTTPError as exc:
+        # The body is the only thing that distinguishes a Cloudflare
+        # bot block from an Open WebUI auth/model error, so log a
+        # snippet of it server-side. It is never returned to the
+        # frontend: the drawer only ever sees the generic fallback.
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            detail = ""
+        logger.warning("Market-chat LLM call failed: HTTP %s %s", exc.code, detail)
+        return None, "unavailable"
     except Exception as exc:
         logger.warning("Market-chat LLM call failed: %s", exc)
         return None, "unavailable"

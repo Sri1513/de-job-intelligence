@@ -16,6 +16,10 @@ from src.core.config import settings
 from src.dashboard import market_chat
 from src.dashboard.app import app
 
+# The autouse fixture below replaces market_chat._post_json with a fake;
+# keep a reference to the real implementation for the User-Agent test.
+_REAL_POST_JSON = market_chat._post_json
+
 OVERVIEW = [
     # Real MCP shape: plain psycopg rows serialized as JSON arrays, in
     # the SELECT column order (job_category, total_jobs_tracked,
@@ -160,6 +164,29 @@ def test_mcp_down_returns_unavailable_answer(monkeypatch):
     result = market_chat.answer_question("Which skills are most in demand?", "1.2.3.4")
     assert "temporarily unavailable" in result["answer"]
     assert all("error" in t for t in result["trace"])
+
+
+def test_post_json_sends_browser_user_agent(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["ua"] = req.get_header("User-agent")
+        return _Resp()
+
+    monkeypatch.setattr(market_chat.urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr(market_chat, "_post_json", _REAL_POST_JSON)
+    assert market_chat._post_json("http://x.test/", {"a": 1}, 5) == {"ok": True}
+    assert captured["ua"] and "Mozilla" in captured["ua"]
 
 
 def test_http_route_and_rate_limit():
