@@ -226,6 +226,25 @@ def test_stream_llm_tokens(monkeypatch):
     assert text == "Hello world"
     done = [e for e in events if e["type"] == "done"][0]
     assert done["llm_used"] is True
+    assert "llm_error" not in done
+
+
+def test_stream_llm_partial_marks_error(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+
+    def _partial(message, overview, top_skills, job_rows):
+        yield "Hello "
+        raise urllib.error.URLError("cut mid-stream")
+
+    monkeypatch.setattr(market_chat, "_stream_llm_tokens", _partial)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "hi"})
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert text == "Hello "
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is True
+    assert done["llm_error"] == "unavailable"
 
 
 def test_stream_llm_failure_falls_back_to_template(monkeypatch):

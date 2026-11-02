@@ -836,7 +836,9 @@
                                     }
                                     if (event.llm_error) {
                                         const note = document.createElement('p');
-                                        note.textContent = 'Live model was unavailable; this answer is grounded directly in the dashboard data.';
+                                        note.textContent = event.llm_used
+                                            ? 'The live model cut out partway through; this is a partial answer.'
+                                            : 'Live model was unavailable; this answer is grounded directly in the dashboard data.';
                                         note.className = 'text-xs text-amber-400';
                                         messages.appendChild(note);
                                     }

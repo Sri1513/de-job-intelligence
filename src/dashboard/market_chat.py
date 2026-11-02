@@ -433,11 +433,13 @@ def stream_answer(message: str):
 
     template = _template_answer(message, overview, top_skills, job_rows, skill)
     streamed_any = False
+    stream_clean = False
     if settings.MARKET_CHAT_LLM_URL:
         try:
             for token in _stream_llm_tokens(message, overview, top_skills, job_rows):
                 streamed_any = True
                 yield _sse({"type": "token", "text": token})
+            stream_clean = True
         except urllib.error.HTTPError as exc:
             try:
                 detail = exc.read().decode("utf-8", "replace")[:200]
@@ -447,10 +449,13 @@ def stream_answer(message: str):
         except Exception as exc:
             logger.warning("Market-chat LLM stream failed: %s", exc)
         if streamed_any:
-            # Partial model output is still model output; the note tells
-            # the visitor the stream cut out.
+            # A clean finish carries no error; only a stream that threw
+            # mid-answer reports unavailable alongside the partial text.
             yield _sse({"type": "trace", "trace": trace})
-            yield _sse({"type": "done", "llm_used": True, "llm_error": "unavailable"})
+            done = {"type": "done", "llm_used": True}
+            if not stream_clean:
+                done["llm_error"] = "unavailable"
+            yield _sse(done)
             return
         # No token arrived at all: fall through to the template answer.
         for word in template.split(" "):
