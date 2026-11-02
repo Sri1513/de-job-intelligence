@@ -23,10 +23,17 @@ SECURITY BOUNDARY -- read this before touching this file:
 - Fail-closed: when MCP_DASHBOARD_READER_PASSWORD is empty, all
   data-serving methods answer 503. Listing methods (which need no DB)
   still work, so clients can discover the surface without data leaking.
+- The profile://frameworks resource is the exception to the DB rule: it
+  serves the curated, public-safe file config/company_frameworks.json
+  (no database, no reader pool, no private data by construction -- the
+  file holds only public profile content and is approved separately).
+  It needs no reader password, so it stays available when the DB
+  methods fail closed.
 """
 import json
 import logging
 from contextlib import contextmanager
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -47,6 +54,8 @@ TOP_SKILLS_LIMIT = 20
 
 OVERVIEW_URI = "jobs://metrics/overview"
 TOP_SKILLS_URI = "jobs://metrics/top-skills"
+PROFILE_URI = "profile://frameworks"
+PROFILE_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "company_frameworks.json"
 
 PUBLIC_RESOURCES = [
     {
@@ -65,6 +74,17 @@ PUBLIC_RESOURCES = [
         "description": (
             "Most frequent skills across tracked postings, counted from "
             "the sanitized skills view. No personal or application data."
+        ),
+        "mimeType": "application/json",
+    },
+    {
+        "uri": PROFILE_URI,
+        "name": "Omkar's public profile: frameworks, experience, projects",
+        "description": (
+            "Curated public profile data for Sri Omkar: experience, "
+            "projects, frameworks, skills, and education. Public-safe "
+            "by construction: no sponsorship, rates, salary, private "
+            "notes, or non-public contact details."
         ),
         "mimeType": "application/json",
     },
@@ -145,6 +165,18 @@ def _reader_connection():
 
 def _rows_to_json(rows):
     return json.loads(json.dumps(rows, default=str))
+
+
+def _read_profile_data():
+    """Read and validate the curated public profile file. Raises
+    ValueError when the file is missing or not valid JSON, so the
+    handler can answer a JSON-RPC error instead of serving partial
+    or stale data."""
+    with open(PROFILE_FILE, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError("profile file must contain a JSON object")
+    return data
 
 
 # ---------------------------------------------------------------- queries
@@ -309,6 +341,26 @@ async def handle_public_rpc(request: Request) -> JSONResponse | Response:
 
         if method == "resources/read":
             uri = params.get("uri")
+            # The profile resource serves a curated file, not the DB:
+            # answer it before touching the reader pool, so it stays
+            # available when the DB methods fail closed.
+            if uri == PROFILE_URI:
+                try:
+                    data = _read_profile_data()
+                except Exception as exc:
+                    return _error(rpc_id, -32603, f"Profile data unavailable: {exc}")
+                return _result(
+                    rpc_id,
+                    {
+                        "contents": [
+                            {
+                                "uri": uri,
+                                "mimeType": "application/json",
+                                "text": json.dumps(data, default=str),
+                            }
+                        ]
+                    },
+                )
             with _reader_connection() as conn:
                 if uri == OVERVIEW_URI:
                     data = _fetch_overview(conn)

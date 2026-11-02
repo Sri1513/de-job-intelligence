@@ -144,7 +144,11 @@ def test_resources_list(public_client):
     client, _ = public_client
     result = rpc(client, "resources/list").json()["result"]
     uris = [r["uri"] for r in result["resources"]]
-    assert uris == ["jobs://metrics/overview", "jobs://metrics/top-skills"]
+    assert uris == [
+        "jobs://metrics/overview",
+        "jobs://metrics/top-skills",
+        "profile://frameworks",
+    ]
 
 
 def test_resources_read_overview(public_client):
