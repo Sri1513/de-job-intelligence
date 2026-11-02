@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     # in .env, e.g. the output of `openssl rand -hex 32`.
     MCP_AUTH_TOKEN: str = ""
 
+    # Password for the read-only mcp_dashboard_reader role (migrations
+    # 004/005). Lives ONLY in the VM .env; the public MCP route refuses
+    # to serve data when this is empty (fail-closed). Never commit a
+    # value here, and generate it with `openssl rand -hex 32` so it
+    # stays URL-safe for the reader pool connection string.
+    MCP_DASHBOARD_READER_PASSWORD: str = ""
+
     # Public base URL of the MCP server, used for OAuth 2.1 discovery
     # metadata (RFC 8414 / RFC 9728) and redirect construction.
     MCP_PUBLIC_URL: str = "https://mcp.sriomkar.com"

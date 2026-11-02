@@ -20,6 +20,7 @@ from starlette.routing import Route
 
 from src.core.config import settings
 from src.protocols.auth import BearerAuthMiddleware
+from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
 from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
@@ -191,6 +192,10 @@ routes = [
     # public MCP server lives at /mcp). Same handler and same auth as /rpc;
     # BearerAuthMiddleware still requires a token or OAuth token here.
     Route("/mcp", handle_rpc, methods=["POST"]),
+    # Public read-only MCP surface (resources, prompts, one tool). Exempt
+    # from bearer auth by exact path in auth.py -- safe only because its
+    # handler queries exclusively through the mcp_dashboard_reader pool.
+    Route(PUBLIC_MCP_PATH, handle_public_rpc, methods=["POST"]),
     *oauth_routes,
 ]
 
