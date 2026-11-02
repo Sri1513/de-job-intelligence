@@ -309,7 +309,7 @@ def test_http_route_and_rate_limit():
 
 
 def test_guardrails_file_loads():
-    assert portfolio_chat._GUARDRAILS["version"] == 1
+    assert portfolio_chat._GUARDRAILS["version"] == 2
     assert portfolio_chat._GUARDRAILS["tools"]["max_tool_rounds"] == 4
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_resources"] == ["profile://frameworks"]
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_tools"] == []
@@ -319,6 +319,13 @@ def test_guardrails_file_loads():
         "https://sriomkar.com",
         "https://www.sriomkar.com",
     }
+
+
+def test_prompts_require_third_person_about_omkar():
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "third person" in prompt
+        assert "Never claim to be Sri Omkar" in prompt
+        assert "Portfolio Assistant" in prompt
 
 
 def test_llm_path_used_when_configured(monkeypatch):
