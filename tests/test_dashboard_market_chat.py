@@ -300,6 +300,29 @@ def test_stream_agent_picks_tool(monkeypatch):
     assert "llm_error" not in done
 
 
+def test_agent_no_tool_calls_falls_back_to_grounded(monkeypatch):
+    """Live failure (2026-11-02): the model returned no tool calls,
+    and the drawer streamed an empty-context guess (invented skill
+    counts). Zero calls must now answer from pre-fetched data."""
+
+    def _agent_post(url, payload, timeout, headers=None):
+        if "public/mcp" in url:
+            return _fake_post_json(url, payload, timeout, headers)
+        return {"choices": [{"message": {"role": "assistant", "content": "no tools"}}]}
+
+    monkeypatch.setattr(market_chat, "_post_json", _agent_post)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "Which skills are most in demand?"})
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    assert not [e for e in events if e["type"] == "tool_call"]
+    trace = [e for e in events if e["type"] == "trace"][0]["trace"]
+    assert any(t["method"] == "resources/read" for t in trace)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert "python" in text.lower()
+    assert "1234" not in text
+
+
 def test_agent_rejects_unknown_resource_and_tool():
     surface, _ = market_chat._discover_mcp_surface()
     trace = []

@@ -685,6 +685,7 @@ def _agent_stream_events(message):
     ]
     tools = _mcp_dispatch_tools(surface)
     url = settings.MARKET_CHAT_LLM_URL
+    tool_calls_made = 0
     for round_no in range(MAX_TOOL_ROUNDS):
         payload = {
             "model": settings.MARKET_CHAT_LLM_MODEL,
@@ -724,6 +725,7 @@ def _agent_stream_events(message):
                 args = {}
             yield _sse({"type": "tool_call", "tool": name, "arguments": args})
             result_text = _execute_mcp_action(name, args, trace, surface)
+            tool_calls_made += 1
             messages.append(
                 {
                     "role": "tool",
@@ -743,6 +745,16 @@ def _agent_stream_events(message):
             }
         )
     logger.info("Market-chat agent loop finished with %d trace entries", len(trace))
+    if tool_calls_made == 0:
+        # The model answered without touching the MCP surface. Its
+        # reply would be an empty-context guess: live, this produced
+        # hedged "not provided" answers and invented skill counts
+        # (Python 1234, SQL 987) copied from the surface listing.
+        # Answer from pre-fetched dashboard data instead, so the
+        # drawer never presents an ungrounded number as market data.
+        logger.info("Market-chat agent made no tool calls; falling back to grounded data")
+        yield from _grounded_stream_events(message)
+        return
     streamed_any = False
     stream_clean = False
     try:
@@ -791,16 +803,21 @@ def _grounded_stream_events(message):
         },
     ]
     streamed_any = False
+    stream_clean = False
     if settings.MARKET_CHAT_LLM_URL:
         try:
             for token in _stream_llm_tokens(messages):
                 streamed_any = True
                 yield _sse({"type": "token", "text": token})
+            stream_clean = True
         except Exception as exc:
             logger.warning("Market-chat grounded stream failed: %s", exc)
     if streamed_any:
         yield _sse({"type": "trace", "trace": trace})
-        yield _sse({"type": "done", "llm_used": True})
+        done = {"type": "done", "llm_used": True}
+        if not stream_clean:
+            done["llm_error"] = "unavailable"
+        yield _sse(done)
         return
     for word in template.split(" "):
         yield _sse({"type": "token", "text": word + " "})
@@ -816,8 +833,9 @@ def stream_answer(message: str):
     With a model endpoint configured, the model drives: it picks MCP
     tools (_agent_stream_events) and only falls back to backend
     pre-fetching (_grounded_stream_events) when the endpoint rejects
-    tool calling outright. Without an endpoint, the grounded template
-    path runs directly."""
+    tool calling outright or the model answers without calling any
+    tool. Without an endpoint, the grounded template path runs
+    directly."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         yield _sse({"type": "token", "text": "Ask a question about the job market data."})
