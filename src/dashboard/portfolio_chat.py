@@ -668,6 +668,10 @@ async def _parse_message(request: Request):
     except Exception:
         return None, JSONResponse({"error": "Invalid JSON body."}, status_code=400, headers=cors)
     message = payload.get("message", "")
+    if not message:
+        # The portfolio drawer originally posted {"question": ...};
+        # accept it as a fallback so cached pages keep working.
+        message = payload.get("question", "")
     if not isinstance(message, str):
         return None, JSONResponse({"error": "message must be a string."}, status_code=400, headers=cors)
     return message, None
