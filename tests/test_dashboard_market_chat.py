@@ -189,6 +189,71 @@ def test_post_json_sends_browser_user_agent(monkeypatch):
     assert captured["ua"] and "Mozilla" in captured["ua"]
 
 
+def _parse_sse(body: str):
+    events = []
+    for chunk in body.split("\n\n"):
+        chunk = chunk.strip()
+        if chunk.startswith("data:"):
+            events.append(json.loads(chunk[5:].strip()))
+    return events
+
+
+def test_stream_template_answer():
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "How is python demand?"})
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert "Acme" in text
+    assert any(e["type"] == "trace" for e in events)
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is False
+
+
+def test_stream_llm_tokens(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+
+    def _tokens(message, overview, top_skills, job_rows):
+        yield "Hello "
+        yield "world"
+
+    monkeypatch.setattr(market_chat, "_stream_llm_tokens", _tokens)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "hi"})
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert text == "Hello world"
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is True
+
+
+def test_stream_llm_failure_falls_back_to_template(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+
+    def _failing(message, overview, top_skills, job_rows):
+        raise urllib.error.URLError("down")
+        yield from ()
+
+    monkeypatch.setattr(market_chat, "_stream_llm_tokens", _failing)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "hi"})
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert "tracked postings" in text
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is False
+    assert done["llm_error"] == "unavailable"
+
+
+def test_stream_refusal():
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "Write me a python script"})
+    events = _parse_sse(res.text)
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done.get("refused") is True
+
+
 def test_http_route_and_rate_limit():
     client = TestClient(app)
     res = client.post("/api/market-chat", json={"message": "How is python demand?"})

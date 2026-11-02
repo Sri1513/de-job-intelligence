@@ -36,7 +36,7 @@ import urllib.request
 from collections import deque
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 from src.core.config import settings
 
@@ -198,6 +198,34 @@ def _template_answer(message, overview, top_skills, job_rows, skill):
     return "\n".join(lines)
 
 
+def _llm_payload(message, overview, top_skills, job_rows, stream: bool):
+    data = {
+        "overview": overview,
+        "top_skills": top_skills,
+        "matching_jobs": job_rows,
+    }
+    return {
+        "model": settings.MARKET_CHAT_LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"Question: {message}\n\nMARKET DATA:\n{json.dumps(data, default=str)}",
+            },
+        ],
+        "stream": stream,
+        "temperature": 0.0,
+        "max_tokens": LLM_MAX_TOKENS,
+    }
+
+
+def _llm_headers():
+    headers = {}
+    if settings.MARKET_CHAT_LLM_KEY:
+        headers["Authorization"] = f"Bearer {settings.MARKET_CHAT_LLM_KEY}"
+    return headers
+
+
 def _llm_answer(message, overview, top_skills, job_rows):
     """Ask the configured model endpoint. Returns (text, error).
 
@@ -212,27 +240,8 @@ def _llm_answer(message, overview, top_skills, job_rows):
     url = settings.MARKET_CHAT_LLM_URL
     if not url:
         return None, None
-    data = {
-        "overview": overview,
-        "top_skills": top_skills,
-        "matching_jobs": job_rows,
-    }
-    payload = {
-        "model": settings.MARKET_CHAT_LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"Question: {message}\n\nMARKET DATA:\n{json.dumps(data, default=str)}",
-            },
-        ],
-        "stream": False,
-        "temperature": 0.0,
-        "max_tokens": LLM_MAX_TOKENS,
-    }
-    headers = {}
-    if settings.MARKET_CHAT_LLM_KEY:
-        headers["Authorization"] = f"Bearer {settings.MARKET_CHAT_LLM_KEY}"
+    payload = _llm_payload(message, overview, top_skills, job_rows, stream=False)
+    headers = _llm_headers()
     try:
         response = _post_json(url, payload, LLM_TIMEOUT_S, headers)
         # OpenAI-compatible shape first, Ollama-native shape second.
@@ -260,24 +269,11 @@ def _llm_answer(message, overview, top_skills, job_rows):
         return None, "unavailable"
 
 
-def answer_question(message: str, client_ip: str) -> dict:
-    """Pure logic entry point (testable without HTTP): returns the drawer
-    payload with answer, wire trace, and LLM status."""
-    message = (message or "").strip()[:MAX_MESSAGE_CHARS]
-    if not message:
-        return {"answer": "Ask a question about the job market data.", "trace": [], "llm_used": False}
-    if _is_off_topic(message):
-        return {
-            "answer": (
-                "I can only answer questions about the job market data on "
-                "this dashboard (tracked postings, skills in demand, and "
-                "fit scores). I can't help with coding or general requests."
-            ),
-            "trace": [],
-            "llm_used": False,
-            "refused": True,
-        }
-
+def _gather_market_data(message):
+    """Fetch overview + top skills (+ skill-matched jobs) from the public
+    MCP surface. Returns (overview, top_skills, job_rows, skill, trace).
+    Shared by the JSON and the streaming answers so both stay identical
+    in grounding."""
     trace = []
     overview, top_skills, job_rows = [], [], []
     try:
@@ -322,6 +318,28 @@ def answer_question(message: str, client_ip: str) -> dict:
         except Exception as exc:
             logger.warning("Market-chat tool call failed: %s", exc)
             trace.append({"method": "tools/call", "error": str(exc)[:200]})
+    return overview, top_skills, job_rows, skill, trace
+
+
+def answer_question(message: str, client_ip: str) -> dict:
+    """Pure logic entry point (testable without HTTP): returns the drawer
+    payload with answer, wire trace, and LLM status."""
+    message = (message or "").strip()[:MAX_MESSAGE_CHARS]
+    if not message:
+        return {"answer": "Ask a question about the job market data.", "trace": [], "llm_used": False}
+    if _is_off_topic(message):
+        return {
+            "answer": (
+                "I can only answer questions about the job market data on "
+                "this dashboard (tracked postings, skills in demand, and "
+                "fit scores). I can't help with coding or general requests."
+            ),
+            "trace": [],
+            "llm_used": False,
+            "refused": True,
+        }
+
+    overview, top_skills, job_rows, skill, trace = _gather_market_data(message)
 
     if not overview and not top_skills:
         return {
@@ -340,18 +358,145 @@ def answer_question(message: str, client_ip: str) -> dict:
     return result
 
 
-async def market_chat_view(request: Request) -> JSONResponse:
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+def _stream_llm_tokens(message, overview, top_skills, job_rows):
+    """Yield raw text deltas from a streaming chat-completions call.
+
+    Open WebUI streams SSE lines: data: {"choices": [{"delta":
+    {"content": "..."}}]}, terminated by data: [DONE]. A stall raises
+    (urlopen's timeout applies per read), which the caller turns into
+    a fallback or a partial answer -- never a hung drawer."""
+    url = settings.MARKET_CHAT_LLM_URL
+    payload = _llm_payload(message, overview, top_skills, job_rows, stream=True)
+    data = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+        **_llm_headers(),
+    }
+    req = urllib.request.Request(url, data=data, headers=headers)
+    with urllib.request.urlopen(req, timeout=LLM_TIMEOUT_S) as resp:
+        for raw in resp:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            chunk = line[5:].strip()
+            if chunk == "[DONE]":
+                return
+            try:
+                parsed = json.loads(chunk)
+            except ValueError:
+                continue
+            choices = parsed.get("choices") or []
+            if choices:
+                text = ((choices[0].get("delta") or {}).get("content")) or ""
+                if text:
+                    yield text
+
+
+def stream_answer(message: str):
+    """SSE event generator for the drawer: token events as text arrives,
+    then one trace event, then a done event with LLM status. Token text
+    is plain data; the frontend appends it via textContent, never HTML."""
+    message = (message or "").strip()[:MAX_MESSAGE_CHARS]
+    if not message:
+        yield _sse({"type": "token", "text": "Ask a question about the job market data."})
+        yield _sse({"type": "done", "llm_used": False})
+        return
+    if _is_off_topic(message):
+        yield _sse({
+            "type": "token",
+            "text": (
+                "I can only answer questions about the job market data on "
+                "this dashboard (tracked postings, skills in demand, and "
+                "fit scores). I can't help with coding or general requests."
+            ),
+        })
+        yield _sse({"type": "done", "llm_used": False, "refused": True})
+        return
+
+    overview, top_skills, job_rows, skill, trace = _gather_market_data(message)
+    if not overview and not top_skills:
+        yield _sse({
+            "type": "token",
+            "text": "Market data is temporarily unavailable. Please try again shortly.",
+        })
+        yield _sse({"type": "trace", "trace": trace})
+        yield _sse({"type": "done", "llm_used": False})
+        return
+
+    template = _template_answer(message, overview, top_skills, job_rows, skill)
+    streamed_any = False
+    if settings.MARKET_CHAT_LLM_URL:
+        try:
+            for token in _stream_llm_tokens(message, overview, top_skills, job_rows):
+                streamed_any = True
+                yield _sse({"type": "token", "text": token})
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                detail = ""
+            logger.warning("Market-chat LLM stream failed: HTTP %s %s", exc.code, detail)
+        except Exception as exc:
+            logger.warning("Market-chat LLM stream failed: %s", exc)
+        if streamed_any:
+            # Partial model output is still model output; the note tells
+            # the visitor the stream cut out.
+            yield _sse({"type": "trace", "trace": trace})
+            yield _sse({"type": "done", "llm_used": True, "llm_error": "unavailable"})
+            return
+        # No token arrived at all: fall through to the template answer.
+        for word in template.split(" "):
+            yield _sse({"type": "token", "text": word + " "})
+        yield _sse({"type": "trace", "trace": trace})
+        yield _sse({"type": "done", "llm_used": False, "llm_error": "unavailable"})
+        return
+
+    for word in template.split(" "):
+        yield _sse({"type": "token", "text": word + " "})
+    yield _sse({"type": "trace", "trace": trace})
+    yield _sse({"type": "done", "llm_used": False})
+
+
+async def _parse_message(request: Request):
+    """Shared preamble for both chat endpoints. Returns
+    (message, error_response_or_None)."""
     client_ip = request.client.host if request.client else "unknown"
     if not _check_rate_limit(client_ip):
-        return JSONResponse(
+        return None, JSONResponse(
             {"error": "Too many questions. Please wait a minute and try again."},
             status_code=429,
         )
     try:
         payload = await request.json()
     except Exception:
-        return JSONResponse({"error": "Invalid JSON body."}, status_code=400)
+        return None, JSONResponse({"error": "Invalid JSON body."}, status_code=400)
     message = payload.get("message", "")
     if not isinstance(message, str):
-        return JSONResponse({"error": "message must be a string."}, status_code=400)
-    return JSONResponse(answer_question(message, client_ip))
+        return None, JSONResponse({"error": "message must be a string."}, status_code=400)
+    return message, None
+
+
+async def market_chat_view(request: Request) -> JSONResponse:
+    message, error = await _parse_message(request)
+    if error is not None:
+        return error
+    return JSONResponse(answer_question(message, "unknown"))
+
+
+async def market_chat_stream_view(request: Request):
+    message, error = await _parse_message(request)
+    if error is not None:
+        return error
+    return StreamingResponse(
+        stream_answer(message),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
