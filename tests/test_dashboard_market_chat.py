@@ -213,7 +213,7 @@ def test_stream_template_answer():
 def test_stream_llm_tokens(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
 
-    def _tokens(message, overview, top_skills, job_rows):
+    def _tokens(messages):
         yield "Hello "
         yield "world"
 
@@ -232,7 +232,7 @@ def test_stream_llm_tokens(monkeypatch):
 def test_stream_llm_partial_marks_error(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
 
-    def _partial(message, overview, top_skills, job_rows):
+    def _partial(messages):
         yield "Hello "
         raise urllib.error.URLError("cut mid-stream")
 
@@ -247,10 +247,73 @@ def test_stream_llm_partial_marks_error(monkeypatch):
     assert done["llm_error"] == "unavailable"
 
 
+def test_stream_agent_picks_tool(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+    calls = {"n": 0}
+
+    def _agent_post(url, payload, timeout, headers=None):
+        if "public/mcp" in url:
+            return _fake_post_json(url, payload, timeout, headers)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"choices": [{"message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "call_1", "type": "function", "function": {
+                    "name": "query_jobs_by_criteria",
+                    "arguments": json.dumps({"skill": "python"}),
+                }}],
+            }}]}
+        return {"choices": [{"message": {"role": "assistant", "content": "final"}}]}
+
+    def _final(messages):
+        yield "Done."
+
+    monkeypatch.setattr(market_chat, "_post_json", _agent_post)
+    monkeypatch.setattr(market_chat, "_stream_llm_tokens", _final)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "python jobs?"})
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    tool_events = [e for e in events if e["type"] == "tool_call"]
+    assert len(tool_events) == 1
+    assert tool_events[0]["tool"] == "query_jobs_by_criteria"
+    assert tool_events[0]["arguments"]["skill"] == "python"
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert text == "Done."
+    trace = [e for e in events if e["type"] == "trace"][0]["trace"]
+    assert any(t["method"] == "tools/call" for t in trace)
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is True
+    assert "llm_error" not in done
+
+
+def test_stream_tools_rejected_falls_back_to_grounded(monkeypatch):
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+
+    def _rejecting(url, payload, timeout, headers=None):
+        if "public/mcp" in url:
+            return _fake_post_json(url, payload, timeout, headers)
+        raise urllib.error.HTTPError(url, 400, "tools not supported", {}, None)
+
+    def _final(messages):
+        yield "Grounded."
+
+    monkeypatch.setattr(market_chat, "_post_json", _rejecting)
+    monkeypatch.setattr(market_chat, "_stream_llm_tokens", _final)
+    client = TestClient(app)
+    res = client.post("/api/market-chat/stream", json={"message": "hi"})
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert text == "Grounded."
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["llm_used"] is True
+
+
 def test_stream_llm_failure_falls_back_to_template(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
 
-    def _failing(message, overview, top_skills, job_rows):
+    def _failing(messages):
         raise urllib.error.URLError("down")
         yield from ()
 
