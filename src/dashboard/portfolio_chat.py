@@ -64,10 +64,10 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from src.core.config import settings
 from src.dashboard.market_chat import (
-    _ToolsUnsupported,
     _mcp_rpc,
     _post_json,
     _stream_llm_tokens,
+    _ToolsUnsupported,
 )
 
 logger = logging.getLogger("de-job-intelligence.portfolio-chat")
