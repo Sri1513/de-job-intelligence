@@ -825,6 +825,11 @@
                                 if (event.type === 'token') {
                                     answerEl.textContent += event.text;
                                     messages.scrollTop = messages.scrollHeight;
+                                } else if (event.type === 'tool_call') {
+                                    const line = document.createElement('p');
+                                    line.textContent = '🔧 ' + event.tool + ' ' + JSON.stringify(event.arguments);
+                                    line.className = 'text-xs text-slate-400';
+                                    messages.insertBefore(line, answerEl);
                                 } else if (event.type === 'trace') {
                                     addTrace(event.trace);
                                 } else if (event.type === 'done') {

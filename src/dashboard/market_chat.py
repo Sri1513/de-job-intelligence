@@ -56,6 +56,63 @@ SYSTEM_PROMPT = (
     "Do not invent details, companies, numbers, or trends."
 )
 
+# Agentic drawer: the model itself picks MCP tools based on the question;
+# the dashboard backend only executes the calls against the public MCP
+# surface (read-only reader pool) and returns results to the model.
+AGENT_SYSTEM_PROMPT = (
+    "You are the Job Market Analyst for Sri Omkar's data platform. "
+    "You have read-only tools that query the tracked job market database: "
+    "a market overview, top skills, and jobs matching criteria. "
+    "Use the tools to answer the user's question; call the tools you need "
+    "before answering. Answer using ONLY what the tools return. "
+    "If the tools do not contain the answer, say so plainly. "
+    "Do not invent details, companies, numbers, or trends."
+)
+
+_MCP_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_market_overview",
+            "description": (
+                "Total tracked postings, average fit, high-match counts, "
+                "and hiring-company counts per job category."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_top_skills",
+            "description": "The most frequent skills across tracked postings, with job counts.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_jobs_by_criteria",
+            "description": "Top postings matching a skill, optionally filtered by minimum fit score.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill": {"type": "string", "description": "Skill to match, e.g. python."},
+                    "min_score": {"type": "number", "description": "Minimum fit score 0-100."},
+                    "limit": {"type": "integer", "description": "Max postings, 1-50."},
+                },
+            },
+        },
+    },
+]
+
+MAX_TOOL_ROUNDS = 4
+
+
+class _ToolsUnsupported(Exception):
+    """The model endpoint rejected tool calling before any tool event
+    was emitted, so the drawer falls back to grounded answering."""
+
 # Deterministic scope guard: code and general-assistant requests are
 # refused before any MCP or LLM call. Kept narrow on purpose so real
 # market questions ("how do I break into data engineering?") still pass.
@@ -362,7 +419,7 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-def _stream_llm_tokens(message, overview, top_skills, job_rows):
+def _stream_llm_tokens(messages):
     """Yield raw text deltas from a streaming chat-completions call.
 
     Open WebUI streams SSE lines: data: {"choices": [{"delta":
@@ -370,7 +427,13 @@ def _stream_llm_tokens(message, overview, top_skills, job_rows):
     (urlopen's timeout applies per read), which the caller turns into
     a fallback or a partial answer -- never a hung drawer."""
     url = settings.MARKET_CHAT_LLM_URL
-    payload = _llm_payload(message, overview, top_skills, job_rows, stream=True)
+    payload = {
+        "model": settings.MARKET_CHAT_LLM_MODEL,
+        "messages": messages,
+        "stream": True,
+        "temperature": 0.0,
+        "max_tokens": LLM_MAX_TOKENS,
+    }
     data = json.dumps(payload).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
@@ -400,10 +463,184 @@ def _stream_llm_tokens(message, overview, top_skills, job_rows):
                     yield text
 
 
+def _execute_mcp_tool(name, arguments, trace):
+    """Run one model-chosen tool against the public MCP surface.
+    Returns the text handed back to the model. Tool failures become
+    text too, so the model can recover instead of the request dying.
+    Trace entries keep the same shape as the pre-fetch path, so the
+    drawer renders model-triggered calls identically."""
+    if name == "get_market_overview":
+        mcp_method, params = "resources/read", {"uri": "jobs://metrics/overview"}
+    elif name == "get_top_skills":
+        mcp_method, params = "resources/read", {"uri": "jobs://metrics/top-skills"}
+    elif name == "query_jobs_by_criteria":
+        mcp_method, params = "tools/call", {
+            "name": "query_jobs_by_criteria",
+            "arguments": arguments,
+        }
+    else:
+        return f"Unknown tool: {name}"
+    try:
+        req, resp = _mcp_rpc(mcp_method, params)
+        trace.append({"method": mcp_method, "request": req, "response": resp})
+        result = resp.get("result") or {}
+        contents = result.get("contents") or result.get("content") or []
+        if contents:
+            return contents[0].get("text") or ""
+        return "No data returned."
+    except Exception as exc:
+        logger.warning("Market-chat tool execution failed (%s): %s", name, exc)
+        trace.append({"method": mcp_method, "error": str(exc)[:200]})
+        return f"Tool error: {exc}"
+
+
+def _agent_stream_events(message):
+    """Agentic loop: the model picks MCP tools, the backend executes
+    them, results go back to the model, and only the final answer
+    streams to the drawer. Yields SSE strings. Raises
+    _ToolsUnsupported only when the very first tools call fails, so
+    the caller can fall back to grounded answering before anything
+    was emitted; later failures degrade to answering from whatever
+    the model already gathered."""
+    messages = [
+        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+        {"role": "user", "content": message},
+    ]
+    trace = []
+    url = settings.MARKET_CHAT_LLM_URL
+    for round_no in range(MAX_TOOL_ROUNDS):
+        payload = {
+            "model": settings.MARKET_CHAT_LLM_MODEL,
+            "messages": messages,
+            "tools": _MCP_TOOLS,
+            "tool_choice": "auto",
+            "stream": False,
+            "temperature": 0.0,
+            "max_tokens": LLM_MAX_TOKENS,
+        }
+        try:
+            resp = _post_json(url, payload, LLM_TIMEOUT_S, _llm_headers())
+        except Exception as exc:
+            if round_no == 0:
+                raise _ToolsUnsupported(str(exc)) from exc
+            logger.warning("Market-chat agent round %d failed: %s", round_no, exc)
+            break
+        msg = ((resp.get("choices") or [{}])[0].get("message") or {})
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            break
+        messages.append(
+            {
+                "role": "assistant",
+                "content": msg.get("content"),
+                "tool_calls": tool_calls,
+            }
+        )
+        for call in tool_calls:
+            fn = call.get("function") or {}
+            name = fn.get("name") or ""
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            if not isinstance(args, dict):
+                args = {}
+            yield _sse({"type": "tool_call", "tool": name, "arguments": args})
+            result_text = _execute_mcp_tool(name, args, trace)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.get("id") or "",
+                    "content": result_text,
+                }
+            )
+    else:
+        # Model never stopped calling tools: force a final answer.
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Answer the original question now using only the tool "
+                    "results above. Do not call further tools."
+                ),
+            }
+        )
+    logger.info("Market-chat agent loop finished with %d tool calls", len(trace))
+    streamed_any = False
+    stream_clean = False
+    try:
+        for token in _stream_llm_tokens(messages):
+            streamed_any = True
+            yield _sse({"type": "token", "text": token})
+        stream_clean = True
+    except Exception as exc:
+        logger.warning("Market-chat agent final stream failed: %s", exc)
+    if streamed_any:
+        yield _sse({"type": "trace", "trace": trace})
+        done = {"type": "done", "llm_used": True}
+        if not stream_clean:
+            done["llm_error"] = "unavailable"
+        yield _sse(done)
+        return
+    # The final stream produced nothing: answer from grounded data
+    # instead of leaving the visitor with an error. This also covers
+    # the case where the model never called tools and the stream died.
+    # (Grounded yields its own trace and done events.)
+    yield from _grounded_stream_events(message)
+
+
+def _grounded_stream_events(message):
+    """Previous behavior, kept as the fallback: backend pre-fetches
+    fixed MCP data and streams a model summary grounded in it (or the
+    template when the model is off)."""
+    overview, top_skills, job_rows, skill, trace = _gather_market_data(message)
+    if not overview and not top_skills:
+        yield _sse({
+            "type": "token",
+            "text": "Market data is temporarily unavailable. Please try again shortly.",
+        })
+        yield _sse({"type": "trace", "trace": trace})
+        yield _sse({"type": "done", "llm_used": False})
+        return
+    template = _template_answer(message, overview, top_skills, job_rows, skill)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"Question: {message}\n\nMARKET DATA:\n"
+                f"{json.dumps({'overview': overview, 'top_skills': top_skills, 'matching_jobs': job_rows}, default=str)}"
+            ),
+        },
+    ]
+    streamed_any = False
+    if settings.MARKET_CHAT_LLM_URL:
+        try:
+            for token in _stream_llm_tokens(messages):
+                streamed_any = True
+                yield _sse({"type": "token", "text": token})
+        except Exception as exc:
+            logger.warning("Market-chat grounded stream failed: %s", exc)
+    if streamed_any:
+        yield _sse({"type": "trace", "trace": trace})
+        yield _sse({"type": "done", "llm_used": True})
+        return
+    for word in template.split(" "):
+        yield _sse({"type": "token", "text": word + " "})
+    yield _sse({"type": "trace", "trace": trace})
+    yield _sse({"type": "done", "llm_used": False, "llm_error": "unavailable"})
+
+
 def stream_answer(message: str):
     """SSE event generator for the drawer: token events as text arrives,
     then one trace event, then a done event with LLM status. Token text
-    is plain data; the frontend appends it via textContent, never HTML."""
+    is plain data; the frontend appends it via textContent, never HTML.
+
+    With a model endpoint configured, the model drives: it picks MCP
+    tools (_agent_stream_events) and only falls back to backend
+    pre-fetching (_grounded_stream_events) when the endpoint rejects
+    tool calling outright. Without an endpoint, the grounded template
+    path runs directly."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         yield _sse({"type": "token", "text": "Ask a question about the job market data."})
@@ -420,54 +657,14 @@ def stream_answer(message: str):
         })
         yield _sse({"type": "done", "llm_used": False, "refused": True})
         return
-
-    overview, top_skills, job_rows, skill, trace = _gather_market_data(message)
-    if not overview and not top_skills:
-        yield _sse({
-            "type": "token",
-            "text": "Market data is temporarily unavailable. Please try again shortly.",
-        })
-        yield _sse({"type": "trace", "trace": trace})
-        yield _sse({"type": "done", "llm_used": False})
+    if not settings.MARKET_CHAT_LLM_URL:
+        yield from _grounded_stream_events(message)
         return
-
-    template = _template_answer(message, overview, top_skills, job_rows, skill)
-    streamed_any = False
-    stream_clean = False
-    if settings.MARKET_CHAT_LLM_URL:
-        try:
-            for token in _stream_llm_tokens(message, overview, top_skills, job_rows):
-                streamed_any = True
-                yield _sse({"type": "token", "text": token})
-            stream_clean = True
-        except urllib.error.HTTPError as exc:
-            try:
-                detail = exc.read().decode("utf-8", "replace")[:200]
-            except Exception:
-                detail = ""
-            logger.warning("Market-chat LLM stream failed: HTTP %s %s", exc.code, detail)
-        except Exception as exc:
-            logger.warning("Market-chat LLM stream failed: %s", exc)
-        if streamed_any:
-            # A clean finish carries no error; only a stream that threw
-            # mid-answer reports unavailable alongside the partial text.
-            yield _sse({"type": "trace", "trace": trace})
-            done = {"type": "done", "llm_used": True}
-            if not stream_clean:
-                done["llm_error"] = "unavailable"
-            yield _sse(done)
-            return
-        # No token arrived at all: fall through to the template answer.
-        for word in template.split(" "):
-            yield _sse({"type": "token", "text": word + " "})
-        yield _sse({"type": "trace", "trace": trace})
-        yield _sse({"type": "done", "llm_used": False, "llm_error": "unavailable"})
-        return
-
-    for word in template.split(" "):
-        yield _sse({"type": "token", "text": word + " "})
-    yield _sse({"type": "trace", "trace": trace})
-    yield _sse({"type": "done", "llm_used": False})
+    try:
+        yield from _agent_stream_events(message)
+    except _ToolsUnsupported:
+        logger.info("Market-chat: endpoint rejected tools; falling back to grounded answering")
+        yield from _grounded_stream_events(message)
 
 
 async def _parse_message(request: Request):
