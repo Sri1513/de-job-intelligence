@@ -16,6 +16,10 @@ from src.core.config import settings
 from src.dashboard import market_chat
 from src.dashboard.app import app
 
+# The autouse fixture below replaces market_chat._post_json with a fake;
+# keep a reference to the real implementation for the User-Agent test.
+_REAL_POST_JSON = market_chat._post_json
+
 OVERVIEW = [
     # Real MCP shape: plain psycopg rows serialized as JSON arrays, in
     # the SELECT column order (job_category, total_jobs_tracked,
@@ -180,6 +184,7 @@ def test_post_json_sends_browser_user_agent(monkeypatch):
         return _Resp()
 
     monkeypatch.setattr(market_chat.urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr(market_chat, "_post_json", _REAL_POST_JSON)
     assert market_chat._post_json("http://x.test/", {"a": 1}, 5) == {"ok": True}
     assert captured["ua"] and "Mozilla" in captured["ua"]
 
