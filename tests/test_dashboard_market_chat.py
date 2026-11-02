@@ -162,6 +162,28 @@ def test_mcp_down_returns_unavailable_answer(monkeypatch):
     assert all("error" in t for t in result["trace"])
 
 
+def test_post_json_sends_browser_user_agent(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["ua"] = req.get_header("User-agent")
+        return _Resp()
+
+    monkeypatch.setattr(market_chat.urllib.request, "urlopen", _fake_urlopen)
+    assert market_chat._post_json("http://x.test/", {"a": 1}, 5) == {"ok": True}
+    assert captured["ua"] and "Mozilla" in captured["ua"]
+
+
 def test_http_route_and_rate_limit():
     client = TestClient(app)
     res = client.post("/api/market-chat", json={"message": "How is python demand?"})
