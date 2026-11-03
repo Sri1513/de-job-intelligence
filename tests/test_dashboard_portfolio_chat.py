@@ -309,7 +309,7 @@ def test_http_route_and_rate_limit():
 
 
 def test_guardrails_file_loads():
-    assert portfolio_chat._GUARDRAILS["version"] == 2
+    assert portfolio_chat._GUARDRAILS["version"] == 3
     assert portfolio_chat._GUARDRAILS["tools"]["max_tool_rounds"] == 4
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_resources"] == ["profile://frameworks"]
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_tools"] == []
@@ -341,6 +341,13 @@ def test_contact_includes_phone_and_each_link_once():
     rendered = portfolio_chat._template_answer("how to contact Omkar?", PROFILE)
     for value in values:
         assert rendered.count(value) == 1
+
+
+def test_prompts_require_first_person_identity_and_complete_source():
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "I am the Portfolio Assistant" in prompt
+        assert "never say you lack access" in prompt
+        assert "list ALL contact methods" in prompt
 
 
 def test_llm_path_used_when_configured(monkeypatch):
