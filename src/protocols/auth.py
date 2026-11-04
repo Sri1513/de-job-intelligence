@@ -19,6 +19,8 @@ Layout follows the production remote-MCP pattern:
 * GET /health, /.well-known/*, and /oauth/* stay unauthenticated by design
   (liveness probes and the OAuth dance itself), plus GET /favicon.ico so
   connector directories and favicon crawlers can fetch the server icon,
+  plus GET / (the public landing page, so favicon crawlers can discover
+  the server icon link),
   plus POST /public/mcp -- the read-only public MCP surface. That last
   exemption is safe ONLY because its handler (dashboard_mcp.py) queries
   exclusively through the mcp_dashboard_reader pool, which holds SELECT
@@ -36,13 +38,17 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 logger = logging.getLogger("de-job-intelligence.auth")
 
 
-def _is_exempt_path(path: str) -> bool:
+def _is_exempt_path(path: str, method: str) -> bool:
+    # Method-scoped on purpose: "/" must exempt ONLY the GET landing page.
+    # A path-only exemption here would also open POST /, the private
+    # JSON-RPC endpoint, so the method is part of the exemption check.
     return (
         path == "/health"
         or path == "/favicon.ico"
         or path == "/public/mcp"
         or path.startswith("/.well-known/")
         or path.startswith("/oauth/")
+        or (path == "/" and method == "GET")
     )
 
 
@@ -77,7 +83,7 @@ class BearerAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
-        if _is_exempt_path(scope.get("path", "")):
+        if _is_exempt_path(scope.get("path", ""), scope.get("method", "")):
             await self.app(scope, receive, send)
             return
 

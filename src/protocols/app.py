@@ -15,7 +15,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 
 from src.core.config import settings
@@ -72,6 +72,33 @@ async def favicon(request: Request) -> FileResponse:
     (e.g. Gemini's) can render it without an authenticated fetch.
     """
     return FileResponse(_FAVICON_PATH, media_type="image/x-icon")
+
+
+async def landing_page(request: Request) -> HTMLResponse:
+    """Public landing page (unauthenticated by design).
+
+    Gives favicon crawlers an HTML page to discover the server icon from:
+    without it, GET / answers 401 (the bearer-gated JSON-RPC surface), so
+    no crawler ever sees a favicon link even though /favicon.ico itself
+    is public. Content is public-safe only: server name, public endpoint
+    path, and the public dashboard link. Nothing internal is named here.
+    """
+    return HTMLResponse(
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '<meta charset="utf-8">\n'
+        "<title>de-job-intelligence MCP server</title>\n"
+        '<meta name="description" content="Public Model Context Protocol server for de-job-intelligence job-market data.">\n'
+        '<link rel="icon" type="image/x-icon" href="/favicon.ico">\n'
+        "</head>\n"
+        "<body>\n"
+        "<h1>de-job-intelligence-public MCP server</h1>\n"
+        "<p>Public MCP endpoint: POST /public/mcp</p>\n"
+        '<p><a href="https://jobs.sriomkar.com">Job dashboard</a></p>\n'
+        "</body>\n"
+        "</html>\n"
+    )
 
 
 async def handle_rpc(request: Request) -> JSONResponse | Response:
@@ -186,6 +213,7 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
 routes = [
     Route("/health", health_check, methods=["GET"]),
     Route("/favicon.ico", favicon, methods=["GET"]),
+    Route("/", landing_page, methods=["GET"]),
     Route("/", handle_rpc, methods=["POST"]),
     Route("/rpc", handle_rpc, methods=["POST"]),
     # /mcp is the conventional Streamable HTTP endpoint path (e.g. Dice's
