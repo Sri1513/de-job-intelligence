@@ -215,11 +215,15 @@ async def _handle_run_batch_ingestion(arguments: Dict[str, Any]) -> Any:
 
 
 async def _handle_process_job_alert_draft(arguments: Dict[str, Any]) -> Any:
+    generate_assets = arguments.get("generate_assets", False)
+    if isinstance(generate_assets, str):
+        generate_assets = generate_assets.lower() in ("true", "1", "yes")
     return process_whatsapp_job_alert(
         whatsapp_text=arguments.get("whatsapp_text"),
         helper_name=arguments.get("helper_name"),
         helper_email=arguments.get("helper_email"),
         helper_company=arguments.get("helper_company"),
+        generate_assets=bool(generate_assets),
     )
 
 
