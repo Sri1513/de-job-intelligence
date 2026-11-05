@@ -132,6 +132,52 @@ async def test_dispatcher_unknown_tool():
 
 
 @pytest.mark.asyncio
+async def test_process_job_alert_draft_defaults_generate_assets_off(monkeypatch):
+    seen = {}
+
+    def fake_alert(**kwargs):
+        seen.update(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(dispatcher, "process_whatsapp_job_alert", fake_alert)
+    result = await dispatch_tool_call(
+        "process_job_alert_draft",
+        {"whatsapp_text": "Data Engineer role at Nityo", "helper_name": "Ganesh"},
+    )
+    assert result["status"] == "success"
+    assert seen["generate_assets"] is False
+
+
+@pytest.mark.asyncio
+async def test_process_job_alert_draft_passes_generate_assets_through(monkeypatch):
+    seen = {}
+
+    def fake_alert(**kwargs):
+        seen.update(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(dispatcher, "process_whatsapp_job_alert", fake_alert)
+    await dispatch_tool_call(
+        "process_job_alert_draft",
+        {
+            "whatsapp_text": "Data Engineer role at Nityo",
+            "helper_name": "Ganesh",
+            "generate_assets": True,
+        },
+    )
+    assert seen["generate_assets"] is True
+    await dispatch_tool_call(
+        "process_job_alert_draft",
+        {
+            "whatsapp_text": "Data Engineer role at Nityo",
+            "helper_name": "Ganesh",
+            "generate_assets": "true",
+        },
+    )
+    assert seen["generate_assets"] is True
+
+
+@pytest.mark.asyncio
 async def test_pipeline_tools_run_in_background_with_guard(monkeypatch):
     # Long pipeline tools must return immediately (client proxies drop the
     # stream after ~30-60s) while the work continues behind them, and a

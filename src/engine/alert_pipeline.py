@@ -117,6 +117,7 @@ def process_whatsapp_job_alert(
     helper_name: str,
     helper_email: Optional[str] = None,
     helper_company: Optional[str] = None,
+    generate_assets: bool = False,
 ) -> Dict[str, Any]:
     """
     Optimized WhatsApp job alert pipeline:
@@ -124,6 +125,11 @@ def process_whatsapp_job_alert(
     2. Conditional RAG tailoring vs Quota Saver default resume.
     3. Generates precise template-matched email draft with helper in CC.
     4. Logs everything into database including the domain short_id.
+
+    generate_assets (default False): steps 2-3 run only when True. When
+    False the alert is only parsed, logged, and tracked — no LLM tailoring,
+    no Drive resume, no Gmail draft. Set True only when the user explicitly
+    asks for the resume and cover letter for this alert.
     """
     logger.info(f"🚀 Processing WhatsApp alert via helper: {helper_name}")
 
@@ -172,10 +178,12 @@ def process_whatsapp_job_alert(
         message_id,
     )
 
-    # 4. Real framework-aware tailoring vs Quota Saver
+    # 4. Real framework-aware tailoring vs Quota Saver — gated on
+    # generate_assets (default off): without it the alert is only parsed,
+    # logged, and tracked, and the master resume link is used.
     resume_url = DEFAULT_MASTER_RESUME_URL
     tailored = None
-    if has_jd:
+    if generate_assets and has_jd:
         try:
             logger.info("✨ Rich JD detected: running framework-aware tailoring...")
             # The wa- lead no longer lives in saved_jobs, so hand the already-
@@ -220,67 +228,77 @@ def process_whatsapp_job_alert(
         except Exception as e:
             logger.warning(f"Tailoring failed ({e}); falling back to master resume.")
             resume_url = DEFAULT_MASTER_RESUME_URL
+    elif has_jd:
+        logger.info("Assets off: rich JD present but generate_assets is False; using master resume.")
     else:
         logger.info("⚡ Lightweight alert detected: Using default master resume to save quota.")
 
-    # 5. Build framework-aware email prompt using extracted recruiter name.
-    # Verified bank for the email: the tailored bullets when tailoring ran
-    # (dynamic, wide-resume based), else deterministically ranked wide-resume
-    # bullets. The email model draws its alignment bullets ONLY from this bank.
-    if tailored and tailored.get("experience_bullets"):
-        bank_lines: list[str] = []
-        for slot in ("job1", "job2", "job3", "job4"):
-            bank_lines.extend(tailored["experience_bullets"].get(slot, []) or [])
-        verified_bank = "\n".join(bank_lines[:12])
+    # 5. Outreach email + Gmail draft — also gated on generate_assets.
+    # Without it there is no email LLM call and no draft; the alert is only
+    # tracked. The verified bank for the email: the tailored bullets when
+    # tailoring ran (dynamic, wide-resume based), else deterministically
+    # ranked wide-resume bullets. The email model draws its alignment
+    # bullets ONLY from this bank.
+    draft_id = None
+    subject = ""
+    if generate_assets:
+        if tailored and tailored.get("experience_bullets"):
+            bank_lines: list[str] = []
+            for slot in ("job1", "job2", "job3", "job4"):
+                bank_lines.extend(tailored["experience_bullets"].get(slot, []) or [])
+            verified_bank = "\n".join(bank_lines[:12])
+        else:
+            verified_bank = "\n".join(_rank_wide_bullets(extracted_jd))
+        email_prompt = build_whatsapp_outreach_prompt(
+            company_name=company_name,
+            job_title=job_title,
+            extracted_jd=extracted_jd,
+            helper_name=helper_name,
+            resume_url=resume_url,
+            recruiter_name=recruiter_name,
+            framework_context=framework_context,
+            verified_bank=verified_bank,
+        )
+
+        try:
+            # Config-driven failover chain (config/llm.yaml): tries providers in
+            # order, sidelining any that hit quota/errors, with WhatsApp alerts.
+            email_json = generate_text(
+                email_prompt,
+                json_mode=True,
+                temperature=0.2,
+                task="whatsapp-outreach-email",
+            )
+            email_data = json.loads(email_json)
+            subject = email_data.get(
+                "subject", f"Application for {job_title} – {company_name} – Sri Omkar D"
+            )
+            body = email_data.get(
+                "body",
+                f"Hi {recruiter_name or 'Hiring Team'},\n\nI'm interested in the {job_title} role. My resume is here:\n{resume_url}\n\nBest,\nSri Omkar D",
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate dynamic email: {e}")
+            subject = f"Application for {job_title} – {company_name} – Sri Omkar D"
+            body = (
+                f"Hi {recruiter_name or 'Hiring Team'},\n\n"
+                f"I am writing to express my interest in the {job_title} position. "
+                f"You can review my background here:\n{resume_url}\n\nBest regards,\nSri Omkar D"
+            )
+
+        # 5. Create Gmail Draft (Helper in CC, absent from body)
+        draft_result = create_gmail_draft(
+            helper_email=resolved_helper_email,
+            helper_name=helper_name,
+            company_name=company_name,
+            job_title=job_title,
+            resume_url=resume_url,
+            recipient_email=recipient_email,
+            dynamic_email_content={"subject": subject, "body": body},
+        )
+        draft_id = draft_result["draft_id"]
     else:
-        verified_bank = "\n".join(_rank_wide_bullets(extracted_jd))
-    email_prompt = build_whatsapp_outreach_prompt(
-        company_name=company_name,
-        job_title=job_title,
-        extracted_jd=extracted_jd,
-        helper_name=helper_name,
-        resume_url=resume_url,
-        recruiter_name=recruiter_name,
-        framework_context=framework_context,
-        verified_bank=verified_bank,
-    )
-
-    try:
-        # Config-driven failover chain (config/llm.yaml): tries providers in
-        # order, sidelining any that hit quota/errors, with WhatsApp alerts.
-        email_json = generate_text(
-            email_prompt,
-            json_mode=True,
-            temperature=0.2,
-            task="whatsapp-outreach-email",
-        )
-        email_data = json.loads(email_json)
-        subject = email_data.get(
-            "subject", f"Application for {job_title} – {company_name} – Sri Omkar D"
-        )
-        body = email_data.get(
-            "body",
-            f"Hi {recruiter_name or 'Hiring Team'},\n\nI'm interested in the {job_title} role. My resume is here:\n{resume_url}\n\nBest,\nSri Omkar D",
-        )
-    except Exception as e:
-        logger.error(f"Failed to generate dynamic email: {e}")
-        subject = f"Application for {job_title} – {company_name} – Sri Omkar D"
-        body = (
-            f"Hi {recruiter_name or 'Hiring Team'},\n\n"
-            f"I am writing to express my interest in the {job_title} position. "
-            f"You can review my background here:\n{resume_url}\n\nBest regards,\nSri Omkar D"
-        )
-
-    # 5. Create Gmail Draft (Helper in CC, absent from body)
-    draft_result = create_gmail_draft(
-        helper_email=resolved_helper_email,
-        helper_name=helper_name,
-        company_name=company_name,
-        job_title=job_title,
-        resume_url=resume_url,
-        recipient_email=recipient_email,
-        dynamic_email_content={"subject": subject, "body": body},
-    )
+        logger.info("Assets off: skipping outreach email and Gmail draft.")
 
     # 6. Log Audit Record in PostgreSQL with short_id
     outreach_id = log_outreach_event(
@@ -289,12 +307,13 @@ def process_whatsapp_job_alert(
         job_title=job_title,
         extracted_jd=extracted_jd,
         resume_doc_url=resume_url,
-        gmail_draft_id=draft_result["draft_id"],
+        gmail_draft_id=draft_id or "",
         recruiter_name=recruiter_name,
         short_id=short_id,
         metadata={
             "whatsapp_raw": whatsapp_text,
             "has_jd": has_jd,
+            "generate_assets": generate_assets,
             "recipient_email": recipient_email,
             "subject": subject,
             "cc_helper": resolved_helper_email,
@@ -320,5 +339,6 @@ def process_whatsapp_job_alert(
         "has_jd": has_jd,
         "framework_selection": slot_frameworks,
         "resume_url": resume_url,
-        "gmail_draft_id": draft_result["draft_id"],
+        "assets_generated": generate_assets,
+        "gmail_draft_id": draft_id,
     }

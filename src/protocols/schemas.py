@@ -178,7 +178,7 @@ MCP_TOOLS = [
     },
     {
         "name": "process_job_alert_draft",
-        "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, tailors/generates the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer', creates a dynamic Gmail draft with the helper in CC, and logs everything to PostgreSQL.",
+        "description": "Parses a WhatsApp job alert snippet, registers or looks up the helper, and logs everything to PostgreSQL. By default it does NOT generate the tailored resume or the outreach email draft — pass generate_assets=true only when the user explicitly asks for them, in which case it tailors the resume into 'Resumes and Cover Letters/<Company>/Sri Omkar - Data Engineer' and creates a dynamic Gmail draft with the helper in CC.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -197,6 +197,11 @@ MCP_TOOLS = [
                 "helper_company": {
                     "type": "string",
                     "description": "Company where the helper works.",
+                },
+                "generate_assets": {
+                    "type": "boolean",
+                    "description": "Generate the tailored resume and outreach email draft for this alert. Default false: the alert is only parsed, logged, and tracked. Set true only when the user explicitly asks for the resume and cover letter for this alert.",
+                    "default": False,
                 },
             },
             "required": ["whatsapp_text", "helper_name"],
