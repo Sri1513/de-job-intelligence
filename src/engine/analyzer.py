@@ -50,7 +50,8 @@ def evaluate_job_fit(
     job_description: str, category_slug: str = "data_engineering"
 ) -> dict[str, Any]:
     """
-    Evaluates job requirements using Groq API as primary, with Gemini fallback.
+    Evaluates job requirements using the config-driven LLM failover
+    chain (config/llm.yaml).
     """
     if not job_description or len(job_description.strip()) < 50:
         return {

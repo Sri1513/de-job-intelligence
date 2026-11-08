@@ -66,6 +66,18 @@ providers:
   #   base_url: https://api.muse.ai/v1
   #   api_key_envs:
   #     - MUSE_API_KEY
+  #
+  # Local 3B fallback (qwen2.5:3b, llm.sriomkar.com) — deliberately NOT a
+  # provider here. It is queue-only (src/engine/local_llm.py): the
+  # fallback queue (src/engine/local_llm_queue.py) drains only rows the
+  # free chain already failed, so the 3B only ever runs after Gemini ->
+  # Groq are exhausted for a given row. A chain tier would serve every
+  # generate_text caller (including tailoring and outreach prompts the 3B
+  # was never validated for), and the generic OpenAI-compatible transport
+  # cannot serve this endpoint as written (it sends a non-browser
+  # User-Agent, which Cloudflare blocks with error 1010, and a 60s
+  # timeout, while cold 3B calls take ~90s). See
+  # hidden_files/llm-3b-fallback-queue-plan-2026-11-08.md.
 
 settings:
   # Seconds to wait before the single automatic retry on a transient error.

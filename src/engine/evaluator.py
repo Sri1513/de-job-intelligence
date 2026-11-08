@@ -161,7 +161,8 @@ def run_backfill_batch(
     *args,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Processes pending or failed jobs using Groq primary with Gemini fallback."""
+    """Processes pending or failed jobs using the config-driven LLM
+    failover chain (config/llm.yaml)."""
     resume_text = get_cached_resume(job_category)
     jobs_to_process = []
 
