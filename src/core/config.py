@@ -102,8 +102,24 @@ class Settings(BaseSettings):
     # settings (not the browser session JWT, which expires). The key is a
     # service credential for that account and lives in .env only.
     MARKET_CHAT_LLM_URL: str = ""
+    # Chat model for the portfolio + market drawers. At deploy time set
+    # this to qwen2.5:7b so chats use the fast Windows 7B (Windows-first
+    # via src/core/llm_routing.py, VM 3B as degraded fallback). The 3B
+    # queue does NOT use this setting -- see LOCAL_LLM_MODEL below.
     MARKET_CHAT_LLM_MODEL: str = "qwen2.5:3b"
     MARKET_CHAT_LLM_KEY: str = ""
+
+    # Windows Ollama (Tailscale) -- primary endpoint for the router in
+    # src/core/llm_routing.py. The jobs VM and the LLM VM reach it over
+    # the tailnet at this address. Ollama has no auth, so no key is ever
+    # sent on this path, and no Cloudflare sits in front of it.
+    WINDOWS_LLM_BASE_URL: str = "http://100.68.109.36:11434"
+
+    # Model served by the VM's Ollama. Used by the 3B queue AND as the
+    # downgrade target when a chat request for another model (e.g.
+    # qwen2.5:7b) falls back to the VM. Pinned: changing it changes what
+    # the queue runs on -- re-run the battery first.
+    LOCAL_LLM_MODEL: str = "qwen2.5:3b"
 
     # Directory Paths
     CONFIG_DIR: Path = BASE_DIR / "config"
