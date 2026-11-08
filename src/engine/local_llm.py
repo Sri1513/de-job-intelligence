@@ -34,17 +34,22 @@ recovered); neutral framing ("were NOT found in pass 1") recovered the
 misses once and degenerated into yes-to-everything (invented Python and
 PowerShell) on another run. Do not add one.
 
-Transport: stdlib urllib POST to settings.MARKET_CHAT_LLM_URL (the full
-Open WebUI route https://llm.sriomkar.com/api/chat/completions). A
-browser-like User-Agent is MANDATORY — the endpoint sits behind Cloudflare,
-which blocks non-browser signatures (error 1010) before Open WebUI ever
-sees the request. Timeout is 150s (cold model load is ~90s). The response
+Transport: stdlib urllib POST, routed Windows-first / VM-fallback by
+src/core/llm_routing.py — the Windows Ollama over Tailscale when it
+answers and lists the queue model, else the VM's Open WebUI route
+(settings.MARKET_CHAT_LLM_URL). A browser-like User-Agent is MANDATORY
+on the VM path — the endpoint sits behind Cloudflare, which blocks
+non-browser signatures (error 1010) before Open WebUI ever sees the
+request. Timeout is 150s (cold model load is ~90s). The response
 parser accepts the OpenAI shape (choices[0].message.content) first and
 Ollama's native shape (message.content) second.
 
 Credentials: the key comes ONLY from settings.MARKET_CHAT_LLM_KEY (the
-jobs VM .env). It is never pasted, hardcoded, logged, or stored anywhere
-in this module. No new env vars are required.
+jobs VM .env) and is sent ONLY to the VM endpoint. Windows Ollama has
+no auth, so no key is sent there — and no key is required for a
+Windows attempt; the key is required only when the attempt runs on
+the VM. It is never pasted, hardcoded, logged, or stored anywhere in
+this module. No new env vars are required.
 
 Step 0c vocabulary-sizing outcome (2026-11-08), refined by the battery:
 a single 128-key checklist call FAILS with HTTP 524 (Cloudflare
@@ -67,6 +72,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 from src.core.config import settings
+from src.core.llm_routing import attempt_with_failover
 from src.engine.skill_normalizer import (
     _surface_index,
     canonical_name,
@@ -197,17 +203,19 @@ def load_checklist_vocabulary() -> List[str]:
 # ---------------------------------------------------------------------------
 
 def _chat_complete(prompt: str, timeout: int = LOCAL_LLM_TIMEOUT_S) -> str:
-    """One chat-completions call to the local model. Returns the text."""
+    """One chat-completions call to the local model. Returns the text.
+
+    Routed Windows-first / VM-fallback via attempt_with_failover (see
+    src/core/llm_routing.py). The queue always requests
+    settings.LOCAL_LLM_MODEL, so the VM retry is the same model --
+    never a swap. The VM key is required only when the attempt runs
+    on the VM; a Windows attempt needs no key.
+    """
     url = settings.MARKET_CHAT_LLM_URL
-    key = settings.MARKET_CHAT_LLM_KEY
-    model = settings.MARKET_CHAT_LLM_MODEL or "qwen2.5:3b"
+    model = settings.LOCAL_LLM_MODEL or "qwen2.5:3b"
     if not url:
         raise LocalLLMUnavailableError(
             "local LLM not configured: MARKET_CHAT_LLM_URL is empty"
-        )
-    if not key:
-        raise LocalLLMUnavailableError(
-            "local LLM not configured: MARKET_CHAT_LLM_KEY is empty"
         )
     payload = {
         "model": model,
@@ -215,13 +223,27 @@ def _chat_complete(prompt: str, timeout: int = LOCAL_LLM_TIMEOUT_S) -> str:
         "temperature": 0,
         "stream": False,
     }
+    return attempt_with_failover(model, lambda ep: _post_once(ep, payload, timeout))
+
+
+def _post_once(endpoint, payload, timeout: int) -> str:
+    """One POST attempt against a resolved endpoint; parses the
+    response text or raises LocalLLMUnavailableError. The request
+    body uses the endpoint's model (== the payload's model for the
+    queue; the copy keeps the caller's payload untouched on a retry).
+    The VM key is required only on the VM path."""
+    if endpoint.via == "vm" and not endpoint.auth_headers:
+        raise LocalLLMUnavailableError(
+            "local LLM not configured: MARKET_CHAT_LLM_KEY is empty"
+        )
+    body = {**payload, "model": endpoint.model}
     req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
+        endpoint.url,
+        data=json.dumps(body).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "User-Agent": BROWSER_USER_AGENT,
-            "Authorization": f"Bearer {key}",
+            **endpoint.auth_headers,
         },
         method="POST",
     )

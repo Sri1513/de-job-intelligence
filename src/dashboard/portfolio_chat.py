@@ -63,6 +63,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from src.core.config import settings
+from src.core.llm_routing import attempt_with_failover
 from src.dashboard.market_chat import (
     _mcp_rpc,
     _post_json,
@@ -397,22 +398,17 @@ def _template_answer(message, profile):
     return "\n".join(lines)
 
 
-def _llm_headers():
-    headers = {}
-    if settings.MARKET_CHAT_LLM_KEY:
-        headers["Authorization"] = f"Bearer {settings.MARKET_CHAT_LLM_KEY}"
-    return headers
-
-
 def _llm_answer(message, profile):
     """Ask the configured model endpoint (non-streaming). Returns
-    (text, error). Any failure yields (None, 'unavailable') so the
-    caller falls back to the template answer."""
+    (text, error). Routed Windows-first / VM-fallback (see
+    src/core/llm_routing.py). Any failure yields (None, 'unavailable')
+    so the caller falls back to the template answer."""
     url = settings.MARKET_CHAT_LLM_URL
     if not url:
         return None, None
+    model = settings.MARKET_CHAT_LLM_MODEL
     payload = {
-        "model": settings.MARKET_CHAT_LLM_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -428,7 +424,12 @@ def _llm_answer(message, profile):
         "max_tokens": LLM_MAX_TOKENS,
     }
     try:
-        response = _post_json(url, payload, LLM_TIMEOUT_S, _llm_headers())
+        response = attempt_with_failover(
+            model,
+            lambda ep: _post_json(
+                ep.url, {**payload, "model": ep.model}, LLM_TIMEOUT_S, ep.auth_headers
+            ),
+        )
         choices = response.get("choices") or []
         if choices:
             text = ((choices[0].get("message") or {}).get("content") or "").strip()
@@ -553,11 +554,11 @@ def _agent_stream_events(message):
         {"role": "user", "content": message},
     ]
     tools = _portfolio_dispatch_tools(surface)
-    url = settings.MARKET_CHAT_LLM_URL
+    model = settings.MARKET_CHAT_LLM_MODEL
     tool_calls_made = 0
     for round_no in range(MAX_TOOL_ROUNDS):
         payload = {
-            "model": settings.MARKET_CHAT_LLM_MODEL,
+            "model": model,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
@@ -566,7 +567,15 @@ def _agent_stream_events(message):
             "max_tokens": LLM_MAX_TOKENS,
         }
         try:
-            resp = _post_json(url, payload, LLM_TIMEOUT_S, _llm_headers())
+            resp = attempt_with_failover(
+                model,
+                lambda ep: _post_json(
+                    ep.url,
+                    {**payload, "model": ep.model},
+                    LLM_TIMEOUT_S,
+                    ep.auth_headers,
+                ),
+            )
         except Exception as exc:
             if round_no == 0:
                 raise _ToolsUnsupported(str(exc)) from exc

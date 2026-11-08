@@ -56,6 +56,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
 from src.core.config import settings
+from src.core.llm_routing import (
+    attempt_with_failover,
+    note_windows_failure,
+    resolve_chat_endpoint,
+    vm_fallback_endpoint,
+)
 
 logger = logging.getLogger("de-job-intelligence.market-chat")
 
@@ -375,31 +381,33 @@ def _llm_payload(message, overview, top_skills, job_rows, stream: bool):
     }
 
 
-def _llm_headers():
-    headers = {}
-    if settings.MARKET_CHAT_LLM_KEY:
-        headers["Authorization"] = f"Bearer {settings.MARKET_CHAT_LLM_KEY}"
-    return headers
-
-
 def _llm_answer(message, overview, top_skills, job_rows):
     """Ask the configured model endpoint. Returns (text, error).
 
-    The endpoint is Open WebUI's OpenAI-compatible chat-completions route
-    (https://llm.sriomkar.com/api/chat/completions), authenticated with an
-    API key created in an Open WebUI account's settings -- the key acts as
-    that account, and it lives only in the jobs VM's .env, never in the
-    browser. The response parser also accepts Ollama's native
-    /api/chat shape, so the same code works if the URL ever points at
-    Ollama directly. Any failure yields (None, 'unavailable') so the
-    caller falls back to the template answer."""
+    Routed Windows-first / VM-fallback (see src/core/llm_routing.py):
+    the chat model (settings.MARKET_CHAT_LLM_MODEL, qwen2.5:7b at
+    deploy time) runs on the Windows box when it is up, else on the
+    VM, where a 7B request is downgraded to the VM's 3B and logged.
+    The VM leg is Open WebUI's OpenAI-compatible chat-completions
+    route (https://llm.sriomkar.com/api/chat/completions), authenticated
+    with an API key created in an Open WebUI account's settings -- the
+    key acts as that account, and it lives only in the jobs VM's .env,
+    never in the browser. The response parser also accepts Ollama's
+    native /api/chat shape, so the same code works if the URL ever
+    points at Ollama directly. Any failure yields (None, 'unavailable')
+    so the caller falls back to the template answer."""
     url = settings.MARKET_CHAT_LLM_URL
     if not url:
         return None, None
+    model = settings.MARKET_CHAT_LLM_MODEL
     payload = _llm_payload(message, overview, top_skills, job_rows, stream=False)
-    headers = _llm_headers()
     try:
-        response = _post_json(url, payload, LLM_TIMEOUT_S, headers)
+        response = attempt_with_failover(
+            model,
+            lambda ep: _post_json(
+                ep.url, {**payload, "model": ep.model}, LLM_TIMEOUT_S, ep.auth_headers
+            ),
+        )
         # OpenAI-compatible shape first, Ollama-native shape second.
         choices = response.get("choices") or []
         if choices:
@@ -520,10 +528,33 @@ def _stream_llm_tokens(messages):
     Open WebUI streams SSE lines: data: {"choices": [{"delta":
     {"content": "..."}}]}, terminated by data: [DONE]. A stall raises
     (urlopen's timeout applies per read), which the caller turns into
-    a fallback or a partial answer -- never a hung drawer."""
-    url = settings.MARKET_CHAT_LLM_URL
+    a fallback or a partial answer -- never a hung drawer.
+
+    Windows-first / VM-fallback, retried once on the VM ONLY when the
+    Windows stream fails before the first token: a restart after
+    tokens were already yielded would duplicate them in the drawer."""
+    model = settings.MARKET_CHAT_LLM_MODEL
+    endpoint = resolve_chat_endpoint(model)
+    yielded = False
+    try:
+        for token in _stream_once(endpoint, messages):
+            yielded = True
+            yield token
+    except Exception:
+        if yielded or endpoint.via != "windows":
+            raise
+        note_windows_failure()
+        logger.warning(
+            "Market-chat stream: Windows failed before the first token; "
+            "retrying once on the VM"
+        )
+        yield from _stream_once(vm_fallback_endpoint(model), messages)
+
+
+def _stream_once(endpoint, messages):
+    """One streaming attempt against a resolved endpoint."""
     payload = {
-        "model": settings.MARKET_CHAT_LLM_MODEL,
+        "model": endpoint.model,
         "messages": messages,
         "stream": True,
         "temperature": 0.0,
@@ -536,9 +567,9 @@ def _stream_llm_tokens(messages):
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
         ),
-        **_llm_headers(),
+        **endpoint.auth_headers,
     }
-    req = urllib.request.Request(url, data=data, headers=headers)
+    req = urllib.request.Request(endpoint.url, data=data, headers=headers)
     with urllib.request.urlopen(req, timeout=LLM_TIMEOUT_S) as resp:
         for raw in resp:
             line = raw.decode("utf-8", "replace").strip()
@@ -684,11 +715,11 @@ def _agent_stream_events(message):
         {"role": "user", "content": message},
     ]
     tools = _mcp_dispatch_tools(surface)
-    url = settings.MARKET_CHAT_LLM_URL
+    model = settings.MARKET_CHAT_LLM_MODEL
     tool_calls_made = 0
     for round_no in range(MAX_TOOL_ROUNDS):
         payload = {
-            "model": settings.MARKET_CHAT_LLM_MODEL,
+            "model": model,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
@@ -697,7 +728,15 @@ def _agent_stream_events(message):
             "max_tokens": LLM_MAX_TOKENS,
         }
         try:
-            resp = _post_json(url, payload, LLM_TIMEOUT_S, _llm_headers())
+            resp = attempt_with_failover(
+                model,
+                lambda ep: _post_json(
+                    ep.url,
+                    {**payload, "model": ep.model},
+                    LLM_TIMEOUT_S,
+                    ep.auth_headers,
+                ),
+            )
         except Exception as exc:
             if round_no == 0:
                 raise _ToolsUnsupported(str(exc)) from exc
