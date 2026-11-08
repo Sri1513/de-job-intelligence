@@ -398,3 +398,111 @@ def test_http_route_and_rate_limit():
     for _ in range(9):
         assert client.post("/api/market-chat", json={"message": "hi"}).status_code == 200
     assert client.post("/api/market-chat", json={"message": "hi"}).status_code == 429
+
+
+def test_market_surface_drops_profile_and_write_tools():
+    """Live defect (2026-11-08): the market drawer read
+    profile://frameworks and answered 'who are you?' as Sri Omkar.
+    The market surface must be jobs-only even when the server lists
+    the profile resource and a write tool."""
+    discovered = {
+        "resources": [
+            {"uri": "jobs://metrics/overview", "name": "Market overview"},
+            {"uri": "jobs://metrics/top-skills", "name": "Top skills in demand"},
+            {"uri": "profile://frameworks", "name": "Omkar's public profile"},
+        ],
+        "tools": [
+            {"name": "query_jobs_by_criteria", "description": "Search postings."},
+            {"name": "stage_agent_jobs", "description": "Queue a job (write)."},
+        ],
+    }
+    surface = market_chat._market_surface(discovered)
+    assert [r["uri"] for r in surface["resources"]] == [
+        "jobs://metrics/overview",
+        "jobs://metrics/top-skills",
+    ]
+    assert [t["name"] for t in surface["tools"]] == ["query_jobs_by_criteria"]
+
+
+def test_market_surface_falls_back_to_static_when_nothing_allowed():
+    surface = market_chat._market_surface({
+        "resources": [{"uri": "profile://frameworks"}],
+        "tools": [{"name": "stage_agent_jobs"}],
+    })
+    assert [r["uri"] for r in surface["resources"]] == [
+        "jobs://metrics/overview",
+        "jobs://metrics/top-skills",
+    ]
+    assert [t["name"] for t in surface["tools"]] == ["query_jobs_by_criteria"]
+
+
+def test_discover_mcp_surface_filters_live_profile(monkeypatch):
+    """Live discovery lists the profile resource (verified against
+    mcp.sriomkar.com 2026-11-08); the market agent must never see it."""
+    def _listing(url, payload, timeout, headers=None):
+        method = payload.get("method")
+        if method == "resources/list":
+            return {"jsonrpc": "2.0", "id": 1, "result": {"resources": [
+                {"uri": "jobs://metrics/overview"},
+                {"uri": "jobs://metrics/top-skills"},
+                {"uri": "profile://frameworks"},
+            ]}}
+        if method == "tools/list":
+            return {"jsonrpc": "2.0", "id": 1, "result": {"tools": [
+                {"name": "query_jobs_by_criteria"},
+                {"name": "stage_agent_jobs"},
+            ]}}
+        raise AssertionError(f"unexpected method {method}")
+
+    monkeypatch.setattr(market_chat, "_post_json", _listing)
+    surface, trace = market_chat._discover_mcp_surface()
+    assert [r["uri"] for r in surface["resources"]] == [
+        "jobs://metrics/overview",
+        "jobs://metrics/top-skills",
+    ]
+    assert [t["name"] for t in surface["tools"]] == ["query_jobs_by_criteria"]
+    assert [t["method"] for t in trace] == ["resources/list", "tools/list"]
+
+
+def test_discover_mcp_surface_fallback_is_jobs_only(monkeypatch):
+    def _down(url, payload, timeout, headers=None):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(market_chat, "_post_json", _down)
+    surface, trace = market_chat._discover_mcp_surface()
+    assert [r["uri"] for r in surface["resources"]] == [
+        "jobs://metrics/overview",
+        "jobs://metrics/top-skills",
+    ]
+    assert [t["name"] for t in surface["tools"]] == ["query_jobs_by_criteria"]
+    assert trace == []
+
+
+def test_agent_cannot_read_profile_resource():
+    surface, _ = market_chat._discover_mcp_surface()
+    assert "Unknown resource" in market_chat._execute_mcp_action(
+        "resources_read", {"uri": "profile://frameworks"}, [], surface
+    )
+    assert "Unknown tool" in market_chat._execute_mcp_action(
+        "tools_call", {"name": "stage_agent_jobs", "arguments": {}}, [], surface
+    )
+
+
+def test_market_prompts_contain_identity_guardrail():
+    for prompt in (market_chat.SYSTEM_PROMPT, market_chat.AGENT_SYSTEM_PROMPT):
+        assert "Never claim to be Sri Omkar" in prompt
+        assert "I am the Job Market Analyst" in prompt
+    assert "jobs://metrics/overview" in market_chat.AGENT_SYSTEM_PROMPT
+    assert "jobs://metrics/top-skills" in market_chat.AGENT_SYSTEM_PROMPT
+    assert "query_jobs_by_criteria" in market_chat.AGENT_SYSTEM_PROMPT
+
+
+def test_market_guardrails_defaults_match_file():
+    """The built-in default (used when the JSON file is unreadable)
+    must carry the same identity line, hint, and 400-token cap."""
+    defaults = market_chat._DEFAULT_GUARDRAILS
+    assert defaults["limits"]["max_tokens"] == 400
+    assert market_chat._GUARDRAILS["limits"]["max_tokens"] == 400
+    assert market_chat.LLM_MAX_TOKENS == 400
+    assert defaults["grounding"]["system_prompt"] == market_chat.SYSTEM_PROMPT
+    assert defaults["grounding"]["agent_system_prompt"] == market_chat.AGENT_SYSTEM_PROMPT
