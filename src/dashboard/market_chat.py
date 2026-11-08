@@ -142,7 +142,12 @@ _DEFAULT_GUARDRAILS = {
             "You are the Job Market Analyst for Sri Omkar's data platform. "
             "Answer the user's question using ONLY the market data below. "
             "If the answer cannot be verified from this data, say so plainly. "
-            "Do not invent details, companies, numbers, or trends."
+            "Do not invent details, companies, numbers, or trends. "
+            "Never claim to be Sri Omkar or answer as him; refer to him "
+            "in the third person. If asked who you are, answer in the "
+            "first person: 'I am the Job Market Analyst, an AI assistant "
+            "that answers questions about the job market data on Sri "
+            "Omkar's data platform.'"
         ),
         "agent_system_prompt": (
             "You are the Job Market Analyst for Sri Omkar's data platform. "
@@ -151,7 +156,14 @@ _DEFAULT_GUARDRAILS = {
             "call the actions you need before answering. Answer using ONLY "
             "what the actions return. If the actions do not contain the "
             "answer, say so plainly. Do not invent details, companies, "
-            "numbers, or trends."
+            "numbers, or trends. Never claim to be Sri Omkar or answer as "
+            "him; refer to him in the third person. If asked who you are, "
+            "answer in the first person: 'I am the Job Market Analyst, an "
+            "AI assistant that answers questions about the job market data "
+            "on Sri Omkar's data platform.' To answer how many jobs are "
+            "tracked, read jobs://metrics/overview. To answer which skills "
+            "are in demand, read jobs://metrics/top-skills. To find "
+            "matching jobs for a skill, call query_jobs_by_criteria."
         ),
     },
     "tools": {
@@ -160,7 +172,7 @@ _DEFAULT_GUARDRAILS = {
     },
     "limits": {
         "max_message_chars": 500,
-        "max_tokens": 200,
+        "max_tokens": 400,
         "rate_limit_per_minute": 10,
         "temperature": 0.0,
     },
@@ -589,10 +601,45 @@ def _stream_once(endpoint, messages):
                     yield text
 
 
+# Jobs-only allowlist for the agent surface: the model may only read
+# jobs:// metrics resources and call read-only jobs tools. The MCP
+# server also lists profile://frameworks (used by the portfolio
+# drawer), which the market drawer must never offer -- a "who are
+# you?" question answered from it is how the drawer once spoke as
+# Sri Omkar. A future write tool on the public surface is dropped
+# here too, before the model ever sees it.
+_ALLOWED_TOOL_NAMES = {"query_jobs_by_criteria"}
+
+
+def _market_surface(discovered):
+    """Filter ANY discovered surface down to the market allowlist:
+    jobs:// resources and read-only jobs tools only. This is the
+    isolation boundary: the profile resource and any write tool are
+    dropped here, before the model ever sees a surface listing."""
+    resources = [
+        r for r in (discovered or {}).get("resources") or []
+        if (r.get("uri") or "").startswith("jobs://")
+    ]
+    tools = [
+        t for t in (discovered or {}).get("tools") or []
+        if t.get("name") in _ALLOWED_TOOL_NAMES
+    ]
+    if not resources:
+        # Discovery returned no jobs resource (server older than the
+        # metrics resources, or a listing that is profile-only): fall
+        # back to the static mirror rather than to an empty surface.
+        resources = _STATIC_SURFACE["resources"]
+    if not tools:
+        # Same for tools: the static mirror's read-only jobs tool.
+        tools = _STATIC_SURFACE["tools"]
+    return {"resources": resources, "tools": tools}
+
+
 def _discover_mcp_surface():
     """Ask the MCP server what it actually offers (resources/list +
-    tools/list). Returns (surface, trace_entries). On any failure,
-    falls back to the static mirror with an empty trace, so a
+    tools/list), then filter to the jobs-only allowlist. Returns
+    (surface, trace_entries). On any failure, falls back to the
+    static mirror (itself filtered) with an empty trace, so a
     list-method outage never blocks the drawer."""
     try:
         req_r, resp_r = _mcp_rpc("resources/list", {})
@@ -600,22 +647,23 @@ def _discover_mcp_surface():
         resources = (resp_r.get("result") or {}).get("resources") or []
         tools = (resp_t.get("result") or {}).get("tools") or []
         if resources and tools:
-            return {"resources": resources, "tools": tools}, [
+            return _market_surface({"resources": resources, "tools": tools}), [
                 {"method": "resources/list", "request": req_r, "response": resp_r},
                 {"method": "tools/list", "request": req_t, "response": resp_t},
             ]
         raise ValueError("empty surface")
     except Exception as exc:
         logger.warning("Market-chat MCP discovery failed (%s); using static surface", exc)
-        return _STATIC_SURFACE, []
+        return _market_surface(_STATIC_SURFACE), []
 
 
 def _mcp_dispatch_tools(surface):
     """The two JSON-RPC dispatch actions the model is given. This is
     the MCP server's own interface, not a renamed copy: resources_read
     performs a JSON-RPC resources/read, tools_call performs a JSON-RPC
-    tools/call. Enums come from live discovery, so the model can only
-    ask for URIs and tools the server actually offers."""
+    tools/call. Enums come from the FILTERED surface, so the model can
+    only ask for jobs:// URIs and read-only jobs tools -- never the
+    profile resource or a write tool, even if the server lists one."""
     resource_uris = [r.get("uri") for r in surface.get("resources") or []]
     tool_names = [t.get("name") for t in surface.get("tools") or []]
     return [
