@@ -16,8 +16,8 @@ import urllib.request
 
 import pytest
 
-from src.core.config import Settings, settings
 from src.core import llm_routing
+from src.core.config import Settings, settings
 from src.dashboard import market_chat
 from src.engine import local_llm
 

@@ -38,16 +38,14 @@ inline evaluator.run_backfill_batch is untouched — this queue is a later
 drain, never a change to the ingestion path.
 """
 
-import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
 
 from src.core.database import get_db_connection
-from src.engine import local_llm
+from src.engine import local_llm, notifier
 from src.engine.local_llm import LocalLLMError, LocalLLMUnavailableError
 from src.engine.matcher import calculate_local_fit_score, get_cached_resume
-from src.engine import notifier
 from src.workers.pipeline_utils import update_job_evaluation
 
 logger = logging.getLogger(__name__)
