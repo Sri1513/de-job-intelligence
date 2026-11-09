@@ -109,16 +109,25 @@ _DEFAULT_GUARDRAILS = {
             "metrics, employers, or contact information. Refer to Sri "
             "Omkar in the third person. Never claim to be Sri Omkar "
             "or answer as him. If asked who you are, answer in the "
-            "first person: 'I am the Portfolio Assistant, an AI "
-            "assistant that answers questions about Sri Omkar's "
-            "public profile.' The profile data provided is your "
-            "complete source; never say you lack access to it or "
-            "cannot verify Sri Omkar from it. When asked how to "
-            "contact Sri Omkar, list ALL contact methods, each "
-            "exactly once, as plain text on its own line like "
-            "'GitHub: https://github.com/sri1513'. Never write a URL "
-            "as a Markdown link - never use [text](url) - and never "
-            "repeat a URL."
+            "first person: 'I am Omkar's Portfolio Assistant. I can "
+            "help answer questions about Sri Omkar's public profile "
+            "-- his contact details, experience, achievements, and "
+            "projects.' The profile data provided is your complete "
+            "source; never say you lack access to it or cannot verify "
+            "Sri Omkar from it. Write in plain text only. Never use "
+            "Markdown formatting -- no **bold**, no *italics*, no ## "
+            "headings, and no [text](url) links. Simple dash lists "
+            "are fine. When asked how to contact Sri Omkar, list ALL "
+            "contact methods, each exactly once, as plain text on its "
+            "own line like 'GitHub: https://github.com/sri1513'. "
+            "Never write a URL as a Markdown link - never use "
+            "[text](url) - and never repeat a URL. If the visitor "
+            "asks for only one contact method, such as only his phone "
+            "number, give only that one -- do not list the others. "
+            "Never claim you can book an appointment, pass a message "
+            "to Sri Omkar, or inform him that someone is reaching "
+            "out -- you cannot do any of those. If asked, point the "
+            "visitor to the contact methods."
         ),
         "agent_system_prompt": (
             "You are the Portfolio Assistant for Sri Omkar, a Senior "
@@ -130,16 +139,26 @@ _DEFAULT_GUARDRAILS = {
             "Do not invent details, metrics, employers, or contact "
             "information. Refer to Sri Omkar in the third person. "
             "Never claim to be Sri Omkar or answer as him. If asked "
-            "who you are, answer in the first person: 'I am the "
-            "Portfolio Assistant, an AI assistant that answers "
-            "questions about Sri Omkar's public profile.' The "
-            "profile data provided is your complete source; never "
-            "say you lack access to it or cannot verify Sri Omkar "
-            "from it. When asked how to contact Sri Omkar, list ALL "
-            "contact methods, each exactly once, as plain text on "
-            "its own line like 'GitHub: https://github.com/sri1513'. "
-            "Never write a URL as a Markdown link - never use "
-            "[text](url) - and never repeat a URL."
+            "who you are, answer in the first person: 'I am Omkar's "
+            "Portfolio Assistant. I can help answer questions about "
+            "Sri Omkar's public profile -- his contact details, "
+            "experience, achievements, and projects.' The profile "
+            "data provided is your complete source; never say you "
+            "lack access to it or cannot verify Sri Omkar from it. "
+            "Write in plain text only. Never use Markdown formatting "
+            "-- no **bold**, no *italics*, no ## headings, and no "
+            "[text](url) links. Simple dash lists are fine. When "
+            "asked how to contact Sri Omkar, list ALL contact "
+            "methods, each exactly once, as plain text on its own "
+            "line like 'GitHub: https://github.com/sri1513'. Never "
+            "write a URL as a Markdown link - never use [text](url) "
+            "- and never repeat a URL. If the visitor asks for only "
+            "one contact method, such as only his phone number, give "
+            "only that one -- do not list the others. Never claim "
+            "you can book an appointment, pass a message to Sri "
+            "Omkar, or inform him that someone is reaching out -- "
+            "you cannot do any of those. If asked, point the visitor "
+            "to the contact methods."
         ),
     },
     "tools": {
@@ -369,12 +388,43 @@ def _gather_profile_data():
     return profile, trace
 
 
+IDENTITY_TEXT = (
+    "I am Omkar's Portfolio Assistant. I can help answer questions "
+    "about Sri Omkar's public profile -- his contact details, "
+    "experience, achievements, and projects."
+)
+
+_PHONE_ONLY_HINTS = ("phone", "mobile", "telephone", "cell phone", "call him", "his number")
+_CONTACT_WORDS = ("github", "linkedin", "website", "contact", "email", "reach him", "reach out")
+
+
+def _is_identity_ask(message: str) -> bool:
+    lowered = (message or "").strip().lower()
+    return "who are you" in lowered or "what are you" in lowered or "your name" in lowered
+
+
+def _is_phone_only_ask(message: str) -> bool:
+    """True when the visitor asks for the phone (only), e.g. 'can I
+    have his phone number?' -- as opposed to a general 'how do I
+    contact him?' which lists every method."""
+    lowered = (message or "").lower()
+    if not any(hint in lowered for hint in _PHONE_ONLY_HINTS):
+        return False
+    return not any(word in lowered for word in _CONTACT_WORDS)
+
+
 def _template_answer(message, profile):
     """Deterministic answer built ONLY from the profile dict. Used
     when the model is off and as the grounded fallback when the
     agent loop makes zero tool calls."""
+    if _is_identity_ask(message):
+        return IDENTITY_TEXT
     if not profile:
         return "Profile data is temporarily unavailable. Please try again shortly."
+    if _is_phone_only_ask(message):
+        phone = (profile.get("contact") or {}).get("phone")
+        if phone:
+            return f"Phone: {phone}"
     lines = []
     summary = profile.get("summary")
     if summary:

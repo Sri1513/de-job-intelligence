@@ -135,6 +135,44 @@ def test_prompts_forbid_markdown_links_for_contact():
         assert "[text](url)" in prompt
 
 
+def test_prompts_require_plain_text_no_markdown():
+    # The drawer renders textContent only -- Markdown never renders,
+    # so "**" showed literally in experience answers. The prompts
+    # must forbid Markdown formatting outright.
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "Write in plain text only" in prompt
+        assert "Never use Markdown formatting" in prompt
+    assert "**" not in portfolio_chat._template_answer("What experience does he have?", PROFILE)
+
+
+def test_phone_only_ask_returns_only_phone():
+    # A phone-only ask must not dump the whole contact block.
+    answer = portfolio_chat._template_answer("Can I have his phone number?", PROFILE)
+    assert answer == "Phone: +1 (951) 545-2146"
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "give only that one" in prompt
+    # ...while a general contact ask still lists every method once.
+    general = portfolio_chat._template_answer("How do I contact him?", PROFILE)
+    for value in ("https://github.com/sri1513", "https://linkedin.com/in/sri-omkar-58r4r4r8",
+                  "https://sriomkar.com", "+1 (951) 545-2146"):
+        assert general.count(value) == 1, value
+
+
+def test_template_identity_answer():
+    assert portfolio_chat._template_answer("Who are you?", PROFILE) == portfolio_chat.IDENTITY_TEXT
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert portfolio_chat.IDENTITY_TEXT in prompt
+
+
+def test_prompts_forbid_false_appointment_claims():
+    # The drawer cannot book, pass messages, or inform Omkar -- it
+    # must never claim it can. (The appointment/notify flow is a
+    # separate build; until it lands, the honest answer is the
+    # contact methods.)
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "Never claim you can book an appointment" in prompt
+
+
 def test_template_contact_lists_each_url_once():
     text = portfolio_chat._template_answer("How do I contact him?", PROFILE)
     for url in (
@@ -335,7 +373,7 @@ def test_http_route_and_rate_limit():
 
 
 def test_guardrails_file_loads():
-    assert portfolio_chat._GUARDRAILS["version"] == 3
+    assert portfolio_chat._GUARDRAILS["version"] == 4
     assert portfolio_chat._GUARDRAILS["tools"]["max_tool_rounds"] == 4
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_resources"] == ["profile://frameworks"]
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_tools"] == []
@@ -371,7 +409,7 @@ def test_contact_includes_phone_and_each_link_once():
 
 def test_prompts_require_first_person_identity_and_complete_source():
     for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
-        assert "I am the Portfolio Assistant" in prompt
+        assert "I am Omkar's Portfolio Assistant" in prompt
         assert "never say you lack access" in prompt
         assert "list ALL contact methods" in prompt
 
