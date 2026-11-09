@@ -145,6 +145,73 @@ def test_prompts_require_plain_text_no_markdown():
     assert "**" not in portfolio_chat._template_answer("What experience does he have?", PROFILE)
 
 
+def test_strip_markdown_removes_model_markdown():
+    # The prompt rule alone did not hold: the model still emitted
+    # '**' in a live experience answer, so the output is stripped
+    # before it reaches the drawer. Uses the transcript's own words.
+    raw = (
+        "Sri Omkar's recent experience includes: - **At Optum (Oct 2025 - Present):** "
+        "- Own, monitor, and optimize *Databricks* pipelines. "
+        "See [his portfolio](https://sriomkar.com) and `README`. "
+        "## Highlights\n__Done__ and ~~struck~~."
+    )
+    clean = portfolio_chat.strip_markdown(raw)
+    assert "**" not in clean
+    assert "*" not in clean  # no emphasis markers left
+    assert "[his portfolio](https://sriomkar.com)" not in clean
+    assert "his portfolio" in clean  # link text survives; the URL goes with the markup
+    assert "https://sriomkar.com" not in clean
+    assert "##" not in clean
+    assert "`" not in clean
+    assert "At Optum (Oct 2025 - Present):" in clean
+    assert "Databricks" in clean
+    assert "Highlights" in clean
+
+
+def test_strip_markdown_keeps_dash_lists_and_star_bullets():
+    # Dash lists are the prompt's allowed format, and the template's
+    # highlight lines use '* ' bullets -- both must survive intact.
+    raw = "- Own, monitor, and optimize pipelines.\n  * Cut the nightly batch in half."
+    assert portfolio_chat.strip_markdown(raw) == raw
+    assert portfolio_chat.strip_markdown("") == ""
+    assert portfolio_chat.strip_markdown("Plain text, no markdown.") == "Plain text, no markdown."
+
+
+def test_answer_question_strips_markdown_from_llm_answer(monkeypatch):
+    monkeypatch.setattr(
+        portfolio_chat,
+        "_llm_answer",
+        lambda msg, profile: (
+            "Sri Omkar's recent experience includes: - **At Optum (Oct 2025 - Present):** "
+            "- Own, monitor, and optimize pipelines.",
+            None,
+        ),
+    )
+    result = portfolio_chat.answer_question("What is his recent experience?", "1.2.3.4")
+    assert result["llm_used"] is True
+    assert "**" not in result["answer"]
+    assert "At Optum (Oct 2025 - Present):" in result["answer"]
+
+
+def test_grounded_stream_strips_markdown_split_across_tokens(monkeypatch):
+    # The live drawer streams, and a '**' marker can split across
+    # tokens -- so the complete model text is stripped once before
+    # emitting, not per token.
+    def _markdown_stream(messages):
+        yield "Sri Omkar's recent experience includes: - **At "
+        yield "Optum (Oct 2025 - Present):** - Own, monitor."
+
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+    monkeypatch.setattr(portfolio_chat, "_stream_llm_tokens", _markdown_stream)
+    events = list(portfolio_chat._grounded_stream_events("What is his recent experience?"))
+    parsed = _parse_sse("".join(events))
+    text = "".join(e["text"] for e in parsed if e["type"] == "token")
+    assert "**" not in text
+    assert "At Optum (Oct 2025 - Present):" in text
+    assert "Own, monitor." in text
+    assert [e for e in parsed if e["type"] == "done"][0]["llm_used"] is True
+
+
 def test_phone_only_ask_returns_only_phone():
     # A phone-only ask must not dump the whole contact block.
     answer = portfolio_chat._template_answer("Can I have his phone number?", PROFILE)
