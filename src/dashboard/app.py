@@ -26,6 +26,7 @@ from src.dashboard.portfolio_chat import (
     portfolio_chat_stream_view,
     portfolio_chat_view,
 )
+from src.dashboard.portfolio_contact import ensure_contact_requests_table
 
 logger = logging.getLogger("de-job-intelligence.dashboard")
 
@@ -1191,6 +1192,7 @@ routes = [
 @contextlib.asynccontextmanager
 async def _dashboard_lifespan(app):
     _ensure_jobs_pagination_index()
+    ensure_contact_requests_table()
     yield
 
 

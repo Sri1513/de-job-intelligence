@@ -135,6 +135,125 @@ def test_prompts_forbid_markdown_links_for_contact():
         assert "[text](url)" in prompt
 
 
+def test_prompts_require_plain_text_no_markdown():
+    # The drawer renders textContent only -- Markdown never renders,
+    # so "**" showed literally in experience answers. The prompts
+    # must forbid Markdown formatting outright.
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "Write in plain text only" in prompt
+        assert "Never use Markdown formatting" in prompt
+    assert "**" not in portfolio_chat._template_answer("What experience does he have?", PROFILE)
+
+
+def test_phone_only_ask_returns_only_phone():
+    # A phone-only ask must not dump the whole contact block.
+    answer = portfolio_chat._template_answer("Can I have his phone number?", PROFILE)
+    assert answer == "Phone: +1 (951) 545-2146"
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "give only that one" in prompt
+    # ...while a general contact ask still lists every method once.
+    general = portfolio_chat._template_answer("How do I contact him?", PROFILE)
+    for value in ("https://github.com/sri1513", "https://linkedin.com/in/sri-omkar-58r4r4r8",
+                  "https://sriomkar.com", "+1 (951) 545-2146"):
+        assert general.count(value) == 1, value
+
+
+def test_template_identity_answer():
+    assert portfolio_chat._template_answer("Who are you?", PROFILE) == portfolio_chat.IDENTITY_TEXT
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert portfolio_chat.IDENTITY_TEXT in prompt
+
+
+def test_prompts_offer_appointment_flow():
+    # The drawer CAN pass details along now (save + WhatsApp ping), so
+    # the old "never claim you can" rule is replaced by the flow: ask
+    # the follow-up question after the contact list, then collect
+    # name + contact (required) and reason + timings (optional).
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert (
+            "Would you like to make an appointment, or would you like me "
+            "to inform him that you are reaching out?" in prompt
+        )
+        assert "share your name and the best way to reach you" in prompt
+        assert "Never claim you can book a specific time" in prompt
+        assert "Never claim you can book an appointment, pass a message" not in prompt
+
+
+def test_answer_question_submission(monkeypatch):
+    history = [
+        {"role": "user", "text": "How do I contact him?"},
+        {
+            "role": "assistant",
+            "text": "Please share your name and the best way to reach you.",
+        },
+    ]
+    monkeypatch.setattr(
+        portfolio_chat,
+        "handle_submission",
+        lambda msg, hist: "Thanks Priya, I've passed your details to Omkar.",
+    )
+    result = portfolio_chat.answer_question(
+        "I'm Priya, priya@example.com, free Tue afternoons", "1.2.3.4", history
+    )
+    assert result["answer"] == "Thanks Priya, I've passed your details to Omkar."
+    assert result["llm_used"] is False
+
+
+def test_stream_submission_with_history(monkeypatch):
+    monkeypatch.setattr(
+        portfolio_chat,
+        "handle_submission",
+        lambda msg, hist: "Thanks Priya, I've passed your details to Omkar.",
+    )
+    client = TestClient(app)
+    res = client.post(
+        "/api/portfolio-chat/stream",
+        json={
+            "message": "I'm Priya, priya@example.com, free Tue afternoons",
+            "history": [
+                {"role": "user", "text": "How do I contact him?"},
+                {
+                    "role": "assistant",
+                    "text": "Please share your name and the best way to reach you.",
+                },
+            ],
+        },
+        headers={"Origin": "https://sriomkar.com"},
+    )
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert "Thanks Priya, I've passed your details to Omkar." in text
+    assert [e for e in events if e["type"] == "done"][0]["llm_used"] is False
+
+
+def test_grounded_stream_includes_history(monkeypatch):
+    captured = {}
+
+    def _capture_stream(messages):
+        captured["messages"] = messages
+        yield "grounded answer "
+
+    monkeypatch.setattr(settings, "MARKET_CHAT_LLM_URL", "http://llm.test/api/chat/completions")
+    monkeypatch.setattr(portfolio_chat, "_stream_llm_tokens", _capture_stream)
+    history = [
+        {"role": "user", "text": "How do I contact him?"},
+        {"role": "assistant", "text": "Here is how to contact him."},
+    ]
+    events = list(
+        portfolio_chat._grounded_stream_events("What did he do at Optum?", history)
+    )
+    messages = captured["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[1] == {"role": "user", "content": "How do I contact him?"}
+    assert messages[2] == {"role": "assistant", "content": "Here is how to contact him."}
+    assert messages[3]["role"] == "user"
+    assert "Question: What did he do at Optum?" in messages[3]["content"]
+    assert "Optum" in messages[3]["content"]  # profile data rides the last turn
+    parsed = _parse_sse("".join(events))
+    assert "".join(e["text"] for e in parsed if e["type"] == "token") == "grounded answer "
+
+
 def test_template_contact_lists_each_url_once():
     text = portfolio_chat._template_answer("How do I contact him?", PROFILE)
     for url in (
@@ -335,7 +454,7 @@ def test_http_route_and_rate_limit():
 
 
 def test_guardrails_file_loads():
-    assert portfolio_chat._GUARDRAILS["version"] == 3
+    assert portfolio_chat._GUARDRAILS["version"] == 5
     assert portfolio_chat._GUARDRAILS["tools"]["max_tool_rounds"] == 4
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_resources"] == ["profile://frameworks"]
     assert portfolio_chat._GUARDRAILS["tools"]["allowed_tools"] == []
@@ -371,7 +490,7 @@ def test_contact_includes_phone_and_each_link_once():
 
 def test_prompts_require_first_person_identity_and_complete_source():
     for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
-        assert "I am the Portfolio Assistant" in prompt
+        assert "I am Omkar's Portfolio Assistant" in prompt
         assert "never say you lack access" in prompt
         assert "list ALL contact methods" in prompt
 
