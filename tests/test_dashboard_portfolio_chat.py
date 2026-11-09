@@ -129,6 +129,24 @@ def test_phone_number_is_shareable():
     assert "+1 (951) 545-2146" in result["answer"]
 
 
+def test_prompts_forbid_markdown_links_for_contact():
+    for prompt in (portfolio_chat.SYSTEM_PROMPT, portfolio_chat.AGENT_SYSTEM_PROMPT):
+        assert "Never write a URL as a Markdown link" in prompt
+        assert "[text](url)" in prompt
+
+
+def test_template_contact_lists_each_url_once():
+    text = portfolio_chat._template_answer("How do I contact him?", PROFILE)
+    for url in (
+        "https://github.com/sri1513",
+        "https://linkedin.com/in/sri-omkar-58r4r4r8",
+        "https://sriomkar.com",
+    ):
+        assert text.count(url) == 1, url
+    assert "[" not in text
+    assert "+1 (951) 545-2146" in text
+
+
 def test_profile_file_is_public_safe():
     blob = json.dumps(PROFILE).lower()
     for forbidden in ("sponsorship", "visa", "salary", "hourly", "h-1b", "green card"):
