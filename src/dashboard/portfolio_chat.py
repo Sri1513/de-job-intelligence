@@ -433,6 +433,39 @@ def _is_phone_only_ask(message: str) -> bool:
     return not any(word in lowered for word in _CONTACT_WORDS)
 
 
+def strip_markdown(text: str) -> str:
+    """Remove Markdown formatting from model output before it reaches
+    the drawer. The drawer renders textContent only, so any Markdown
+    the model emits despite the plain-text prompt rule would show
+    literally (seen live: '**At Optum (Oct 2025 - Present):**').
+    Dash lists and '*' bullets are plain text already and are left
+    alone."""
+    if not text:
+        return ""
+    # [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    # `code` -> code
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    # ***bold italic*** -> bold italic
+    text = re.sub(r"\*\*\*([^*]+)\*\*\*", r"\1", text)
+    # **bold** -> bold
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    # __bold__ -> bold
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    # *italic* -> italic (only when the * touches non-space text, so
+    # '* ' bullets are untouched)
+    text = re.sub(r"\*([^\s*][^*]*[^\s*])\*", r"\1", text)
+    # _italic_ -> italic
+    text = re.sub(r"\b_([^_\s][^_]*[^_\s])_\b", r"\1", text)
+    # ~~strikethrough~~ -> strikethrough
+    text = re.sub(r"~~([^~]+)~~", r"\1", text)
+    # ## headings -> plain line (at a line start, or after whitespace --
+    # a '#' with no space after it, as in C#, is left alone)
+    text = re.sub(r"(?m)(^|[ \t])#{1,6}[ \t]+", r"\1", text)
+    # Safety net: any unbalanced ** left behind.
+    return text.replace("**", "")
+
+
 def _template_answer(message, profile):
     """Deterministic answer built ONLY from the profile dict. Used
     when the model is off and as the grounded fallback when the
@@ -550,7 +583,9 @@ def answer_question(message: str, client_ip: str, history=None) -> dict:
     template = _template_answer(message, profile)
     llm_text, llm_error = _llm_answer(message, profile)
     if llm_text:
-        return {"answer": llm_text, "trace": trace, "llm_used": True}
+        # The drawer renders textContent, so strip any Markdown the
+        # model emitted despite the plain-text prompt rule.
+        return {"answer": strip_markdown(llm_text), "trace": trace, "llm_used": True}
     result = {"answer": template, "trace": trace, "llm_used": False}
     if llm_error:
         result["llm_error"] = llm_error
@@ -559,6 +594,17 @@ def answer_question(message: str, client_ip: str, history=None) -> dict:
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
+
+
+def _emit_text_tokens(text: str):
+    """Yield one token event carrying sanitized text. Markdown is
+    stripped first: the drawer renders textContent, so any Markdown
+    the model emitted despite the plain-text prompt rule would show
+    literally. One event (rather than word-by-word) keeps the emitted
+    text byte-identical to the sanitized answer."""
+    clean = strip_markdown(text)
+    if clean:
+        yield _sse({"type": "token", "text": clean})
 
 
 def _grounded_stream_events(message, history=None):
@@ -590,15 +636,19 @@ def _grounded_stream_events(message, history=None):
     )
     streamed_any = False
     stream_clean = False
+    parts = []
     if settings.MARKET_CHAT_LLM_URL:
         try:
             for token in _stream_llm_tokens(messages):
                 streamed_any = True
-                yield _sse({"type": "token", "text": token})
+                parts.append(token)
             stream_clean = True
         except Exception as exc:
             logger.warning("Portfolio-chat grounded stream failed: %s", exc)
     if streamed_any:
+        # Buffer-then-sanitize: a '**' marker can split across tokens,
+        # so the complete model text is stripped once before emitting.
+        yield from _emit_text_tokens("".join(parts))
         yield _sse({"type": "trace", "trace": trace})
         done = {"type": "done", "llm_used": True}
         if not stream_clean:
@@ -716,14 +766,18 @@ def _agent_stream_events(message, history=None):
         return
     streamed_any = False
     stream_clean = False
+    parts = []
     try:
         for token in _stream_llm_tokens(messages):
             streamed_any = True
-            yield _sse({"type": "token", "text": token})
+            parts.append(token)
         stream_clean = True
     except Exception as exc:
         logger.warning("Portfolio-chat agent final stream failed: %s", exc)
     if streamed_any:
+        # Buffer-then-sanitize: a '**' marker can split across tokens,
+        # so the complete model text is stripped once before emitting.
+        yield from _emit_text_tokens("".join(parts))
         yield _sse({"type": "trace", "trace": trace})
         done = {"type": "done", "llm_used": True}
         if not stream_clean:
