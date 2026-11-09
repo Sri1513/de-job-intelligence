@@ -90,7 +90,7 @@ _DEFAULT_GUARDRAILS = {
             r"^\s*(write|give me)\s+(a\s+)?(python|java|sql|javascript)\b",
             r"\b(visa|sponsorship|immigration|h-1b|green card|citizenship)\b",
             r"\b(salary|hourly rate|pay rate|compensation|expected pay)\b",
-            r"\b(phone number|home address|personal email)\b",
+            r"\b(home address|personal email)\b",
         ],
         "refusal_text": (
             "I can only answer questions about Sri Omkar's public "
@@ -115,7 +115,10 @@ _DEFAULT_GUARDRAILS = {
             "complete source; never say you lack access to it or "
             "cannot verify Sri Omkar from it. When asked how to "
             "contact Sri Omkar, list ALL contact methods, each "
-            "exactly once, and never repeat a URL."
+            "exactly once, as plain text on its own line like "
+            "'GitHub: https://github.com/sri1513'. Never write a URL "
+            "as a Markdown link - never use [text](url) - and never "
+            "repeat a URL."
         ),
         "agent_system_prompt": (
             "You are the Portfolio Assistant for Sri Omkar, a Senior "
@@ -133,8 +136,10 @@ _DEFAULT_GUARDRAILS = {
             "profile data provided is your complete source; never "
             "say you lack access to it or cannot verify Sri Omkar "
             "from it. When asked how to contact Sri Omkar, list ALL "
-            "contact methods, each exactly once, and never repeat "
-            "a URL."
+            "contact methods, each exactly once, as plain text on "
+            "its own line like 'GitHub: https://github.com/sri1513'. "
+            "Never write a URL as a Markdown link - never use "
+            "[text](url) - and never repeat a URL."
         ),
     },
     "tools": {
