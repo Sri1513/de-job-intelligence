@@ -70,6 +70,12 @@ from src.dashboard.market_chat import (
     _stream_llm_tokens,
     _ToolsUnsupported,
 )
+from src.dashboard.portfolio_contact import (
+    MAX_HISTORY_CHARS,
+    MAX_HISTORY_TURNS,
+    detect_submission,
+    handle_submission,
+)
 
 logger = logging.getLogger("de-job-intelligence.portfolio-chat")
 
@@ -124,10 +130,17 @@ _DEFAULT_GUARDRAILS = {
             "[text](url) - and never repeat a URL. If the visitor "
             "asks for only one contact method, such as only his phone "
             "number, give only that one -- do not list the others. "
-            "Never claim you can book an appointment, pass a message "
-            "to Sri Omkar, or inform him that someone is reaching "
-            "out -- you cannot do any of those. If asked, point the "
-            "visitor to the contact methods."
+            "After listing the contact methods, ask: 'Would you like "
+            "to make an appointment, or would you like me to inform "
+            "him that you are reaching out?' If the visitor says "
+            "they want to make an appointment or be put in touch, "
+            "ask them to share your name and the best way to reach "
+            "you (required), plus your reason and a few times that "
+            "work for you (optional) -- ask for all of it in one "
+            "message. When they share their name and contact info, "
+            "confirm you have passed their details to Sri Omkar. "
+            "Never claim you can book a specific time or that Sri "
+            "Omkar will reply by a certain time."
         ),
         "agent_system_prompt": (
             "You are the Portfolio Assistant for Sri Omkar, a Senior "
@@ -154,11 +167,18 @@ _DEFAULT_GUARDRAILS = {
             "write a URL as a Markdown link - never use [text](url) "
             "- and never repeat a URL. If the visitor asks for only "
             "one contact method, such as only his phone number, give "
-            "only that one -- do not list the others. Never claim "
-            "you can book an appointment, pass a message to Sri "
-            "Omkar, or inform him that someone is reaching out -- "
-            "you cannot do any of those. If asked, point the visitor "
-            "to the contact methods."
+            "only that one -- do not list the others. After listing "
+            "the contact methods, ask: 'Would you like to make an "
+            "appointment, or would you like me to inform him that "
+            "you are reaching out?' If the visitor says they want "
+            "to make an appointment or be put in touch, ask them to "
+            "share your name and the best way to reach you "
+            "(required), plus your reason and a few times that work "
+            "for you (optional) -- ask for all of it in one message. "
+            "When they share their name and contact info, confirm "
+            "you have passed their details to Sri Omkar. Never claim "
+            "you can book a specific time or that Sri Omkar will "
+            "reply by a certain time."
         ),
     },
     "tools": {
@@ -505,12 +525,14 @@ def _llm_answer(message, profile):
         return None, "unavailable"
 
 
-def answer_question(message: str, client_ip: str) -> dict:
+def answer_question(message: str, client_ip: str, history=None) -> dict:
     """Pure logic entry point (testable without HTTP): returns the
     drawer payload with answer, wire trace, and LLM status."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return {"answer": "Ask a question about Sri Omkar's profile.", "trace": [], "llm_used": False}
+    if detect_submission(history, message):
+        return {"answer": handle_submission(message, history), "trace": [], "llm_used": False}
     if _is_off_topic(message):
         return {
             "answer": REFUSAL_TEXT,
@@ -539,7 +561,7 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-def _grounded_stream_events(message):
+def _grounded_stream_events(message, history=None):
     """Backend pre-fetches the profile resource and streams a model
     summary grounded in it (or the template when the model is off).
     This is the EXPECTED launch path, not an error path: the VM2 3B
@@ -554,8 +576,10 @@ def _grounded_stream_events(message):
         yield _sse({"type": "done", "llm_used": False})
         return
     template = _template_answer(message, profile)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for turn in (history or [])[-MAX_HISTORY_TURNS:]:
+        messages.append({"role": turn["role"], "content": turn["text"]})
+    messages.append(
         {
             "role": "user",
             "content": (
@@ -563,7 +587,7 @@ def _grounded_stream_events(message):
                 f"{json.dumps(profile, default=str)}"
             ),
         },
-    ]
+    )
     streamed_any = False
     stream_clean = False
     if settings.MARKET_CHAT_LLM_URL:
@@ -587,7 +611,7 @@ def _grounded_stream_events(message):
     yield _sse({"type": "done", "llm_used": False, "llm_error": "unavailable"})
 
 
-def _agent_stream_events(message):
+def _agent_stream_events(message, history=None):
     """Agentic loop on the FILTERED portfolio surface: discover,
     filter to profile://frameworks only, give the model the single
     resources_read action, forward its calls verbatim as JSON-RPC,
@@ -688,7 +712,7 @@ def _agent_stream_events(message):
         # pre-fetched profile data instead of streaming an
         # empty-context guess.
         logger.info("Portfolio-chat agent made no tool calls; falling back to grounded data")
-        yield from _grounded_stream_events(message)
+        yield from _grounded_stream_events(message, history)
         return
     streamed_any = False
     stream_clean = False
@@ -706,10 +730,10 @@ def _agent_stream_events(message):
             done["llm_error"] = "unavailable"
         yield _sse(done)
         return
-    yield from _grounded_stream_events(message)
+    yield from _grounded_stream_events(message, history)
 
 
-def stream_answer(message: str):
+def stream_answer(message: str, history=None):
     """SSE event generator for the drawer: token events as text arrives,
     then one trace event, then a done event with LLM status. Token text
     is plain data; the frontend appends it via textContent, never HTML."""
@@ -718,29 +742,38 @@ def stream_answer(message: str):
         yield _sse({"type": "token", "text": "Ask a question about Sri Omkar's profile."})
         yield _sse({"type": "done", "llm_used": False})
         return
+    if detect_submission(history, message):
+        reply = handle_submission(message, history)
+        for word in reply.split(" "):
+            yield _sse({"type": "token", "text": word + " "})
+        yield _sse({"type": "done", "llm_used": False})
+        return
     if _is_off_topic(message):
         yield _sse({"type": "token", "text": REFUSAL_TEXT})
         yield _sse({"type": "done", "llm_used": False, "refused": True})
         return
     if not settings.MARKET_CHAT_LLM_URL:
-        yield from _grounded_stream_events(message)
+        yield from _grounded_stream_events(message, history)
         return
     try:
-        yield from _agent_stream_events(message)
+        yield from _agent_stream_events(message, history)
     except _ToolsUnsupported:
         logger.info("Portfolio-chat: endpoint rejected tools; falling back to grounded answering")
-        yield from _grounded_stream_events(message)
+        yield from _grounded_stream_events(message, history)
 
 
 async def _parse_message(request: Request):
     """Shared preamble for both chat endpoints. Returns
-    (message, error_response_or_None). Error responses carry the
-    same CORS headers as success responses, so the browser can
-    read them cross-origin."""
+    (message, history, error_response_or_None). History is the
+    conversation so far -- a list of {role, text} turns, validated
+    and capped -- so the drawer can follow up across turns (the
+    appointment flow) without server-side sessions. Error responses
+    carry the same CORS headers as success responses, so the browser
+    can read them cross-origin."""
     cors = _cors_headers(request)
     client_ip = request.client.host if request.client else "unknown"
     if not _check_rate_limit(client_ip):
-        return None, JSONResponse(
+        return None, [], JSONResponse(
             {"error": "Too many questions. Please wait a minute and try again."},
             status_code=429,
             headers=cors,
@@ -748,30 +781,42 @@ async def _parse_message(request: Request):
     try:
         payload = await request.json()
     except Exception:
-        return None, JSONResponse({"error": "Invalid JSON body."}, status_code=400, headers=cors)
+        return None, [], JSONResponse({"error": "Invalid JSON body."}, status_code=400, headers=cors)
     message = payload.get("message", "")
     if not message:
         # The portfolio drawer originally posted {"question": ...};
         # accept it as a fallback so cached pages keep working.
         message = payload.get("question", "")
     if not isinstance(message, str):
-        return None, JSONResponse({"error": "message must be a string."}, status_code=400, headers=cors)
-    return message, None
+        return None, [], JSONResponse({"error": "message must be a string."}, status_code=400, headers=cors)
+    history = payload.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    cleaned = []
+    for turn in history[-MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get("role")
+        text = turn.get("text")
+        if role not in ("user", "assistant") or not isinstance(text, str):
+            continue
+        cleaned.append({"role": role, "text": text[:MAX_HISTORY_CHARS]})
+    return message, cleaned, None
 
 
 async def portfolio_chat_view(request: Request) -> JSONResponse:
-    message, error = await _parse_message(request)
+    message, history, error = await _parse_message(request)
     if error is not None:
         return error
-    return JSONResponse(answer_question(message, "unknown"), headers=_cors_headers(request))
+    return JSONResponse(answer_question(message, "unknown", history), headers=_cors_headers(request))
 
 
 async def portfolio_chat_stream_view(request: Request):
-    message, error = await _parse_message(request)
+    message, history, error = await _parse_message(request)
     if error is not None:
         return error
     return StreamingResponse(
-        stream_answer(message),
+        stream_answer(message, history),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
