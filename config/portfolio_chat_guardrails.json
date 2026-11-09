@@ -30,7 +30,7 @@
       "^\\s*(write|give me)\\s+(a\\s+)?(python|java|sql|javascript)\\b",
       "\\b(visa|sponsorship|immigration|h-1b|green card|citizenship)\\b",
       "\\b(salary|hourly rate|pay rate|compensation|expected pay)\\b",
-      "\\b(phone number|home address|personal email)\\b"
+      "\\b(home address|personal email)\\b"
     ],
     "refusal_text": "I can only answer questions about Sri Omkar's public professional profile -- his experience, projects, skills, frameworks, and education. I can't help with anything else, and I won't guess at details not in his profile."
   },

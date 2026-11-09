@@ -90,7 +90,7 @@ _DEFAULT_GUARDRAILS = {
             r"^\s*(write|give me)\s+(a\s+)?(python|java|sql|javascript)\b",
             r"\b(visa|sponsorship|immigration|h-1b|green card|citizenship)\b",
             r"\b(salary|hourly rate|pay rate|compensation|expected pay)\b",
-            r"\b(phone number|home address|personal email)\b",
+            r"\b(home address|personal email)\b",
         ],
         "refusal_text": (
             "I can only answer questions about Sri Omkar's public "

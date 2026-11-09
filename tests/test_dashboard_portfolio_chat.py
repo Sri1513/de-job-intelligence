@@ -121,6 +121,14 @@ def test_off_profile_refused_without_mcp_calls():
     assert calls == []
 
 
+def test_phone_number_is_shareable():
+    # The phone is public (resume, LinkedIn, profile contact) -- a direct
+    # ask must be answered from the profile, not refused.
+    result = portfolio_chat.answer_question("What is his phone number?", "1.2.3.4")
+    assert result.get("refused") is not True
+    assert "+1 (951) 545-2146" in result["answer"]
+
+
 def test_profile_file_is_public_safe():
     blob = json.dumps(PROFILE).lower()
     for forbidden in ("sponsorship", "visa", "salary", "hourly", "h-1b", "green card"):
