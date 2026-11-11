@@ -53,6 +53,19 @@ def test_empty_scrape_stays_empty(monkeypatch):
     assert jobs == []
 
 
+def test_default_sites_include_glassdoor(monkeypatch):
+    seen = []
+
+    def fake_scrape_jobs(**kw):
+        seen.append(kw["site_name"][0])
+        return _rows([date.today()])
+
+    monkeypatch.setattr(scraper, "scrape_jobs", fake_scrape_jobs)
+    jobs = scraper.fetch_scraped_jobs(hours_old=48, results_wanted=1)
+    assert seen == ["linkedin", "indeed", "glassdoor"]
+    assert len(jobs) == 3
+
+
 def test_blacklist_still_applies_after_fallback(monkeypatch):
     today = date.today()
     df = pd.DataFrame([

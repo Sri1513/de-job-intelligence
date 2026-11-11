@@ -91,13 +91,13 @@ MCP_TOOLS = [
     },
     {
         "name": "run_batch_ingestion",
-        "description": "Scrapes and stages new jobs from LinkedIn/Indeed, prevents duplicates, computes zero-cost local TF-IDF match scores, and saves to PostgreSQL.",
+        "description": "Scrapes and stages new jobs from LinkedIn/Indeed/Glassdoor, prevents duplicates, computes zero-cost local TF-IDF match scores, and saves to PostgreSQL.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "search_term": {"type": "string", "default": "Data Engineer Spark"},
                 "location": {"type": "string", "default": "Remote"},
-                "results_wanted": {"type": "integer", "default": 5},
+                "results_wanted": {"type": "integer", "default": 15},
                 "hours_old": {"type": "integer", "default": 48},
                 "job_category": {"type": "string", "default": "data_engineering"},
                 "c2c_only": {

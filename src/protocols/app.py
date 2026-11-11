@@ -33,14 +33,32 @@ logger = logging.getLogger("de-job-intelligence.mcp")
 # reached mcp.log. Attach a dedicated stderr handler (captured by tee into
 # mcp.log) and stop propagation so records can't double-emit via root.
 logger.setLevel(logging.INFO)
+_handler = logging.StreamHandler()
+_handler.setLevel(logging.INFO)
+_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+)
 if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setLevel(logging.INFO)
-    _handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-    )
     logger.addHandler(_handler)
 logger.propagate = False
+
+# Same black-box problem one level down: run_batch_ingestion's per-source
+# counts ("Total combined raw jobs fetched", "Extracted N jobs from X") are
+# logger.info() on these loggers, which also have no handler in this process
+# -- so lastResort (WARNING) dropped every one of them and a run looked like
+# it "just executed". Give each of them the same stderr handler (captured
+# by tee into mcp.log) with propagate off, so nothing double-emits.
+for _ingestion_logger_name in (
+    "src.engine.ingestion",
+    "src.engine.scraper",
+    "de-job-intelligence.dice_client",
+    "de-job-intelligence.dispatcher",
+):
+    _ingestion_logger = logging.getLogger(_ingestion_logger_name)
+    _ingestion_logger.setLevel(logging.INFO)
+    if not _ingestion_logger.handlers:
+        _ingestion_logger.addHandler(_handler)
+    _ingestion_logger.propagate = False
 
 # Protocol versions this server speaks. The tools wire format (initialize,
 # tools/list, tools/call, notifications) is identical across these versions,
