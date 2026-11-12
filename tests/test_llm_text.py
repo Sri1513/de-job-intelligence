@@ -8,6 +8,7 @@ import yaml
 
 from src.engine import llm_text
 from src.engine.llm_text import (
+    GenerationResult,
     TextProvider,
     generate_text,
     load_text_providers,
@@ -37,7 +38,9 @@ class ScriptedProvider(TextProvider):
         action = self._script.pop(0) if self._script else self._script[-1]
         if isinstance(action, Exception):
             raise action
-        return action
+        if isinstance(action, GenerationResult):
+            return action
+        return GenerationResult(action)
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +103,7 @@ def test_key_rotation_within_provider():
                 if k == "bad":
                     last = RuntimeError("401 invalid key")
                     continue
-                return f"ok-with-{k}"
+                return GenerationResult(f"ok-with-{k}")
             raise last
 
     p = KeyRotating(name="gemini", kind="free", model="m",

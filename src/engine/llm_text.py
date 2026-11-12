@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from src.core.llm_telemetry import record_llm_call
 from src.engine.llm_router import FREE, PAID, classify_llm_error
 from src.engine.notifier import (
     alert_llm_all_down,
@@ -64,8 +65,24 @@ def _resolve_keys(env_names: List[str]) -> List[str]:
 # Provider builders — one per serving mechanism (not per vendor)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class GenerationResult:
+    """What one provider attempt returned, including token usage.
+
+    The builders used to return bare ``str`` and the usage metadata was
+    thrown away — which is why no token counts existed anywhere. Every
+    builder now returns this, so ``generate_text`` can record the call
+    in the telemetry ledger (Sprint 1, Batch 2). Counts are 0 when the
+    provider does not report usage; never None, never guessed.
+    """
+
+    text: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
 def _gemini_generate(api_key: str, model: str, prompt: str, *,
-                    json_mode: bool, temperature: float) -> str:
+                    json_mode: bool, temperature: float) -> GenerationResult:
     from google import genai
     from google.genai import types
 
@@ -78,11 +95,16 @@ def _gemini_generate(api_key: str, model: str, prompt: str, *,
             temperature=temperature,
         ),
     )
-    return (response.text or "").strip()
+    usage = getattr(response, "usage_metadata", None)
+    return GenerationResult(
+        text=(response.text or "").strip(),
+        prompt_tokens=int(getattr(usage, "prompt_token_count", 0) or 0),
+        completion_tokens=int(getattr(usage, "candidates_token_count", 0) or 0),
+    )
 
 
 def _openai_compat_generate(base_url: str, api_key: str, model: str, prompt: str, *,
-                            json_mode: bool, temperature: float) -> str:
+                            json_mode: bool, temperature: float) -> GenerationResult:
     from openai import OpenAI
 
     client = OpenAI(base_url=base_url, api_key=api_key)
@@ -96,7 +118,12 @@ def _openai_compat_generate(base_url: str, api_key: str, model: str, prompt: str
         timeout=60.0,
         **kwargs,
     )
-    return (response.choices[0].message.content or "").strip()
+    usage = getattr(response, "usage", None)
+    return GenerationResult(
+        text=(response.choices[0].message.content or "").strip(),
+        prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+        completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +162,7 @@ class TextProvider:
         self.consecutive_transient_failures = 0
         self.transient_cooldown_until = None
 
-    def generate(self, prompt: str, *, json_mode: bool, temperature: float) -> str:
+    def generate(self, prompt: str, *, json_mode: bool, temperature: float) -> GenerationResult:
         """Tries each configured key in order; raises the last error."""
         last_exc: Optional[BaseException] = None
         for idx, key in enumerate(self.api_keys):
@@ -274,9 +301,36 @@ def generate_text(
     cooldown_s = float(_chain_settings.get("transient_cooldown_s", 120))
     last_exc: Optional[BaseException] = None
     next_provider_name = "none"
+    # Telemetry (Batch 2): one ledger row per generate_text invocation.
+    # failed_kinds collects the classify() outcome of every provider that
+    # failed before the serving one, in order — so fallback_triggered is
+    # true exactly when an earlier provider failed, and fallback_reason
+    # is the last failure kind. Latency covers the whole invocation,
+    # including failed attempts and the retry, not just the serving call.
+    started = time.perf_counter()
+    failed_kinds: List[str] = []
+    last_provider: Optional[TextProvider] = None
+
+    def _record(provider: TextProvider, result: Optional[GenerationResult],
+                *, status: str = "ok",
+                error_message: Optional[str] = None) -> None:
+        record_llm_call(
+            provider=provider.name,
+            model=provider.model,
+            kind=provider.kind,
+            task=task,
+            prompt_tokens=result.prompt_tokens if result else 0,
+            completion_tokens=result.completion_tokens if result else 0,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            fallback_triggered=bool(failed_kinds),
+            fallback_reason=failed_kinds[-1] if failed_kinds else None,
+            status=status,
+            error_message=error_message,
+        )
 
     available = [p for p in chain if p.available()]
     for i, provider in enumerate(available):
+        last_provider = provider
         next_provider_name = available[i + 1].name if i + 1 < len(available) else "none"
         try:
             result = provider.generate(
@@ -291,12 +345,14 @@ def generate_text(
                 )
             else:
                 logger.debug("llm-text: task=%s served via %s", task, provider.name)
-            return result
+            _record(provider, result)
+            return result.text
         except Exception as exc:  # noqa: BLE001 - provider-level failover
             last_exc = exc
             kind = classify_llm_error(exc)
             err = str(exc)[:200]
             if kind == "quota":
+                failed_kinds.append(kind)
                 until = (
                     _next_utc_midnight()
                     if provider.kind == FREE
@@ -307,6 +363,7 @@ def generate_text(
                                    next_provider_name)
                 continue
             if kind == "billing":
+                failed_kinds.append(kind)
                 provider.mark_exhausted(
                     _utcnow() + timedelta(minutes=30), f"billing problem: {err}"
                 )
@@ -328,9 +385,12 @@ def generate_text(
                 logger.info(
                     "llm-text: task=%s provider=%s recovered on retry", task, provider.name
                 )
-                return result
+                failed_kinds.append(kind)
+                _record(provider, result)
+                return result.text
             except Exception as retry_exc:  # noqa: BLE001
                 last_exc = retry_exc
+                failed_kinds.append(kind)
                 provider.transient_cooldown_until = _utcnow() + timedelta(seconds=cooldown_s)
                 logger.warning(
                     "llm-text: task=%s provider=%s retry failed; failing over to %s (%s)",
@@ -341,4 +401,7 @@ def generate_text(
     msg = f"llm-text: all providers exhausted/failed for task={task}. Last error: {last_exc}"
     logger.error(msg)
     alert_llm_all_down(task, str(last_exc)[:300] if last_exc else "unknown")
+    if last_provider is not None:
+        _record(last_provider, None, status="error",
+                error_message=str(last_exc)[:200] if last_exc else "unknown")
     raise RuntimeError(msg)
