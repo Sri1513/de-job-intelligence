@@ -1,0 +1,34 @@
+# profiles.yml — EXAMPLE ONLY. Copy to ~/.dbt/profiles.yml on de-lab
+# (never commit the real one — .gitignore blocks dbt/profiles.yml).
+#
+# Two targets, one project:
+# - prod: the VM's Postgres over Tailscale. This is where `dbt run`
+#   writes marts (schema analytics) and reads raw tables (schema scout).
+# - dev: same database, different schema (analytics_dev). Use it to
+#   test a model change without touching the prod marts.
+#
+# The password comes from the environment, never from this file:
+#   export DBT_PASSWORD='<the dbt_runner password>'
+# on de-lab before running dbt. The role is created once on the VM —
+# see dbt/README.md for the SQL (your step, one psql command).
+de_job_intelligence:
+  target: prod
+  outputs:
+    prod:
+      type: postgres
+      host: 100.118.69.90
+      port: 5432
+      user: dbt_runner
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: job_scout_db
+      schema: analytics
+      threads: 4
+    dev:
+      type: postgres
+      host: 100.118.69.90
+      port: 5432
+      user: dbt_runner
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: job_scout_db
+      schema: analytics_dev
+      threads: 4

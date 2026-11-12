@@ -1,0 +1,51 @@
+version: 2
+
+# Sources are the raw tables dbt reads but never writes. They live in
+# the scout schema on the VM's Postgres (job_scout_db). dbt's job starts
+# AFTER ingestion: staging models select from these, never from the
+# pipeline's Python code.
+sources:
+  - name: scout
+    database: job_scout_db
+    schema: scout
+    description: >
+      Raw application tables owned by the Python ingestion pipeline
+      (src/engine/pipeline_utils.py) and the migrations in /migrations.
+      dbt reads them; it never INSERTs/UPDATEs them.
+    tables:
+      - name: saved_jobs
+        description: >
+          Every tracked job posting (2,330 rows as of 2026-11-12). One row
+          per job_id. Columns come from the pipeline INSERT
+          (pipeline_utils.py) plus the worker lease columns and the
+          telemetry-era columns. fit_score is TEXT on purpose — the
+          numeric guard lives in the marts, like the hand-written views.
+        columns:
+          - name: job_id
+            description: Unique job key (e.g. 'li-4473528772', 'dice_...').
+            tests:
+              - unique
+              - not_null
+          - name: job_url
+            description: >
+              Posting URL as ingested — MAY contain email tracking params
+              (trkEmail, otpToken, lipi) or utm_* params. Staging strips
+              them into job_url_clean; never trust the raw value for
+              dedup or display.
+          - name: title
+            description: >
+              Job title as ingested. MAY contain a mashed-in tracking URL
+              (Oct 4 diagnosis: LinkedIn reminder emails) — staging flags
+              it, it does not rewrite it.
+          - name: company
+            description: Employer name as ingested (un-normalized).
+          - name: status
+            description: Row status ('saved', 'DELETED', ...). Marts exclude DELETED.
+          - name: saved_at
+            description: When the row was staged.
+
+      - name: outreach_tracking
+        description: >
+          Recruiter outreach history, CDC Type 2 versioned (version,
+          is_current, effective_start/end). The dbt snapshot in a later
+          batch tracks status changes here; no model reads it yet.

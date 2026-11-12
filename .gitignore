@@ -50,3 +50,10 @@ dist/
 # Local database backups (pg_dump output — never commit)
 backups/
 *.dump
+
+# dbt (Sprint 1, Batch 5 — runs on de-lab, project lives in git)
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/profiles.yml
+# profiles.yml.example IS committed (template, no secrets)

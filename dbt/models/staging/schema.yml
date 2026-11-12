@@ -1,0 +1,30 @@
+version: 2
+
+# Tests + docs for the staging layer. These run with `dbt test` and
+# block a bad run the same way CI blocks a bad merge: a failing test
+# means the data is wrong, not the query.
+models:
+  - name: stg_saved_jobs
+    description: >
+      Cleaned scout.saved_jobs. One row per job_id. Downstream models
+      read this, never the raw table.
+    columns:
+      - name: job_id
+        tests:
+          - unique
+          - not_null
+      - name: job_url_clean
+        description: job_url with trkEmail/otpToken/lipi/utm_* stripped.
+        tests:
+          - not_null
+      - name: company_clean
+        description: Company name, whitespace-normalized, case kept.
+      - name: company_key
+        description: Lowercased company_clean, for grouping only.
+      - name: title_contains_url
+        description: >
+          True when the title contains 'http' — almost certainly a
+          mashed-in tracking URL from the email pipeline (Oct 4).
+          Flag, not fix: the parser owns the repair.
+      - name: had_tracking_params
+        description: True when at least one tracking param was stripped.
