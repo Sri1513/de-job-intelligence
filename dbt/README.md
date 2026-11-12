@@ -49,11 +49,12 @@ Least privilege, on purpose: dbt can read `scout` and write only its
 own `analytics` / `analytics_dev` schemas. It cannot touch the app
 tables, and it never gets the app user's password.
 
-**2. Profiles file on de-lab** (once):
+**2. Profiles file on de-lab** (once — from inside the repo's `dbt/`
+directory, where `dbt_project.yml` lives):
 
 ```bash
 mkdir -p ~/.dbt
-cp <repo>/dbt/profiles.yml.example ~/.dbt/profiles.yml
+cp profiles.yml.example ~/.dbt/profiles.yml
 export DBT_PASSWORD='<the dbt_runner password>'
 ```
 
