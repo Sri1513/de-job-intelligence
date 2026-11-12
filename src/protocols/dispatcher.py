@@ -198,7 +198,7 @@ async def _handle_retry_job_evaluations(arguments: Dict[str, Any]) -> Any:
 async def _handle_run_batch_ingestion(arguments: Dict[str, Any]) -> Any:
     search_term = arguments.get("search_term", "Data Engineer")
     location = arguments.get("location", "United States")
-    results_wanted = int(arguments.get("results_wanted", 5))
+    results_wanted = int(arguments.get("results_wanted", 15))
     hours_old = int(arguments.get("hours_old", 48))
     job_category = arguments.get("job_category", "data_engineering")
     c2c_only = bool(arguments.get("c2c_only", False))

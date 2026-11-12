@@ -266,3 +266,25 @@ def test_mcp_logger_emits_info():
         h.level <= logging.INFO for h in logger.handlers
     ), "mcp logger needs its own INFO handler (process configures no root handler)"
     assert logger.propagate is False  # our handler emits; don't double-emit via root
+
+
+def test_ingestion_loggers_emit_info():
+    # Regression: run_batch_ingestion's per-source counts are logger.info()
+    # on loggers with no handler in the MCP process, so lastResort (WARNING)
+    # dropped them and a run looked like it "just executed".
+    import logging
+
+    import src.protocols.app  # noqa: F401  (import configures the loggers)
+
+    for name in (
+        "src.engine.ingestion",
+        "src.engine.scraper",
+        "de-job-intelligence.dice_client",
+        "de-job-intelligence.dispatcher",
+    ):
+        lg = logging.getLogger(name)
+        assert lg.getEffectiveLevel() <= logging.INFO, name
+        assert any(
+            h.level <= logging.INFO for h in lg.handlers
+        ), f"{name} needs its own INFO handler"
+        assert lg.propagate is False, name

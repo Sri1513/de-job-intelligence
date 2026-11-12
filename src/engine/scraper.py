@@ -248,7 +248,11 @@ def fetch_scraped_jobs(
     site_name: list = None,
     c2c_only: bool = False,
 ) -> list:
-    """Scrapes job listings strictly from LinkedIn and Indeed.
+    """Scrapes job listings from LinkedIn, Indeed, and Glassdoor.
+
+    Glassdoor was verified live 2026-11-11 (fresh rows returned for
+    "Data Engineer", United States). ZipRecruiter stays out of the default:
+    it 403s from a datacenter IP and its MCP endpoint needs credentials.
 
     When c2c_only is True, JobSpy is asked for contract roles only
     (job_type="contract" — the closest native filter; C2C itself is not
@@ -260,7 +264,7 @@ def fetch_scraped_jobs(
     enrichment (run_batch_ingestion_workflow does this).
     """
     if site_name is None:
-        site_name = ["linkedin", "indeed"]
+        site_name = ["linkedin", "indeed", "glassdoor"]
 
     collected_jobs = []
 
