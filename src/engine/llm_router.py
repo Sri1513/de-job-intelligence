@@ -21,9 +21,12 @@ admin API already exposes for remote diagnosis.
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
+
+from src.core.llm_telemetry import arecord_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,28 @@ def classify_llm_error(exc: BaseException) -> str:
     if any(k in text for k in _QUOTA_KEYWORDS):
         return "quota"
     return "transient"
+
+
+def _extract_usage(result: Any) -> tuple[int, int]:
+    """(prompt_tokens, completion_tokens) from a browser-use chat result.
+
+    LangChain messages carry usage_metadata {'input_tokens',
+    'output_tokens'}; some providers put token_usage {'prompt_tokens',
+    'completion_tokens'} in response_metadata instead. Anything missing
+    is 0, never guessed — a row with 0 tokens means "not reported".
+    """
+    usage = getattr(result, "usage_metadata", None) or {}
+    if usage:
+        return (
+            int(usage.get("input_tokens") or 0),
+            int(usage.get("output_tokens") or 0),
+        )
+    meta = getattr(result, "response_metadata", None) or {}
+    token_usage = meta.get("token_usage") or {}
+    return (
+        int(token_usage.get("prompt_tokens") or 0),
+        int(token_usage.get("completion_tokens") or 0),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +226,36 @@ class FailoverLLM:
 
     async def ainvoke(self, messages, output_format=None, **kwargs):
         last_exc: Optional[BaseException] = None
+        # Telemetry (Batch 2): one ledger row per ainvoke invocation.
+        # Same grain as generate_text — failed attempts stay in the logs;
+        # the row carries the serving provider, total latency, and whether
+        # an earlier provider failed (failed_kinds, in order).
+        started = time.perf_counter()
+        failed_kinds: list[str] = []
+        last_provider: Optional[Provider] = None
+
+        async def _record(provider: Provider, result: Any = None, *,
+                          status: str = "ok",
+                          error_message: Optional[str] = None) -> None:
+            prompt_tokens, completion_tokens = (
+                _extract_usage(result) if result is not None else (0, 0)
+            )
+            await arecord_llm_call(
+                provider=provider.name,
+                model=provider.model,
+                kind=provider.kind,
+                task="apply-agent",
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                fallback_triggered=bool(failed_kinds),
+                fallback_reason=failed_kinds[-1] if failed_kinds else None,
+                status=status,
+                error_message=error_message,
+            )
+
         for provider in self._ordered_available():
+            last_provider = provider
             try:
                 logger.debug("llm-router: serving call via provider=%s", provider.name)
                 result = await provider.llm.ainvoke(
@@ -209,12 +263,14 @@ class FailoverLLM:
                 )
                 provider.note_success()
                 self._announce_serving(provider)
+                await _record(provider, result)
                 return result
             except Exception as exc:  # noqa: BLE001 - must catch provider errors
                 last_exc = exc
                 kind = classify_llm_error(exc)
                 err = str(exc)[:200]
                 if kind == "quota":
+                    failed_kinds.append(kind)
                     # Free daily quotas reset ~midnight UTC; paid quotas can be
                     # raised, so only a short cooldown there.
                     until = (
@@ -230,6 +286,7 @@ class FailoverLLM:
                     )
                     continue
                 if kind == "billing":
+                    failed_kinds.append(kind)
                     provider.mark_exhausted(
                         _utcnow() + timedelta(minutes=30),
                         f"billing problem: {err}",
@@ -259,6 +316,8 @@ class FailoverLLM:
                         "llm-router: provider=%s recovered on retry", provider.name
                     )
                     self._announce_serving(provider)
+                    failed_kinds.append(kind)
+                    await _record(provider, result)
                     return result
                 except Exception as retry_exc:  # noqa: BLE001
                     logger.warning(
@@ -267,7 +326,11 @@ class FailoverLLM:
                         str(retry_exc)[:200],
                     )
                     last_exc = retry_exc
+                    failed_kinds.append(kind)
                     continue
+        if last_provider is not None:
+            await _record(last_provider, status="error",
+                          error_message=str(last_exc)[:200] if last_exc else "unknown")
         raise RuntimeError(
             f"llm-router: all providers exhausted/failed. Last error: {last_exc}"
         )
