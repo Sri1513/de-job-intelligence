@@ -1,6 +1,22 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Sprint 1, Batch 3: pgvector image, NOT plain postgres:16-alpine.
+    # The pgvector/pgvector:pg16 image is the official PostgreSQL 16 image
+    # with the pgvector extension preinstalled (there is no `latest` tag;
+    # `pg16` tracks the newest pgvector for Postgres 16). Same PG major
+    # version, same data-directory format — the postgres_data volume is
+    # reused as-is, so no data migration is needed. One difference: this
+    # image is Debian-based, the old one was Alpine; that only changes
+    # the container OS, not the data.
+    # WHY: the Sprint 1 chunk tables (migration 008, Batch 4) need
+    # `embedding vector(384)` columns, and the `vector` type only exists
+    # once this image is running. The extension itself is enabled per
+    # database by migration 008 (CREATE EXTENSION IF NOT EXISTS vector);
+    # this change only makes it AVAILABLE.
+    # SAFETY: back up BEFORE merging this — merging triggers the CI
+    # deploy, which recreates the postgres container with this image.
+    # See docs/pgvector-image-swap.md for the backup/verify steps.
+    image: pgvector/pgvector:pg16
     container_name: de-job-db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}

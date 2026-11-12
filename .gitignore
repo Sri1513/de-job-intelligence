@@ -47,3 +47,6 @@ data/browser_profiles/*
 build/
 dist/
 *.egg-info/
+# Local database backups (pg_dump output — never commit)
+backups/
+*.dump
