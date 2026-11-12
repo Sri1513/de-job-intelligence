@@ -1,0 +1,54 @@
+# dbt project: de_job_intelligence
+# Sprint 1, Batch 5 — the transformation layer for de-job-intelligence.
+#
+# WHAT IT IS: dbt Core (SQL + tests + docs) that turns raw scout.* tables
+# into clean, tested marts. It does NOT ingest anything (ingestion stays
+# in the Python pipeline) and it does NOT replace Spark (Spark moves
+# bytes; dbt brings DAG, tests, docs and incremental logic to the SQL
+# layer on top of Postgres — same line you drilled in the Oct 9 session).
+#
+# WHERE IT RUNS: de-lab (the Lenovo E480), NOT the Oracle VM. dbt is a
+# command-line runner, not a server: it is installed on de-lab
+# (pip install dbt-postgres), the project lives here in git, and runs
+# target the VM's Postgres over Tailscale (100.118.69.90:5432 — verified
+# reachable from de-lab 2026-11-12). The VM stays lean; dbt runs are
+# batch (nightly), so the ~21ms round trip doesn't matter. If de-lab is
+# down, a run just doesn't happen — the dashboard keeps serving the last
+# good marts.
+#
+# VERSION PIN: dbt-core 1.11.17 + dbt-postgres 1.11.0 (matched stable
+# pair). dbt-core 1.12.x exists, but there is NO dbt-postgres 1.12
+# adapter yet, so 1.11.x is the newest usable pair. A bare
+# `pip install dbt-postgres` once pulled a 1.13.0 beta core — don't do
+# that again; install the pinned pair (see README.md).
+name: de_job_intelligence
+version: 1.0.0
+config-version: 2
+profile: de_job_intelligence
+
+# Keep the working pair: core 1.11.x only, until a 1.12 postgres
+# adapter exists. See the header note.
+require-dbt-version: [">=1.11.0", "<1.12.0"]
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Staging models are views (always fresh, no storage). Marts are tables
+# (the dashboard reads them; rebuilding a view on every read would
+# re-run the aggregation). Snapshots are tables by default.
+models:
+  de_job_intelligence:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
