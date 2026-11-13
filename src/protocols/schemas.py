@@ -95,8 +95,11 @@ MCP_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "search_term": {"type": "string", "default": "Data Engineer Spark"},
-                "location": {"type": "string", "default": "Remote"},
+                # Defaults match the handler (what actually runs). They used
+                # to advertise "Data Engineer Spark" / "Remote", which no
+                # caller ever received — the handler defaults to these.
+                "search_term": {"type": "string", "default": "Data Engineer"},
+                "location": {"type": "string", "default": "United States"},
                 "results_wanted": {"type": "integer", "default": 15},
                 "hours_old": {"type": "integer", "default": 48},
                 "job_category": {"type": "string", "default": "data_engineering"},
