@@ -58,15 +58,9 @@ models:
     marts:
       +materialized: table
 
-# Failing tests land as tables in the target schema (analytics.*),
-# so a nightly failure leaves the offending rows behind to inspect
-# instead of just a count. Added while diagnosing the Batch 6
-# parity failures (2026-11-12).
-# NOTE: +schema is required — the default failures schema
-# (analytics_dbt_test__audit) needs CREATE ON DATABASE, which
-# dbt_runner deliberately does NOT have. analytics is the schema
-# it owns.
-tests:
-  de_job_intelligence:
-    +store_failures: true
-    +schema: analytics
+# NOTE (2026-11-12): store_failures was tried while diagnosing the
+# Batch 6 parity failures and REMOVED — it needs CREATE ON DATABASE
+# (for the analytics_dbt_test__audit schema), which dbt_runner
+# deliberately does not have. Least privilege wins over the
+# diagnostic convenience; failures are diagnosed from the run log.
+# Do not re-add it without a VM-side GRANT CREATE ON DATABASE.
