@@ -16,12 +16,18 @@ dashboard keeps serving the last good marts.
 ## Install (on de-lab, once)
 
 ```bash
+# A venv, NOT a --user install: dbt's ~60 dependencies live isolated
+# here so they can never clash with another tool's versions.
 # Pinned matched pair — do NOT bare `pip install dbt-postgres`
 # (it once pulled a 1.13.0 beta core; there is no 1.12 postgres
 # adapter, so 1.11.x is the newest usable pair).
-pip3 install --user "dbt-core~=1.11.0" "dbt-postgres==1.11.0"
-dbt --version   # expect core 1.11.x + postgres 1.11.0
+python3 -m venv ~/venvs/dbt
+~/venvs/dbt/bin/pip install "dbt-core~=1.11.0" "dbt-postgres==1.11.0"
+~/venvs/dbt/bin/dbt --version   # expect core 1.11.17 + postgres 1.11.0
 ```
+
+Use it either by full path (`~/venvs/dbt/bin/dbt ...`) or by
+activating first (`source ~/venvs/dbt/bin/activate`, then plain `dbt`).
 
 ## Connect (one-time setup)
 
@@ -49,11 +55,12 @@ Least privilege, on purpose: dbt can read `scout` and write only its
 own `analytics` / `analytics_dev` schemas. It cannot touch the app
 tables, and it never gets the app user's password.
 
-**2. Profiles file on de-lab** (once):
+**2. Profiles file on de-lab** (once — from inside the repo's `dbt/`
+directory, where `dbt_project.yml` lives):
 
 ```bash
 mkdir -p ~/.dbt
-cp <repo>/dbt/profiles.yml.example ~/.dbt/profiles.yml
+cp profiles.yml.example ~/.dbt/profiles.yml
 export DBT_PASSWORD='<the dbt_runner password>'
 ```
 
