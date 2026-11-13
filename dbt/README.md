@@ -118,8 +118,24 @@ dbt docs generate && dbt docs serve   # browse the lineage + docs
      variants and changes a number the dashboard shows — one-line
      change for a later batch, not a silent change here.
 - Parity is enforced by singular tests in `tests/`: row counts and
-  job_id/skill set differences vs the live views. A failing parity
-  test means the mart diverged — the run fails loudly.
+  job_id/skill set differences vs the view's logic replayed over
+  the SAME frozen input (int_saved_jobs / int_job_skills). A
+  failing parity test means the mart diverged — the run fails
+  loudly.
+- Why frozen input, not the live view: the first version of these
+  tests compared the mart to the live `scout.v_dashboard_*` views
+  and failed on 5 phantom rows — job_ids present in int but absent
+  from live `saved_jobs` at test time. Diagnosis (2026-11-12,
+  ~01:11–01:30 UTC) proved the source table itself churns: the same
+  job_id was md5-identical to a live row at 01:27 UTC and absent at
+  01:29 UTC, across repeated polls. No DELETE exists anywhere in the
+  application code (grep-verified, including case-insensitive), so
+  the writer is unidentified — likely a long-running tool
+  transaction deleting + re-inserting rows. The mart was never
+  wrong; the test was comparing a frozen mart to a moving target.
+  The frozen-input comparison tests what Batch 6 owns (mart logic
+  parity) and is immune to that churn. The churn itself is an open
+  platform question, not a Batch 6 blocker.
 
 **Snapshot:** `snap_saved_jobs_status` — SCD-2 (`check` strategy on
 `status` + `apply_status`; no `updated_at` exists for a timestamp
