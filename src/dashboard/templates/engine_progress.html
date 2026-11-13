@@ -15,6 +15,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       background-color: #0f172a;
@@ -113,6 +114,30 @@
 
   <!-- Stage counts -->
   <div id="stageCounts" class="d-flex flex-wrap gap-3 mb-4"></div>
+
+  <!-- FinOps: LLM cost & failover telemetry -->
+  <div class="track-card">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h4 class="fw-bold mb-1"><i class="fa fa-coins text-info"></i> FinOps — LLM Cost &amp; Failover</h4>
+        <p class="text-secondary mb-0 small">Every LLM call the platform makes (market chat, portfolio chat, tailoring, queue) — cost, failovers, errors. The apply engine is dormant, so there is no per-application cost to show.</p>
+      </div>
+      <span id="finops-updated" class="text-secondary small text-nowrap"></span>
+    </div>
+    <div id="finops-stats" class="d-flex flex-wrap gap-3 mb-3"></div>
+    <div class="row g-3">
+      <div class="col-md-7">
+        <h6 class="text-secondary small fw-semibold">CALLS PER DAY (LAST 30 DAYS)</h6>
+        <div style="position:relative;height:220px;"><canvas id="finopsDailyChart"></canvas></div>
+      </div>
+      <div class="col-md-5">
+        <h6 class="text-secondary small fw-semibold">COST BY MODEL</h6>
+        <div id="finops-models"></div>
+        <h6 class="text-secondary small fw-semibold mt-3">FAILOVERS BY REASON</h6>
+        <div id="finops-reasons"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Card List -->
   <div id="progressContainer">
@@ -367,7 +392,71 @@ async function saveTracker() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", fetchProgress);
+let finopsChartInstance = null;
+
+async function fetchFinops() {
+  const statsEl = document.getElementById("finops-stats");
+  const money = (v) => {
+    const n = Number(v || 0);
+    return n === 0 ? "$0.00" : "$" + n.toFixed(4);
+  };
+  try {
+    const res = await djRead("/api/finops");
+    const data = await res.json();
+    statsEl.innerHTML = [
+      ["LLM calls", data.total_calls],
+      ["Total cost", money(data.total_cost_usd)],
+      ["Failovers", data.fallbacks],
+      ["Errors", data.errors],
+    ].map(([label, val]) =>
+      `<div class="metric-card"><div class="text-secondary small fw-semibold">${esc(label.toUpperCase())}</div><div class="metric-value">${esc(val)}</div></div>`
+    ).join("");
+    const updated = document.getElementById("finops-updated");
+    updated.textContent = data.last_call_at ? "Last call " + String(data.last_call_at).slice(0, 16).replace("T", " ") : "";
+    const modelsEl = document.getElementById("finops-models");
+    if (!data.by_model || data.by_model.length === 0) {
+      modelsEl.innerHTML = `<p class="text-secondary small">No LLM calls recorded yet.</p>`;
+    } else {
+      modelsEl.innerHTML = `<table class="table table-dark table-sm mb-0"><thead><tr><th>Model</th><th>Calls</th><th>Cost</th><th>Failovers</th></tr></thead><tbody>` +
+        data.by_model.map(m => `<tr><td>${esc(m.model || m.provider || "")}</td><td>${m.calls}</td><td>${money(m.cost_usd)}</td><td>${m.fallbacks}</td></tr>`).join("") + `</tbody></table>`;
+    }
+    const reasonsEl = document.getElementById("finops-reasons");
+    if (!data.by_fallback_reason || data.by_fallback_reason.length === 0) {
+      reasonsEl.innerHTML = `<p class="text-secondary small">No failovers recorded.</p>`;
+    } else {
+      reasonsEl.innerHTML = data.by_fallback_reason.map(r => `<p class="mb-1"><strong>${esc(r.reason || "unknown")}:</strong> ${r.calls}</p>`).join("");
+    }
+    const ctx = document.getElementById("finopsDailyChart").getContext("2d");
+    if (finopsChartInstance) finopsChartInstance.destroy();
+    finopsChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: (data.daily || []).map(d => d.day),
+        datasets: [{
+          label: "LLM calls",
+          data: (data.daily || []).map(d => d.calls),
+          backgroundColor: "rgba(56, 189, 248, 0.75)",
+          borderColor: "rgba(56, 189, 248, 1)",
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#94a3b8" }, grid: { color: "#1e293b" } },
+          y: { beginAtZero: true, ticks: { color: "#94a3b8", precision: 0 }, grid: { color: "#1e293b" } }
+        }
+      }
+    });
+  } catch (err) {
+    statsEl.innerHTML = `<div class="alert alert-danger">Error loading FinOps: ${esc(err.message)}</div>`;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => { fetchProgress(); fetchFinops(); });
 </script>
 
 <script>

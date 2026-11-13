@@ -766,6 +766,136 @@ async def api_engine_progress(request: Request) -> JSONResponse:
     return JSONResponse({"stage_counts": stage_counts, "roles": roles})
 
 
+def _finops_json_list(value):
+    """Coerce a json_agg column to a list. psycopg returns parsed JSON,
+    but mocks and older drivers may return a string, so accept both."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except Exception:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return value if isinstance(value, list) else []
+
+
+def _finops_money(value):
+    """Coerce a NUMERIC cost to a JSON-safe float, rounded to 6 places."""
+    try:
+        return round(float(value or 0), 6)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def api_finops(request: Request) -> JSONResponse:
+    """LLM cost & failover telemetry, aggregated from the telemetry ledger.
+
+    Reframed from the Sprint 1 spec ("Cost per Application"): the apply
+    engine is dormant, so there is no per-application cost to show. What
+    the ledger actually records is every LLM call the platform makes
+    (market chat, portfolio chat, tailoring, queue) with provider, model,
+    tokens, cost, and failover state. This endpoint serves aggregates
+    only — no per-call rows, no job_ids, no error text — so it is safe
+    for the public showcase view. A single query keeps the endpoint
+    trivially testable (one fetchone) and cheap on the reader.
+    """
+    query = """
+        SELECT
+            (SELECT count(*) FROM scout.llm_telemetry_ledger) AS total_calls,
+            (SELECT coalesce(sum(estimated_cost_usd), 0)
+             FROM scout.llm_telemetry_ledger) AS total_cost_usd,
+            (SELECT count(*) FROM scout.llm_telemetry_ledger
+             WHERE fallback_triggered) AS fallbacks,
+            (SELECT count(*) FROM scout.llm_telemetry_ledger
+             WHERE status = 'error') AS errors,
+            (SELECT min(created_at) FROM scout.llm_telemetry_ledger) AS first_call_at,
+            (SELECT max(created_at) FROM scout.llm_telemetry_ledger) AS last_call_at,
+            (SELECT coalesce(json_agg(t), '[]'::json) FROM (
+                SELECT provider, model, count(*) AS calls,
+                       coalesce(sum(estimated_cost_usd), 0) AS cost_usd,
+                       count(*) FILTER (WHERE fallback_triggered) AS fallbacks
+                FROM scout.llm_telemetry_ledger
+                GROUP BY provider, model ORDER BY calls DESC
+            ) t) AS by_model,
+            (SELECT coalesce(json_agg(t), '[]'::json) FROM (
+                SELECT fallback_reason AS reason, count(*) AS calls
+                FROM scout.llm_telemetry_ledger
+                WHERE fallback_triggered
+                GROUP BY fallback_reason ORDER BY calls DESC
+            ) t) AS by_fallback_reason,
+            (SELECT coalesce(json_agg(t), '[]'::json) FROM (
+                SELECT to_char(created_at::date, 'YYYY-MM-DD') AS day,
+                       count(*) AS calls,
+                       coalesce(sum(estimated_cost_usd), 0) AS cost_usd,
+                       count(*) FILTER (WHERE fallback_triggered) AS fallbacks
+                FROM scout.llm_telemetry_ledger
+                GROUP BY created_at::date ORDER BY day DESC LIMIT 30
+            ) t) AS daily
+    """
+    empty = {
+        "total_calls": 0,
+        "total_cost_usd": 0.0,
+        "fallbacks": 0,
+        "errors": 0,
+        "first_call_at": None,
+        "last_call_at": None,
+        "by_model": [],
+        "by_fallback_reason": [],
+        "daily": [],
+    }
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(query)
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.error(f"Error querying /api/finops: {exc}", exc_info=True)
+        return JSONResponse(empty, status_code=500)
+    if not isinstance(row, dict):
+        return JSONResponse(empty)
+    by_model = [
+        {
+            "provider": m.get("provider"),
+            "model": m.get("model"),
+            "calls": int(m.get("calls") or 0),
+            "cost_usd": _finops_money(m.get("cost_usd")),
+            "fallbacks": int(m.get("fallbacks") or 0),
+        }
+        for m in _finops_json_list(row.get("by_model"))
+        if isinstance(m, dict)
+    ]
+    by_reason = [
+        {"reason": r.get("reason"), "calls": int(r.get("calls") or 0)}
+        for r in _finops_json_list(row.get("by_fallback_reason"))
+        if isinstance(r, dict)
+    ]
+    daily = [
+        {
+            "day": d.get("day"),
+            "calls": int(d.get("calls") or 0),
+            "cost_usd": _finops_money(d.get("cost_usd")),
+            "fallbacks": int(d.get("fallbacks") or 0),
+        }
+        for d in _finops_json_list(row.get("daily"))
+        if isinstance(d, dict)
+    ]
+    # Daily is newest-first from SQL; the chart wants oldest-first.
+    daily.sort(key=lambda d: d["day"] or "")
+    return JSONResponse(
+        {
+            "total_calls": int(row.get("total_calls") or 0),
+            "total_cost_usd": _finops_money(row.get("total_cost_usd")),
+            "fallbacks": int(row.get("fallbacks") or 0),
+            "errors": int(row.get("errors") or 0),
+            "first_call_at": serialize_for_json(row.get("first_call_at")),
+            "last_call_at": serialize_for_json(row.get("last_call_at")),
+            "by_model": by_model,
+            "by_fallback_reason": by_reason,
+            "daily": daily,
+        }
+    )
+
+
 @_require_write_auth
 async def api_update_tracker(request: Request) -> JSONResponse:
     """Creates or patches the engine_tracker metadata for one job.
@@ -1158,6 +1288,7 @@ routes = [
     Route("/applications", applications_view, methods=["GET"]),
     Route("/engine-progress", engine_progress_view, methods=["GET"]),
     Route("/api/engine-progress", api_engine_progress, methods=["GET"]),
+    Route("/api/finops", api_finops, methods=["GET"]),
     Route("/api/jobs/update-tracker", api_update_tracker, methods=["POST"]),
     Route("/logs", logs_view, methods=["GET"]),
     Route("/api/applications", api_applications, methods=["GET"]),
