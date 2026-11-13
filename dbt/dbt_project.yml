@@ -62,6 +62,11 @@ models:
 # so a nightly failure leaves the offending rows behind to inspect
 # instead of just a count. Added while diagnosing the Batch 6
 # parity failures (2026-11-12).
+# NOTE: +schema is required — the default failures schema
+# (analytics_dbt_test__audit) needs CREATE ON DATABASE, which
+# dbt_runner deliberately does NOT have. analytics is the schema
+# it owns.
 tests:
   de_job_intelligence:
     +store_failures: true
+    +schema: analytics
