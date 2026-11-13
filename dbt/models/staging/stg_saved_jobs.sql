@@ -49,6 +49,8 @@ with base as (
         job_category,
         ai_status,
         status,
+        apply_status,
+        applied_at,
         saved_at,
         split_part(job_url, '?', 1) as url_base,
         nullif(split_part(job_url, '?', 2), '') as query_string
@@ -103,6 +105,8 @@ select
     b.job_category,
     b.ai_status,
     b.status,
+    b.apply_status,
+    b.applied_at,
     b.saved_at
 from base as b
 left join kept_params as k
