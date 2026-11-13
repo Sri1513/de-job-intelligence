@@ -24,6 +24,7 @@ from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
 from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
+from src.protocols.validation import ToolArgumentError
 
 logger = logging.getLogger("de-job-intelligence.mcp")
 # The MCP server process never configures a handler for this logger (no
@@ -201,6 +202,22 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
                         ]
                     },
                 }
+            )
+        except ToolArgumentError as exc:
+            # Sprint 2, Batch 1: bad arguments are the client's fault, not
+            # an internal error. Answer -32602 (Invalid params) with
+            # field-level errors only — no exception text, no traceback.
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": rpc_id,
+                    "error": {
+                        "code": -32602,
+                        "message": "Invalid tool arguments",
+                        "data": {"tool": exc.tool_name, "errors": exc.errors},
+                    },
+                },
+                status_code=200,
             )
         except Exception as exc:
             logger.exception("Tool execution failed: %s", tool_name)
