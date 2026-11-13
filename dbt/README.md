@@ -84,17 +84,83 @@ dbt docs generate && dbt docs serve   # browse the lineage + docs
 | `dbt_project.yml` | Project config (name, profile, materializations) |
 | `models/sources.yml` | Raw tables dbt reads, never writes |
 | `models/staging/` | `stg_saved_jobs` — URL cleansing, company normalization, title flags |
-| `models/marts/` | Gold marts (next batch — replace the 3 hand-written views) |
-| `models/intermediate/` | Silver incremental models (next batch) |
-| `snapshots/` | SCD-2 snapshots (next batch — outreach_tracking/job status) |
+| `models/marts/` | Gold marts — drop-in replacements for the 3 hand-written views |
+| `models/intermediate/` | Silver incremental models (`int_saved_jobs`, `int_job_skills`) |
+| `snapshots/` | SCD-2 snapshot of saved_jobs status / apply_status |
+| `tests/` | Singular tests — mart-vs-view parity + skills grain check |
 | `profiles.yml.example` | Connection template — real file lives at `~/.dbt/profiles.yml` |
+
+## Batch 6 — Silver + Gold + snapshot + schedule (2026-11-12)
+
+**Silver (intermediate, incremental on `saved_at`):**
+- `int_saved_jobs` — enriched job grain: all staging columns plus
+  `fit_score_num` (numeric-guarded fit score) and
+  `description_preview`, so the guard logic lives in one file.
+- `int_job_skills` — one row per (job_id, skill); the JSON expansion
+  from migration 005, done once here instead of on every read.
+- Honest limit: saved_jobs has NO `updated_at` (verified live), so
+  incremental runs see new rows only. In-place edits to old rows
+  wait for the weekly full refresh; status history is the
+  snapshot's job, not Silver's.
+
+**Gold (marts — drop-in replacements for the 3 hand-written views):**
+- `mart_job_analytics` ← `v_dashboard_job_analytics`
+- `mart_market_metrics` ← `v_dashboard_market_metrics`
+- `mart_job_skills` ← `v_dashboard_job_skills`
+- Same columns, same order, same `status != 'DELETED'` filter.
+  The dashboard (`src/protocols/dashboard_mcp.py`) can point at
+  these without a single query change.
+- Two deliberate decisions (both in the model headers):
+  1. `mart_job_analytics.job_url` is `job_url_clean`, not the raw
+     URL — the one value change, and the whole point of staging.
+  2. `unique_hiring_companies` still counts raw `company` (parity
+     with the view). Switching to `company_clean` merges case
+     variants and changes a number the dashboard shows — one-line
+     change for a later batch, not a silent change here.
+- Parity is enforced by singular tests in `tests/`: row counts and
+  job_id/skill set differences vs the view's logic replayed over
+  the SAME frozen input (int_saved_jobs / int_job_skills). A
+  failing parity test means the mart diverged — the run fails
+  loudly.
+- Why frozen input, not the live view: the first version of these
+  tests compared the mart to the live `scout.v_dashboard_*` views
+  and failed on 5 phantom rows — job_ids present in int but absent
+  from live `saved_jobs` at test time. Diagnosis (2026-11-12,
+  ~01:11–01:30 UTC) proved the source table itself churns: the same
+  job_id was md5-identical to a live row at 01:27 UTC and absent at
+  01:29 UTC, across repeated polls. No DELETE exists anywhere in the
+  application code (grep-verified, including case-insensitive), so
+  the writer is unidentified — likely a long-running tool
+  transaction deleting + re-inserting rows. The mart was never
+  wrong; the test was comparing a frozen mart to a moving target.
+  The frozen-input comparison tests what Batch 6 owns (mart logic
+  parity) and is immune to that churn. The churn itself is an open
+  platform question, not a Batch 6 blocker.
+
+**Snapshot:** `snap_saved_jobs_status` — SCD-2 (`check` strategy on
+`status` + `apply_status`; no `updated_at` exists for a timestamp
+strategy). First run snapshots all rows as version 1.
+`outreach_tracking` gets NO snapshot: it is already CDC Type 2 by
+design (the app versions it in `helper_repo.py`).
+
+**Schedule (cron on de-lab, installed — see `crontab -l`):**
+```cron
+# Nightly 02:00 — build everything: models, snapshot, tests.
+0 2 * * * bash -lc 'cd ~/de-job-intelligence/dbt && ~/venvs/dbt/bin/dbt build' >> ~/logs/dbt-nightly.log 2>&1
+# Weekly full refresh, Sun 02:30 — catches in-place edits to old rows.
+30 2 * * 0 bash -lc 'cd ~/de-job-intelligence/dbt && ~/venvs/dbt/bin/dbt build --full-refresh' >> ~/logs/dbt-nightly.log 2>&1
+```
+`bash -lc` loads `~/.bashrc`, so `DBT_PASSWORD` is available to the
+run (cron itself does not read `.bashrc`). Logs go to
+`~/logs/dbt-nightly.log`. The dashboard keeps serving the last good
+marts if a run ever fails — nothing here touches the live views.
 
 ## What's next (same batch-wise rhythm)
 
-1. **Silver (intermediate):** incremental models on top of staging.
-2. **Gold (marts):** rebuild `v_dashboard_job_analytics`,
-   `v_dashboard_market_metrics`, `v_dashboard_job_skills` as dbt
-   models with the EXACT same columns (the public MCP surface reads
-   them — the contract is in `src/protocols/dashboard_mcp.py`).
-3. **Snapshot:** SCD-2 on outreach_tracking / job status.
-4. **Schedule:** a nightly run on de-lab (cron or systemd timer).
+1. **Point the dashboard at the marts** — swap the three
+   `scout.v_dashboard_*` reads in `src/protocols/dashboard_mcp.py`
+   to `analytics.mart_*` (or keep the views as the public surface
+   and let the marts feed the demo graphs). His call.
+2. **DuckDB weekly export** — Parquet export of jobs > 30 days old.
+3. **FinOps widget** — "Cost per Application & Failover Telemetry"
+   on `/engine-progress`.
