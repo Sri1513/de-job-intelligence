@@ -1,0 +1,52 @@
+version: 2
+
+# Tests + docs for the Gold (marts) layer. These are the tables the
+# dashboard reads, so they carry the strictest tests — plus the
+# parity tests in dbt/tests/, which fail the run if a mart ever
+# diverges from the hand-written view it replaces.
+models:
+  - name: mart_job_analytics
+    description: >
+      Per-job dashboard table. Drop-in replacement for
+      scout.v_dashboard_job_analytics: same columns, same order.
+      job_url is the CLEANED url (job_url_clean) — the one deliberate
+      value change in Batch 6.
+    columns:
+      - name: job_id
+        tests:
+          - unique
+          - not_null
+      - name: job_url
+        description: Cleaned posting URL (no tracking params).
+        tests:
+          - not_null
+      - name: description_preview
+        description: First 600 chars + '...' or the pending fallback.
+
+  - name: mart_market_metrics
+    description: >
+      One row per job_category. Drop-in replacement for
+      scout.v_dashboard_market_metrics: same columns, same order.
+    columns:
+      - name: job_category
+        tests:
+          - unique
+          - not_null
+      - name: total_jobs_tracked
+        tests:
+          - not_null
+      - name: last_ingested_at
+        description: max(saved_at) in the category.
+
+  - name: mart_job_skills
+    description: >
+      One row per (job_id, skill). Drop-in replacement for
+      scout.v_dashboard_job_skills: same columns, same DISTINCT.
+    columns:
+      - name: job_id
+        tests:
+          - not_null
+      - name: skill
+        description: Lowercased skill, '' excluded, deduped per job.
+        tests:
+          - not_null

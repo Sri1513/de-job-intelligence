@@ -1,0 +1,48 @@
+version: 2
+
+# Tests + docs for the Silver (intermediate) layer. Incremental models
+# get the same treatment as staging: a failing test means the data is
+# wrong, not the query.
+models:
+  - name: int_saved_jobs
+    description: >
+      Enriched job grain, one row per job_id. Staging columns plus
+      fit_score_num (numeric-guarded fit score) and
+      description_preview. Incremental on saved_at; weekly full
+      refresh catches in-place edits to old rows.
+    columns:
+      - name: job_id
+        tests:
+          - unique
+          - not_null
+      - name: saved_at
+        description: >
+          Watermark column. Live data has zero NULLs (verified
+          2026-11-12), so the incremental filter never drops a row.
+        tests:
+          - not_null
+      - name: fit_score_num
+        description: >
+          fit_score as numeric, NULL when the text is not a number
+          (same regex guard as the market-metrics view).
+      - name: job_url_clean
+        description: job_url with tracking params stripped (staging).
+
+  - name: int_job_skills
+    description: >
+      Skills grain, one row per (job_id, skill). The JSON expansion
+      from migrations/005, done once here instead of on every read.
+      Incremental on saved_at; status carried so Gold can exclude
+      DELETED.
+    columns:
+      - name: job_id
+        tests:
+          - not_null
+      - name: skill
+        description: Lowercased skill, '' excluded, deduped per job.
+        tests:
+          - not_null
+      - name: saved_at
+        description: Bookkeeping column for the incremental watermark.
+        tests:
+          - not_null

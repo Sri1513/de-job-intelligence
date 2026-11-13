@@ -43,12 +43,17 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
-# Staging models are views (always fresh, no storage). Marts are tables
-# (the dashboard reads them; rebuilding a view on every read would
-# re-run the aggregation). Snapshots are tables by default.
+# Staging models are views (always fresh, no storage). Intermediate
+# models are incremental tables (nightly: new rows only, watermarked
+# on saved_at; weekly full refresh catches in-place edits to old
+# rows — there is no updated_at column). Marts are tables (the
+# dashboard reads them; rebuilding a view on every read would re-run
+# the aggregation). Snapshots are tables by default.
 models:
   de_job_intelligence:
     staging:
       +materialized: view
+    intermediate:
+      +materialized: incremental
     marts:
       +materialized: table
