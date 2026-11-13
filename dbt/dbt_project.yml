@@ -57,3 +57,11 @@ models:
       +materialized: incremental
     marts:
       +materialized: table
+
+# Failing tests land as tables in the target schema (analytics.*),
+# so a nightly failure leaves the offending rows behind to inspect
+# instead of just a count. Added while diagnosing the Batch 6
+# parity failures (2026-11-12).
+tests:
+  de_job_intelligence:
+    +store_failures: true
