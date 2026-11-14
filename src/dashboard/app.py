@@ -105,6 +105,40 @@ def redact_alert_for_public(alert: dict) -> dict:
     return alert
 
 
+def redact_application_for_public(app: dict) -> dict:
+    """Strips private application state for unauthenticated readers.
+
+    Sprint 2, Batch 5: /api/applications carries the same public
+    field-stripping as /api/jobs (PR #50). The showcase fields (title,
+    company, location, job URL, fit score) and the aggregate stats
+    stay public; everything revealing Omkar's own application state
+    goes behind the dashboard token: the pipeline status, the applied
+    timestamp, his agent notes, the review-screenshot link, the manual
+    application details (portal, recruiter, rate, notes), and the
+    engine tracker (already None for public readers at build time;
+    listed here so this function is the complete public contract).
+    A None apply_status makes the frontend render a locked badge
+    instead of inventing a neutral value (same pattern as /api/jobs).
+
+    KNOWN LIMIT (not fixed here): the review screenshots themselves
+    are served by the public /screenshots StaticFiles mount with
+    guessable filenames ({job_id}_review.png). Stripping the URL
+    from this API removes the clickable link, but anyone who knows
+    the naming scheme can still fetch a screenshot directly. Gating
+    the mount needs a cookie or signed-URL mechanism (an <img> tag
+    cannot send the bearer header), so that is a separate design
+    decision, not part of this batch.
+    """
+    app = dict(app)
+    app["apply_status"] = None
+    app["applied_at"] = None
+    app["apply_notes"] = ""
+    app["screenshot_url"] = None
+    app["manual_application"] = None
+    app["engine_tracker"] = None
+    return app
+
+
 def serialize_for_json(obj):
     """Recursively serializes timestamps and decimals for JSON transport."""
     if isinstance(obj, (datetime, date)):
@@ -241,6 +275,10 @@ async def api_applications(request: Request) -> JSONResponse:
         logger.error(f"Error querying /api/applications: {exc}", exc_info=True)
         return JSONResponse({"stats": stats, "applications": []}, status_code=500)
 
+    # Sprint 2, Batch 5: public readers get the showcase fields only.
+    # The stats are aggregate counts (already public on /engine-progress).
+    if not authed:
+        applications = [redact_application_for_public(a) for a in applications]
     return JSONResponse({"stats": stats, "applications": applications})
 
 
