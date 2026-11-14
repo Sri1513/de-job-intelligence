@@ -17,6 +17,7 @@ from src.core.database import get_db_connection, get_job_by_id
 from src.engine.agent_bridge import stage_agent_jobs_workflow
 from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
+from src.protocols.scopes import require_tool_scope
 from src.protocols.validation import validate_tool_arguments
 from src.synthesis.gdrive_docs import generate_resume_from_llm_payload
 from src.synthesis.prompt_builder import build_job_tailoring_prompt
@@ -349,17 +350,24 @@ def _start_pipeline_run(tool_name, handler, arguments) -> Dict[str, Any]:
     }
 
 
-async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any]) -> Any:
+async def dispatch_tool_call(
+    tool_name: str, arguments: Dict[str, Any], scopes=None
+) -> Any:
     """Dispatches a JSON-RPC tool request through the handler registry.
 
-    Arguments are Pydantic-validated first (Sprint 2, Batch 1): a bad
-    argument set raises ToolArgumentError before any handler — or any
-    background pipeline run — sees it. Handlers still receive a plain
-    dict (validated, defaults applied), so they are untouched.
+    Scope is checked first (Sprint 2, Batch 2): a caller that lacks the
+    tool's scope gets InsufficientScopeError before validation or any
+    handler runs, so it learns nothing about the tool's arguments.
+    `scopes=None` means "no scope information" (direct/internal caller)
+    and is unrestricted; an empty set is authenticated-but-unscoped and
+    is denied for every tool. Arguments are then Pydantic-validated
+    (Sprint 2, Batch 1). Handlers still receive a plain dict (validated,
+    defaults applied), so they are untouched.
     """
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
         return {"error": f"Unknown tool: '{tool_name}'"}
+    require_tool_scope(tool_name, scopes)
     arguments = validate_tool_arguments(tool_name, arguments)
     if tool_name in ASYNC_PIPELINE_TOOLS:
         return _start_pipeline_run(tool_name, handler, arguments)

@@ -27,6 +27,13 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from src.core.config import settings
+from src.protocols.scopes import (
+    ALL_SCOPES,
+    SCOPES_SUPPORTED,
+    normalize_scope_string,
+    parse_scopes,
+    unknown_scopes,
+)
 from src.protocols.token_store import get_store
 
 logger = logging.getLogger("de-job-intelligence.oauth")
@@ -108,7 +115,7 @@ async def authorization_server_metadata(request: Request) -> JSONResponse:
                 "client_secret_post",
                 "client_secret_basic",
             ],
-            "scopes_supported": ["mcp"],
+            "scopes_supported": SCOPES_SUPPORTED,
         }
     )
 
@@ -119,7 +126,7 @@ async def protected_resource_metadata(request: Request) -> JSONResponse:
         {
             "resource": iss,
             "authorization_servers": [iss],
-            "scopes_supported": ["mcp"],
+            "scopes_supported": SCOPES_SUPPORTED,
             "bearer_methods_supported": ["header"],
         }
     )
@@ -143,10 +150,19 @@ async def register_client(request: Request) -> JSONResponse:
         if not isinstance(uri, str) or not _valid_redirect_uri(uri):
             return _oauth_error("invalid_redirect_uri", f"Rejected redirect URI: {uri!r}.")
 
+    # Sprint 2, Batch 2: reject scope names the server does not know, and
+    # store the canonical form (all three granular scopes collapse to "mcp").
+    requested_scope = str(body.get("scope", ""))[:200]
+    unknown = unknown_scopes(requested_scope)
+    if unknown:
+        return _oauth_error(
+            "invalid_scope", f"Unknown scope(s): {', '.join(unknown)}."
+        )
+
     creds = get_store().register_client(
         redirect_uris=redirect_uris,
         client_name=str(body.get("client_name", ""))[:120],
-        scope=str(body.get("scope", ""))[:200],
+        scope=normalize_scope_string(requested_scope),
     )
     logger.info("Registered OAuth client %s", creds["client_id"])
     return JSONResponse(
@@ -186,6 +202,7 @@ button{{flex:1;border:0;border-radius:8px;padding:.7rem;font-size:.95rem;cursor:
 <p>This app wants to access your MCP server tools (read saved jobs, queue
 applications, run workers). Only the server owner can approve &mdash; enter
 your <code>MCP_AUTH_TOKEN</code> to confirm it&rsquo;s you.</p>
+<p>Requested access: <code>{scope_display}</code></p>
 <form method="post">
 <input type="hidden" name="client_id" value="{client_id}">
 <input type="hidden" name="redirect_uri" value="{redirect_uri}">
@@ -204,6 +221,17 @@ _ERROR_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <title>Authorization error</title></head>
 <body style="font-family:system-ui,sans-serif;padding:3rem"><h1>Authorization error</h1>
 <p>{message}</p></body></html>"""
+
+
+def _scope_display(scope: str) -> str:
+    """Human-readable scope line for the approval page, so the owner sees
+    exactly what access they are granting."""
+    effective = parse_scopes(scope)
+    if effective == ALL_SCOPES:
+        return "mcp (full access — all tools)"
+    if not effective:
+        return "none (this token cannot call any tool)"
+    return ", ".join(sorted(effective))
 
 
 def _validate_authorize_params(params) -> tuple:
@@ -239,6 +267,14 @@ async def authorize_get(request: Request) -> HTMLResponse | RedirectResponse:
             redirect_uri,
             {"error": "invalid_request", "error_description": "PKCE code_challenge is required.", "state": params.get("state", "")},
         )
+    # Sprint 2, Batch 2: reject scope names the server does not know.
+    requested_scope = params.get("scope", "mcp")
+    unknown = unknown_scopes(requested_scope)
+    if unknown:
+        return _redirect_with_params(
+            redirect_uri,
+            {"error": "invalid_scope", "error_description": f"Unknown scope(s): {', '.join(unknown)}.", "state": params.get("state", "")},
+        )
     client_name = record.get("client_name") or params.get("client_id")
     return HTMLResponse(
         _APPROVAL_PAGE.format(
@@ -246,7 +282,8 @@ async def authorize_get(request: Request) -> HTMLResponse | RedirectResponse:
             client_id=params.get("client_id", ""),
             redirect_uri=redirect_uri,
             state=params.get("state", ""),
-            scope=params.get("scope", "mcp"),
+            scope=normalize_scope_string(requested_scope),
+            scope_display=_scope_display(requested_scope),
             code_challenge=params.get("code_challenge", ""),
             code_challenge_method=params.get("code_challenge_method", "S256"),
         )
@@ -271,10 +308,21 @@ async def authorize_post(request: Request):
             status_code=403,
         )
 
+    # Sprint 2, Batch 2: the form's scope is owner-submitted HTML, so
+    # validate it again here (the GET check is not a trust boundary) and
+    # store the canonical form.
+    requested_scope = form.get("scope", "mcp")
+    unknown = unknown_scopes(requested_scope)
+    if unknown:
+        return HTMLResponse(
+            _ERROR_PAGE.format(message=f"Unknown scope(s): {', '.join(unknown)}."),
+            status_code=400,
+        )
+
     code = get_store().create_code(
         client_id=form.get("client_id", ""),
         redirect_uri=redirect_uri,
-        scope=form.get("scope", "mcp"),
+        scope=normalize_scope_string(requested_scope),
         code_challenge=form.get("code_challenge", ""),
         code_challenge_method=form.get("code_challenge_method", "S256") or "S256",
     )

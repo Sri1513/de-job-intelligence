@@ -24,6 +24,7 @@ from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
 from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
+from src.protocols.scopes import InsufficientScopeError, scopes_for_request
 from src.protocols.validation import ToolArgumentError
 
 logger = logging.getLogger("de-job-intelligence.mcp")
@@ -185,7 +186,9 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
             )
 
         try:
-            execution_result = await dispatch_tool_call(tool_name, arguments)
+            execution_result = await dispatch_tool_call(
+                tool_name, arguments, scopes=scopes_for_request(request)
+            )
             logger.info("Tool executed: %s", tool_name)
             # Serialize as JSON (not str()) so agents receive parseable content;
             # default=str keeps datetimes and other scalars safe.
@@ -202,6 +205,26 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
                         ]
                     },
                 }
+            )
+        except InsufficientScopeError as exc:
+            # Sprint 2, Batch 2: the token is valid but lacks the tool's
+            # scope. -32001 (same code the middleware uses for auth
+            # failures) with the required scope named, so the client knows
+            # what to request. HTTP 200 like the other tool-call errors.
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": rpc_id,
+                    "error": {
+                        "code": -32001,
+                        "message": str(exc),
+                        "data": {
+                            "tool": exc.tool_name,
+                            "required_scope": exc.required_scope,
+                        },
+                    },
+                },
+                status_code=200,
             )
         except ToolArgumentError as exc:
             # Sprint 2, Batch 1: bad arguments are the client's fault, not
