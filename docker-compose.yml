@@ -38,6 +38,10 @@ services:
       # Residential egress for scraping: forward proxy on the user's laptop
       # over Tailscale (e.g. http://100.68.109.36:8888). Empty = scrape direct.
       - SCRAPER_PROXY_URL=${SCRAPER_PROXY_URL:-}
+      # Bearer-token proxy in front of the Windows Ollama (Sprint 2,
+      # Batch 6): the router sends its Windows calls through the MCP
+      # server's own /ollama/* routes with the MCP bearer token.
+      - OLLAMA_PROXY_URL=http://mcp-server:8000/ollama
     ports:
       - "8000:8000"
     depends_on:
@@ -60,6 +64,10 @@ services:
       # In compose the MCP server is reachable by service name.
       - MCP_HEALTH_URL=http://mcp-server:8000/health
       - MARKET_CHAT_MCP_URL=http://mcp-server:8000/public/mcp
+      # Bearer-token proxy in front of the Windows Ollama (Sprint 2,
+      # Batch 6): the router sends its Windows calls through the MCP
+      # server's /ollama/* routes with the MCP bearer token.
+      - OLLAMA_PROXY_URL=http://mcp-server:8000/ollama
     ports:
       - "5001:5001"
     depends_on:

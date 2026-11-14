@@ -140,6 +140,18 @@ class Settings(BaseSettings):
     # sent on this path, and no Cloudflare sits in front of it.
     WINDOWS_LLM_BASE_URL: str = "http://100.68.109.36:11434"
 
+    # Bearer-token proxy in front of the Windows Ollama (Sprint 2,
+    # Batch 6). When set, the LLM router sends its Windows probe and
+    # chat calls through <OLLAMA_PROXY_URL>/api/tags and
+    # <OLLAMA_PROXY_URL>/v1/chat/completions with the MCP bearer token
+    # instead of calling the Windows box directly (which has no auth).
+    # Empty (default) keeps the direct behaviour. The proxy itself
+    # lives on the MCP server (src/protocols/ollama_proxy.py) and
+    # requires the full "mcp" scope. In compose this is
+    # http://mcp-server:8000/ollama -- the same URL from the dashboard
+    # and the MCP-server containers.
+    OLLAMA_PROXY_URL: str = ""
+
     # Model served by the VM's Ollama. Used by the 3B queue AND as the
     # downgrade target when a chat request for another model (e.g.
     # qwen2.5:7b) falls back to the VM. Pinned: changing it changes what

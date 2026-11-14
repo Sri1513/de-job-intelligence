@@ -62,6 +62,9 @@ def _clean(monkeypatch):
     monkeypatch.setattr(settings, "MARKET_CHAT_LLM_MODEL", CHAT_MODEL)
     monkeypatch.setattr(settings, "LOCAL_LLM_MODEL", QUEUE_MODEL)
     monkeypatch.setattr(settings, "WINDOWS_LLM_BASE_URL", WINDOWS_BASE)
+    # Proxy off by default; Batch 6 tests below opt in explicitly.
+    monkeypatch.setattr(settings, "OLLAMA_PROXY_URL", "")
+    monkeypatch.setattr(settings, "MCP_AUTH_TOKEN", "mcp-owner-token")
 
 
 def _install_probe(monkeypatch, models=("qwen2.5:7b", "qwen2.5:3b"), fail=False):
@@ -341,3 +344,71 @@ def test_stream_does_not_restart_after_first_token(monkeypatch):
     # Probe + one Windows stream attempt; no VM retry after a token.
     assert len(calls) == 2
     assert all("vm.test" not in url for url in calls)
+
+
+# --- Ollama proxy mode (Sprint 2, Batch 6) -----------------------------------
+
+PROXY_BASE = "http://proxy.test:8000/ollama"
+
+
+def _install_proxy_probe(monkeypatch, models=("qwen2.5:7b", "qwen2.5:3b")):
+    """Stub urlopen for the proxy probe; return the list of (url, auth)."""
+    probed = []
+
+    def _fake_urlopen(req, timeout=None):
+        probed.append((req.full_url, req.get_header("Authorization")))
+        return _FakeResp({"models": [{"name": name} for name in models]})
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    return probed
+
+
+def test_proxy_endpoint_when_configured(monkeypatch):
+    monkeypatch.setattr(settings, "OLLAMA_PROXY_URL", PROXY_BASE)
+    probed = _install_proxy_probe(monkeypatch)
+    ep = llm_routing.resolve_chat_endpoint(CHAT_MODEL)
+    assert ep.via == "windows"
+    assert ep.url == PROXY_BASE + "/v1/chat/completions"
+    assert ep.model == CHAT_MODEL
+    assert ep.auth_headers == {"Authorization": "Bearer mcp-owner-token"}
+    assert ep.downgraded is False
+    # The probe went to the proxy's tags route, not the Windows box.
+    assert probed == [(PROXY_BASE + "/api/tags", "Bearer mcp-owner-token")]
+
+
+def test_proxy_probe_sends_no_token_when_direct(monkeypatch):
+    # Proxy off: the direct probe carries no Authorization header.
+    probed = _install_proxy_probe(monkeypatch)
+    llm_routing.resolve_chat_endpoint(CHAT_MODEL)
+    assert probed == [(WINDOWS_BASE + "/api/tags", None)]
+
+
+def test_proxy_without_token_fails_closed_to_vm(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "OLLAMA_PROXY_URL", PROXY_BASE)
+    monkeypatch.setattr(settings, "MCP_AUTH_TOKEN", "")
+    probed = _install_proxy_probe(monkeypatch)
+    ep = llm_routing.resolve_chat_endpoint(CHAT_MODEL)
+    assert ep.via == "vm"
+    assert ep.model == QUEUE_MODEL  # 7B downgraded to the VM 3B
+    assert ep.downgraded is True
+    assert "MCP_AUTH_TOKEN is empty" in caplog.text
+    # No probe at all: a configured proxy with no token never calls
+    # the Windows box directly, not even to probe it.
+    assert probed == []
+
+
+def test_proxy_chat_attempt_uses_proxy_url(monkeypatch):
+    monkeypatch.setattr(settings, "OLLAMA_PROXY_URL", PROXY_BASE)
+    _install_proxy_probe(monkeypatch)
+    seen = []
+    result = llm_routing.attempt_with_failover(
+        CHAT_MODEL, lambda ep: seen.append(ep) or "ok"
+    )
+    assert result == "ok"
+    assert len(seen) == 1
+    assert seen[0].url == PROXY_BASE + "/v1/chat/completions"
+    assert seen[0].auth_headers == {"Authorization": "Bearer mcp-owner-token"}
+
+
+def test_config_default_proxy_empty():
+    assert Settings.model_fields["OLLAMA_PROXY_URL"].default == ""

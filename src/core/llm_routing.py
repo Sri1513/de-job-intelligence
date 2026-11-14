@@ -32,9 +32,17 @@ Resolution, per call:
 
 Auth: the VM key (``settings.MARKET_CHAT_LLM_KEY``) is sent ONLY to the
 VM endpoint (Open WebUI needs it). Windows Ollama has no auth -- no key
-is ever sent there. The browser-like User-Agent is kept on both paths
-(mandatory on the VM path: Cloudflare blocks non-browser signatures
-with error 1010; harmless on the Windows path).
+is ever sent there -- UNLESS the bearer-token proxy is configured
+(``settings.OLLAMA_PROXY_URL``, Sprint 2, Batch 6): then the probe and
+the chat call go through ``<proxy>/api/tags`` and
+``<proxy>/v1/chat/completions`` with the MCP bearer token
+(``settings.MCP_AUTH_TOKEN``), and the proxy enforces the full "mcp"
+scope server-side. If the proxy is configured but no MCP token is
+available, Windows is treated as down (fail closed to the VM) rather
+than calling the Windows box directly -- configuring the proxy is a
+promise that direct calls stop. The browser-like User-Agent is kept on
+both paths (mandatory on the VM path: Cloudflare blocks non-browser
+signatures with error 1010; harmless on the Windows path).
 
 Failover: ``attempt_with_failover`` runs the caller's attempt once
 against the resolved endpoint; if it raises AND the endpoint was
@@ -110,11 +118,25 @@ def _windows_base_url() -> str:
     return (settings.WINDOWS_LLM_BASE_URL or "").rstrip("/")
 
 
+def _proxy_base_url() -> str:
+    """The Ollama proxy base (Sprint 2, Batch 6), or "" when the proxy
+    is not configured and Windows is called directly."""
+    return (settings.OLLAMA_PROXY_URL or "").rstrip("/")
+
+
 def _windows_tags_url() -> str:
+    # The probe goes through the proxy too when one is configured --
+    # the proxy forwards /api/tags to the Windows box.
+    proxy = _proxy_base_url()
+    if proxy:
+        return proxy + "/api/tags"
     return _windows_base_url() + "/api/tags"
 
 
 def _windows_chat_url() -> str:
+    proxy = _proxy_base_url()
+    if proxy:
+        return proxy + "/v1/chat/completions"
     return _windows_base_url() + "/v1/chat/completions"
 
 
@@ -164,9 +186,14 @@ def _probe_windows() -> FrozenSet[str]:
     base = _windows_base_url()
     if not base:
         return frozenset()
+    headers = {"User-Agent": BROWSER_USER_AGENT}
+    if _proxy_base_url() and settings.MCP_AUTH_TOKEN:
+        # The probe goes through the proxy: it needs the bearer token
+        # the proxy enforces (full "mcp" scope, server-side).
+        headers["Authorization"] = f"Bearer {settings.MCP_AUTH_TOKEN}"
     req = urllib.request.Request(
         _windows_tags_url(),
-        headers={"User-Agent": BROWSER_USER_AGENT},
+        headers=headers,
         method="GET",
     )
     try:
@@ -215,6 +242,40 @@ def _reset_probe_cache() -> None:
         _probe_at = 0.0
 
 
+def _windows_endpoint(requested_model: str) -> Optional[LLMEndpoint]:
+    """Windows endpoint for a request, direct or via the Ollama proxy,
+    or None when Windows must not be used.
+
+    The probe gates on the model list in both modes. With a proxy
+    configured, the chat URL is the proxy's and the MCP bearer token
+    rides along; without one, the direct Windows URL with no auth
+    (the pre-Batch 6 behaviour). A configured proxy with no MCP token
+    fails closed to None (never a direct call) with a warning.
+    """
+    proxy = _proxy_base_url()
+    if proxy and not settings.MCP_AUTH_TOKEN:
+        logger.warning(
+            "LLM routing: OLLAMA_PROXY_URL is set but MCP_AUTH_TOKEN "
+            "is empty; Windows is unavailable, falling back to the VM"
+        )
+        return None
+    if requested_model not in _windows_models():
+        return None
+    if proxy:
+        return LLMEndpoint(
+            url=proxy + "/v1/chat/completions",
+            model=requested_model,
+            auth_headers={"Authorization": f"Bearer {settings.MCP_AUTH_TOKEN}"},
+            via="windows",
+        )
+    return LLMEndpoint(
+        url=_windows_chat_url(),
+        model=requested_model,
+        auth_headers={},
+        via="windows",
+    )
+
+
 def resolve_chat_endpoint(requested_model: str) -> LLMEndpoint:
     """Windows-first endpoint for a chat-completions call.
 
@@ -228,13 +289,9 @@ def resolve_chat_endpoint(requested_model: str) -> LLMEndpoint:
     if not settings.MARKET_CHAT_LLM_URL:
         raise RuntimeError("LLM routing: MARKET_CHAT_LLM_URL is not configured")
     requested_model = requested_model or _vm_model()
-    if requested_model in _windows_models():
-        return LLMEndpoint(
-            url=_windows_chat_url(),
-            model=requested_model,
-            auth_headers={},
-            via="windows",
-        )
+    windows = _windows_endpoint(requested_model)
+    if windows is not None:
+        return windows
     return _vm_endpoint(requested_model)
 
 
