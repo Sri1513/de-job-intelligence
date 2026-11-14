@@ -35,6 +35,8 @@ import logging
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from src.protocols.scopes import ALL_SCOPES, parse_scopes
+
 logger = logging.getLogger("de-job-intelligence.auth")
 
 
@@ -65,18 +67,29 @@ class BearerAuthMiddleware:
         self.app = app
         self._token = token.encode("utf-8")
 
-    def _is_authorized(self, scope: Scope) -> bool:
+    def _granted_scopes(self, scope: Scope) -> frozenset | None:
+        """Granted scopes for the presented credential, or None if unknown.
+
+        The static token is the owner's token: all scopes. An OAuth access
+        token resolves to the scopes stored on its record (legacy ``mcp``
+        expands to all three). This is the only place that resolves scopes:
+        the static token can be overridden per app instance (create_app),
+        so no other layer may re-derive them from settings.
+        """
         headers = dict(scope.get("headers", []))
         auth = headers.get(b"authorization", b"").decode("latin-1")
         scheme, _, credential = auth.partition(" ")
         if scheme.lower() != "bearer" or not credential:
-            return False
+            return None
         if hmac.compare_digest(credential.encode("utf-8"), self._token):
-            return True
+            return ALL_SCOPES
         # OAuth 2.1 access token issued by our own authorization server.
         from src.protocols.token_store import get_store
 
-        return get_store().get_access_token(credential) is not None
+        record = get_store().get_access_token(credential)
+        if record is None:
+            return None
+        return parse_scopes(record.get("scope", ""))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
@@ -87,7 +100,8 @@ class BearerAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
-        if not self._is_authorized(scope):
+        granted = self._granted_scopes(scope)
+        if granted is None:
             logger.warning("Rejected unauthenticated request to %s", scope.get("path"))
             from src.core.config import settings
 
@@ -115,4 +129,8 @@ class BearerAuthMiddleware:
             await response(scope, receive, send)
             return
 
+        # Stash the granted scopes for the tool layer (scopes_for_request
+        # reads them back in handle_rpc). The middleware is the only layer
+        # that knows which credential was presented.
+        scope["mcp_scopes"] = granted
         await self.app(scope, receive, send)
