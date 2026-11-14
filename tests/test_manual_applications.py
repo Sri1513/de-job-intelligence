@@ -4,8 +4,10 @@
 Marking a job applied from the dashboard is a HUMAN application, so it
 records apply_status='MANUAL' (never 'SUBMITTED', which is reserved for
 engine submissions) plus optional details in metadata JSON. The review
-pool surfaces those details without leaking the rest of metadata
-(personal notes stay out of the ungated applications response).
+pool surfaces those details to token readers only (Sprint 2, Batch 5:
+manual details are private -- they can name a recruiter, a rate, and
+free-text notes), without leaking the rest of metadata (personal notes
+stay out of the applications response entirely).
 """
 import json
 from unittest.mock import MagicMock
@@ -115,10 +117,20 @@ def test_applications_surfaces_manual_details_without_metadata_leak(monkeypatch)
     }
     _mock_db(monkeypatch, fetchone=counts, fetchall=[row])
     client = _client(monkeypatch)
+    # Public readers: manual details are private (Sprint 2, Batch 5),
+    # and the raw metadata never leaks either way.
     r = client.get("/api/applications?status=ALL")
     assert r.status_code == 200
     data = r.json()
     assert data["stats"]["manual"] == 2
+    rec = data["applications"][0]
+    assert rec["manual_application"] is None
+    assert "metadata" not in rec
+    assert "SECRET-NOTE" not in r.text
+    # Token readers: the manual details surface.
+    r = client.get("/api/applications?status=ALL", headers=_auth())
+    assert r.status_code == 200
+    data = r.json()
     rec = data["applications"][0]
     assert rec["manual_application"]["portal"] == "Indeed"
     assert rec["manual_application"]["work_type"] == "C2C"
