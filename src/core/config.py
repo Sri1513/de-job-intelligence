@@ -75,6 +75,31 @@ class Settings(BaseSettings):
     # metadata (RFC 8414 / RFC 9728) and redirect construction.
     MCP_PUBLIC_URL: str = "https://mcp.sriomkar.com"
 
+    # Sprint 2, Batch 4 — HTTP guards (src/protocols/guard.py). All four
+    # are set above anything the owner's own clients send, so normal use
+    # (Gemini app, Inspector, scripts, dashboard backend) is unaffected:
+    # - MAX_REQUEST_BYTES: 1 MB. Tool calls are kilobytes; even staging
+    #   100 jobs at once is a few hundred KB. Oversized bodies get 413
+    #   before anything reads them.
+    # - ALLOWED_ORIGINS: browser origins allowed to call the JSON-RPC
+    #   surface. Only enforced when an Origin header is PRESENT (only
+    #   browsers send one — server-side clients send none and pass
+    #   through). Loopback origins are always allowed (local Inspector /
+    #   local dev). Add a hosted Inspector's origin here if you ever
+    #   connect one directly from the browser instead of via its proxy.
+    # - RATE_LIMIT_PER_MINUTE: per credential (SHA-256 of the bearer
+    #   token; no credential means per client IP), sliding 60s window.
+    #   60/min is far above the owner's handful of calls a minute; it
+    #   exists to stop one runaway client flooding the server. 0 disables.
+    # - TOOL_TIMEOUT_SECONDS: per tools/call, enforced in handle_rpc
+    #   where the tool name is known. run_application_worker and
+    #   retry_job_evaluations are exempt (slow by nature); the ingestion
+    #   / email tools return immediately so the timeout never bites them.
+    MCP_MAX_REQUEST_BYTES: int = 1_048_576
+    MCP_ALLOWED_ORIGINS: str = "https://jobs.sriomkar.com,https://sriomkar.com"
+    MCP_RATE_LIMIT_PER_MINUTE: int = 60
+    MCP_TOOL_TIMEOUT_SECONDS: float = 30.0
+
     # Admin API (remote diagnostics for the AI operator). When empty, the
     # /api/admin/* routes behave as if they do not exist (404).
     ADMIN_API_TOKEN: str = ""

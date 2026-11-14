@@ -9,6 +9,7 @@ Authentication is enforced by BearerAuthMiddleware (see auth.py); this module
 only speaks protocol. Tool routing lives in dispatcher.py's TOOL_HANDLERS
 registry; business logic lives in engine/, workers/, and synthesis/.
 """
+import asyncio
 import json
 import logging
 import time
@@ -30,6 +31,7 @@ from src.protocols.audit import (
 from src.protocols.auth import BearerAuthMiddleware
 from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
+from src.protocols.guard import MCPGuardMiddleware
 from src.protocols.oauth import oauth_routes
 from src.protocols.schemas import MCP_TOOLS
 from src.protocols.scopes import InsufficientScopeError, scopes_for_request
@@ -81,6 +83,14 @@ SUPPORTED_PROTOCOL_VERSIONS = frozenset(
     {"2024-11-05", "2025-03-26", "2025-06-18"}
 )
 DEFAULT_PROTOCOL_VERSION = "2024-11-05"
+
+# Sprint 2, Batch 4: tools exempt from the 30s call timeout — slow by
+# nature. run_application_worker drives browser automation (minutes);
+# retry_job_evaluations runs backfill batches (LLM calls per job). Every
+# other tool must answer inside MCP_TOOL_TIMEOUT_SECONDS.
+_TIMEOUT_EXEMPT_TOOLS = frozenset(
+    {"run_application_worker", "retry_job_evaluations"}
+)
 
 
 async def _record_tool_call(
@@ -266,9 +276,52 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
             )
 
         try:
-            execution_result = await dispatch_tool_call(
-                tool_name, arguments, scopes=scopes_for_request(request)
-            )
+            # Sprint 2, Batch 4: bound how long a tool call may hold the
+            # request. Exempt are the two synchronous long-runners — the
+            # apply worker (browser automation, minutes) and the backfill
+            # retries — plus a non-positive timeout disables the guard.
+            # The ingestion / email tools return immediately ("started"),
+            # so the timeout never bites them. Best-effort for handlers
+            # that block the event loop synchronously: wait_for can only
+            # cancel at an await point; a to_thread handler keeps running
+            # in its thread after the client gets the timeout.
+            timeout = settings.MCP_TOOL_TIMEOUT_SECONDS
+            if tool_name in _TIMEOUT_EXEMPT_TOOLS or timeout <= 0:
+                execution_result = await dispatch_tool_call(
+                    tool_name, arguments, scopes=scopes_for_request(request)
+                )
+            else:
+                try:
+                    execution_result = await asyncio.wait_for(
+                        dispatch_tool_call(
+                            tool_name, arguments, scopes=scopes_for_request(request)
+                        ),
+                        timeout=timeout,
+                    )
+                except TimeoutError:
+                    await _record_tool_call(
+                        request=request,
+                        correlation_id=correlation_id,
+                        tool_name=tool_name,
+                        scope=scope,
+                        started=started,
+                        status="error",
+                        error_code="-32000",
+                        error_message=f"Tool call timed out after {timeout:g}s",
+                        request_size_bytes=request_size_bytes,
+                    )
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": rpc_id,
+                            "error": {
+                                "code": -32000,
+                                "message": f"Tool call timed out after {timeout:g}s",
+                                "data": {"correlation_id": correlation_id},
+                            },
+                        },
+                        status_code=200,
+                    )
             # Unknown tools (and some handlers) answer with a result dict
             # carrying an "error" key instead of raising — already
             # client-safe text, but it is still a failed call for the
@@ -456,6 +509,11 @@ def create_app(auth_token: str | None = None) -> Starlette:
         )
     app = Starlette(debug=False, routes=routes)
     app.add_middleware(BearerAuthMiddleware, token=token)
+    # Sprint 2, Batch 4: the guard is added AFTER auth, which makes it
+    # OUTERMOST (Starlette wraps last-added first) — oversized bodies,
+    # foreign browser origins, and flooding clients are rejected before
+    # auth or any handler ever sees them.
+    app.add_middleware(MCPGuardMiddleware)
     return app
 
 
