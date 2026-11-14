@@ -11,6 +11,7 @@ registry; business logic lives in engine/, workers/, and synthesis/.
 """
 import json
 import logging
+import time
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -19,6 +20,13 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from starlette.routing import Route
 
 from src.core.config import settings
+from src.protocols.audit import (
+    arecord_audit_row,
+    client_id_for_request,
+    log_tool_call,
+    new_correlation_id,
+    required_scope_for_tool,
+)
 from src.protocols.auth import BearerAuthMiddleware
 from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
@@ -73,6 +81,52 @@ SUPPORTED_PROTOCOL_VERSIONS = frozenset(
     {"2024-11-05", "2025-03-26", "2025-06-18"}
 )
 DEFAULT_PROTOCOL_VERSION = "2024-11-05"
+
+
+async def _record_tool_call(
+    *,
+    request: Request,
+    correlation_id: str,
+    tool_name: str,
+    scope: str,
+    started: float,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    request_size_bytes: int | None = None,
+) -> None:
+    """One JSON log line + one audit row for a tools/call outcome.
+
+    Sprint 2, Batch 3: the same correlation_id ties the client's error
+    response to the server-side record. The JSON line always emits; the
+    audit row is fail-open inside record_audit_row. ``error_message``
+    must already be client-safe (the message the client saw) — never
+    pass exception text here.
+    """
+    duration_ms = int((time.monotonic() - started) * 1000)
+    client_id = client_id_for_request(request)
+    log_tool_call(
+        correlation_id=correlation_id,
+        tool_name=tool_name,
+        scope=scope,
+        client_id=client_id,
+        status=status,
+        duration_ms=duration_ms,
+        error_code=error_code,
+        error_message=error_message,
+        request_size_bytes=request_size_bytes,
+    )
+    await arecord_audit_row(
+        correlation_id=correlation_id,
+        tool_name=tool_name,
+        scope=scope,
+        client_id=client_id,
+        duration_ms=duration_ms,
+        status=status,
+        error_code=error_code,
+        error_message=error_message,
+        request_size_bytes=request_size_bytes,
+    )
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -176,12 +230,38 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
+        # Sprint 2, Batch 3: one UUID per call, generated at the boundary.
+        # It goes back to the client on every error response (never the
+        # raw exception text) and ties the JSON log line to the audit row.
+        correlation_id = new_correlation_id()
+        started = time.monotonic()
+        # request.json() above already read + cached the body, so this is
+        # cheap; the size goes in the log line and the audit row.
+        body = await request.body()
+        request_size_bytes = len(body) if body else None
+        scope = required_scope_for_tool(tool_name)
+
         if not tool_name:
+            await _record_tool_call(
+                request=request,
+                correlation_id=correlation_id,
+                tool_name="unknown",
+                scope=scope,
+                started=started,
+                status="error",
+                error_code="-32602",
+                error_message="Missing 'name' in params",
+                request_size_bytes=request_size_bytes,
+            )
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
                     "id": rpc_id,
-                    "error": {"code": -32602, "message": "Missing 'name' in params"},
+                    "error": {
+                        "code": -32602,
+                        "message": "Missing 'name' in params",
+                        "data": {"correlation_id": correlation_id},
+                    },
                 }
             )
 
@@ -189,7 +269,32 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
             execution_result = await dispatch_tool_call(
                 tool_name, arguments, scopes=scopes_for_request(request)
             )
-            logger.info("Tool executed: %s", tool_name)
+            # Unknown tools (and some handlers) answer with a result dict
+            # carrying an "error" key instead of raising — already
+            # client-safe text, but it is still a failed call for the
+            # audit trail.
+            if isinstance(execution_result, dict) and "error" in execution_result:
+                await _record_tool_call(
+                    request=request,
+                    correlation_id=correlation_id,
+                    tool_name=tool_name,
+                    scope=scope,
+                    started=started,
+                    status="error",
+                    error_message=str(execution_result["error"]),
+                    request_size_bytes=request_size_bytes,
+                )
+            else:
+                logger.info("Tool executed: %s", tool_name)
+                await _record_tool_call(
+                    request=request,
+                    correlation_id=correlation_id,
+                    tool_name=tool_name,
+                    scope=scope,
+                    started=started,
+                    status="ok",
+                    request_size_bytes=request_size_bytes,
+                )
             # Serialize as JSON (not str()) so agents receive parseable content;
             # default=str keeps datetimes and other scalars safe.
             return JSONResponse(
@@ -211,16 +316,30 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
             # scope. -32001 (same code the middleware uses for auth
             # failures) with the required scope named, so the client knows
             # what to request. HTTP 200 like the other tool-call errors.
+            # str(exc) is client-safe by construction (tool + scope names).
+            message = str(exc)
+            await _record_tool_call(
+                request=request,
+                correlation_id=correlation_id,
+                tool_name=tool_name,
+                scope=scope,
+                started=started,
+                status="error",
+                error_code="-32001",
+                error_message=message,
+                request_size_bytes=request_size_bytes,
+            )
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
                     "id": rpc_id,
                     "error": {
                         "code": -32001,
-                        "message": str(exc),
+                        "message": message,
                         "data": {
                             "tool": exc.tool_name,
                             "required_scope": exc.required_scope,
+                            "correlation_id": correlation_id,
                         },
                     },
                 },
@@ -230,6 +349,17 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
             # Sprint 2, Batch 1: bad arguments are the client's fault, not
             # an internal error. Answer -32602 (Invalid params) with
             # field-level errors only — no exception text, no traceback.
+            await _record_tool_call(
+                request=request,
+                correlation_id=correlation_id,
+                tool_name=tool_name,
+                scope=scope,
+                started=started,
+                status="error",
+                error_code="-32602",
+                error_message="Invalid tool arguments",
+                request_size_bytes=request_size_bytes,
+            )
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
@@ -237,13 +367,36 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
                     "error": {
                         "code": -32602,
                         "message": "Invalid tool arguments",
-                        "data": {"tool": exc.tool_name, "errors": exc.errors},
+                        "data": {
+                            "tool": exc.tool_name,
+                            "errors": exc.errors,
+                            "correlation_id": correlation_id,
+                        },
                     },
                 },
                 status_code=200,
             )
-        except Exception as exc:
-            logger.exception("Tool execution failed: %s", tool_name)
+        except Exception:
+            # Sprint 2, Batch 3: the client gets the correlation_id and
+            # nothing else — no str(exc), no traceback. The full traceback
+            # stays server-side in mcp.log, tagged with the same id so the
+            # owner can find the call it belongs to.
+            logger.exception(
+                "Tool execution failed: %s (correlation_id=%s)",
+                tool_name,
+                correlation_id,
+            )
+            await _record_tool_call(
+                request=request,
+                correlation_id=correlation_id,
+                tool_name=tool_name,
+                scope=scope,
+                started=started,
+                status="error",
+                error_code="-32603",
+                error_message="Internal error during tool execution",
+                request_size_bytes=request_size_bytes,
+            )
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
@@ -251,7 +404,7 @@ async def handle_rpc(request: Request) -> JSONResponse | Response:
                     "error": {
                         "code": -32603,
                         "message": "Internal error during tool execution",
-                        "data": str(exc),
+                        "data": {"correlation_id": correlation_id},
                     },
                 },
                 status_code=200,

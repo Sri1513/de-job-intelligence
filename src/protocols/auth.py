@@ -67,12 +67,13 @@ class BearerAuthMiddleware:
         self.app = app
         self._token = token.encode("utf-8")
 
-    def _granted_scopes(self, scope: Scope) -> frozenset | None:
-        """Granted scopes for the presented credential, or None if unknown.
+    def _granted_scopes(self, scope: Scope) -> tuple[frozenset, str | None] | None:
+        """Granted scopes + OAuth client_id for the presented credential.
 
-        The static token is the owner's token: all scopes. An OAuth access
-        token resolves to the scopes stored on its record (legacy ``mcp``
-        expands to all three). This is the only place that resolves scopes:
+        Returns None if the credential is unknown. The static token is
+        the owner's token: all scopes, client_id None. An OAuth access
+        token resolves to the scopes stored on its record plus the
+        record's client_id. This is the only place that resolves either:
         the static token can be overridden per app instance (create_app),
         so no other layer may re-derive them from settings.
         """
@@ -82,14 +83,14 @@ class BearerAuthMiddleware:
         if scheme.lower() != "bearer" or not credential:
             return None
         if hmac.compare_digest(credential.encode("utf-8"), self._token):
-            return ALL_SCOPES
+            return ALL_SCOPES, None
         # OAuth 2.1 access token issued by our own authorization server.
         from src.protocols.token_store import get_store
 
         record = get_store().get_access_token(credential)
         if record is None:
             return None
-        return parse_scopes(record.get("scope", ""))
+        return parse_scopes(record.get("scope", "")), record.get("client_id")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
@@ -129,8 +130,11 @@ class BearerAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        # Stash the granted scopes for the tool layer (scopes_for_request
-        # reads them back in handle_rpc). The middleware is the only layer
+        # Stash the granted scopes + client_id for the tool layer
+        # (scopes_for_request reads them back in handle_rpc; the audit
+        # trail records the client_id). The middleware is the only layer
         # that knows which credential was presented.
-        scope["mcp_scopes"] = granted
+        scopes, client_id = granted
+        scope["mcp_scopes"] = scopes
+        scope["mcp_client_id"] = client_id
         await self.app(scope, receive, send)
