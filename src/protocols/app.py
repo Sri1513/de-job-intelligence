@@ -33,6 +33,7 @@ from src.protocols.dashboard_mcp import PUBLIC_MCP_PATH, handle_public_rpc
 from src.protocols.dispatcher import dispatch_tool_call
 from src.protocols.guard import MCPGuardMiddleware
 from src.protocols.oauth import oauth_routes
+from src.protocols.ollama_proxy import ollama_proxy
 from src.protocols.schemas import MCP_TOOLS
 from src.protocols.scopes import InsufficientScopeError, scopes_for_request
 from src.protocols.validation import ToolArgumentError
@@ -488,6 +489,12 @@ routes = [
     # from bearer auth by exact path in auth.py -- safe only because its
     # handler queries exclusively through the mcp_dashboard_reader pool.
     Route(PUBLIC_MCP_PATH, handle_public_rpc, methods=["POST"]),
+    # Bearer-token proxy in front of the Windows Ollama (Sprint 2,
+    # Batch 6). NOT exempt from bearer auth: BearerAuthMiddleware
+    # requires a valid token, and the handler additionally requires the
+    # full "mcp" scope. The router sends its Windows calls through here
+    # when OLLAMA_PROXY_URL is set.
+    Route("/ollama/{rest:path}", ollama_proxy, methods=["GET", "POST"]),
     *oauth_routes,
 ]
 
