@@ -35,8 +35,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -s /usr/bin/chromium /usr/bin/google-chrome
 
 # 3. Install project dependencies directly from pyproject.toml
+# CPU-only torch FIRST: sentence-transformers depends on torch, and the
+# default PyPI wheel is the full CUDA build (~2.5 GB + NVIDIA deps) even
+# though this box has no GPU. Pre-installing the CPU wheel from the
+# PyTorch CPU index means `pip install .` below sees torch already
+# satisfied and does not pull the CUDA build. (Sprint 3 Lesson 1: the
+# CUDA download is what blew the CI deploy past its 10-minute timeout.)
 COPY pyproject.toml README.md* ./
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir .
 
 # 4. Initialize Playwright Chromium browser
