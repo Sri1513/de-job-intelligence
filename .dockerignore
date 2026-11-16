@@ -1,0 +1,32 @@
+# .dockerignore — what `COPY . /app` in the Dockerfile must NOT bake into images.
+# Without this file, every build copies the VM checkout's live runtime data
+# into the image layer shared by mcp-server, dashboard and apply-worker.
+# That layer is what blew the PR #97 deploy up with "no space left on
+# device": data/browser_profiles holds live LinkedIn browser sessions,
+# and all three images extract that same layer at once.
+
+# Runtime data — provided by volumes at runtime, never baked into images.
+# compose mounts ./data/screenshots, ./data/oauth and the browser_profiles
+# named volume; the Dockerfile itself mkdirs the directories it needs.
+data/
+logs/
+
+# Secrets — provided by env_file / volume mounts at runtime.
+# A secret baked into an image layer stays in that layer's history.
+.env
+.env.*
+credentials.json
+token.json
+
+# Repo metadata and local tooling — not needed inside the container.
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+de_job_intelligence.egg-info/
+
+# Local-only artifacts.
+backups/
