@@ -13,6 +13,7 @@ from src.engine.framework_selector import (
     load_framework,
     select_slot_frameworks,
 )
+from src.engine.hybrid_search import search_evidence_for_job
 from src.engine.jit_enrichment import maybe_enrich_job_for_tailoring
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,10 @@ def build_job_tailoring_prompt(
     WhatsApp path, whose leads live in scout.whatsapp_messages, not
     saved_jobs.
     """
+    # Hybrid retrieval (Sprint 3, Lesson 2) — filled on the DB path only.
+    # The WhatsApp path has no DB connection, so it keeps {} and the
+    # prompt falls back to the framework dump, exactly as before.
+    retrieved_evidence: dict[int, list[dict[str, Any]]] = {}
     if job_override is not None:
         # WhatsApp path: no DB row — enrich the in-memory dict only.
         job = maybe_enrich_job_for_tailoring(job_override, conn=None)
@@ -383,6 +388,16 @@ def build_job_tailoring_prompt(
                 # below, both of which read the description as the JD.
                 # One live widening pass, fail-open, attempt-guarded.
                 job = maybe_enrich_job_for_tailoring(job, conn)
+                # Hybrid retrieval, on this same open connection: the top
+                # evidence chunks per JD requirement, fused vector + text.
+                # A job with no chunks yields {}. Fail-OPEN: a search
+                # error must never break tailoring — the prompt still
+                # builds from the framework dump below.
+                try:
+                    retrieved_evidence = search_evidence_for_job(conn, job_id)
+                except Exception as e:
+                    logger.warning("hybrid search failed for job %s: %s", job_id, e)
+                    retrieved_evidence = {}
 
     if not job:
         return {"error": f"No job found in the database for job_id '{job_id}'."}
@@ -453,12 +468,33 @@ def build_job_tailoring_prompt(
     ranked_banks = rank_all_slots(slot_data, jd_text)
     deterministic_ranking = {
         slot: [
-            {"id": b.get("id"), "score": b["_overlap_score"],
-             "matched": b["_matched_skills"]}
+            {"id": b.get("id"), "score": b["_overlap_score"], "matched": b["_matched_skills"]}
             for b in ranked[:8]
         ]
         for slot, ranked in ranked_banks.items()
     }
+
+    # Retrieved evidence, reshaped for the prompt: one entry per JD
+    # requirement — with its own text, so the LLM can see what each
+    # group answers — each carrying its top evidence chunks best-first.
+    # Empty on the WhatsApp path (no DB) and for jobs with no chunks.
+    retrieved_evidence_list = [
+        {
+            "requirement_index": idx,
+            "requirement_kind": rows[0]["requirement_kind"],
+            "requirement_text": rows[0]["requirement_text"],
+            "evidence": [
+                {
+                    "source_ref": r["source_ref"],
+                    "source_type": r["source_type"],
+                    "chunk_text": r["chunk_text"],
+                    "rrf_score": round(r["rrf_score"], 4),
+                }
+                for r in rows
+            ],
+        }
+        for idx, rows in sorted(retrieved_evidence.items())
+    ]
 
     formatting_rules = (
         "PURPOSEFUL RECRUITER HIGHLIGHTING RULES (MANDATORY **term** FORMATTING):\n"
@@ -501,6 +537,16 @@ def build_job_tailoring_prompt(
             "tenure_enforcement": "The candidate has 7+ years of cumulative professional experience. The summary MUST explicitly open with this.",
             "bullet_distribution": BULLET_DISTRIBUTION,
             "deterministic_bullet_ranking": deterministic_ranking,
+            "retrieved_evidence": retrieved_evidence_list,
+            "retrieved_evidence_policy": (
+                "RETRIEVED EVIDENCE (hybrid search, RRF-fused): the chunks "
+                "below are the closest verified evidence for each JD "
+                "requirement, ranked by meaning AND exact words. Prefer "
+                "them when selecting bullets for the requirement they "
+                "answer — they come ONLY from the verified resume/framework "
+                "banks, so they are safe to use verbatim. If a requirement "
+                "has no evidence, fall back to that slot's bullet bank."
+            ),
             "fidelity_rules": FIDELITY_RULES,
             "tool_translation_policy": TOOL_TRANSLATION_POLICY,
             "skill_equivalences": load_skill_equivalences().get("equivalences", {}),
