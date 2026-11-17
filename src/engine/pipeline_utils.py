@@ -1,12 +1,16 @@
 # src/engine/pipeline_utils.py
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Optional
 
 from src.core.utils import get_cached_resume
+from src.engine.dedup import find_duplicate
 from src.engine.matcher import calculate_local_fit_score
+
+logger = logging.getLogger(__name__)
 
 
 def generate_domain_short_id(email: Optional[str], company_name: Optional[str] = None) -> str:
@@ -51,10 +55,7 @@ def _is_placeholder_description(desc: str) -> bool:
     """
     d = (desc or "").strip()
     return (
-        not d
-        or d.startswith("Extracted via email alert")
-        or d.startswith("Role: ")
-        or len(d) < 50
+        not d or d.startswith("Extracted via email alert") or d.startswith("Role: ") or len(d) < 50
     )
 
 
@@ -88,6 +89,36 @@ def safe_float(val):
         return float(val) if val is not None and val != "N/A" else None
     except (ValueError, TypeError):
         return None
+
+
+def _merge_repost_location(cur, job_id: str, city: str, job_url: str) -> None:
+    """Append a repost's {city, url} to the original row's locations.
+
+    Same merge the exact-key path does when a known job_id resurfaces
+    under a new URL: the repost's source is new information even
+    though the role is not. No-op when that URL/city is already
+    there, or when the original row is gone. Accepts dict rows
+    (dict_row) or plain tuples, like the rest of this module.
+    """
+    cur.execute("SELECT metadata FROM saved_jobs WHERE job_id = %s;", (job_id,))
+    row = cur.fetchone()
+    if row is None:
+        return
+    metadata = row.get("metadata") if isinstance(row, dict) else row[0]
+    metadata = metadata or {}
+    locations_list = metadata.get("locations", [])
+    location_exists = any(
+        loc.get("url") == job_url or loc.get("city", "").lower() == city.lower()
+        for loc in locations_list
+    )
+    if location_exists:
+        return
+    locations_list.append({"city": city, "url": job_url})
+    metadata["locations"] = locations_list
+    cur.execute(
+        "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
+        (json.dumps(metadata), job_id),
+    )
 
 
 def stage_raw_jobs(
@@ -207,6 +238,30 @@ def stage_raw_jobs(
                 else:
                     skipped_count += 1
                 continue
+
+            # 1b. Semantic dedup: the same role reposted under a new
+            # URL / tweaked title / different aggregator gets a
+            # different job_id, so the exact-key check above misses
+            # it. Only for real descriptions — placeholder text is
+            # boilerplate and would match other placeholders at
+            # ~1.0. Fail-open: any dedup error logs a warning and
+            # the job is staged normally; a dedup failure must never
+            # block ingestion. On a match, keep the repost's
+            # URL/location on the original row, then skip the insert.
+            if _is_real_description(job_desc):
+                try:
+                    duplicate = find_duplicate(conn, job_id, job_desc, title=title)
+                except Exception:
+                    logger.warning(
+                        "Semantic dedup failed for %s; staging normally",
+                        job_id,
+                        exc_info=True,
+                    )
+                    duplicate = None
+                if duplicate is not None:
+                    _merge_repost_location(cur, duplicate["job_id"], city, job_url)
+                    skipped_count += 1
+                    continue
 
             # 2. Compute immediate baseline score using local TF-IDF matcher (0 API tokens)
             local_eval = calculate_local_fit_score(
