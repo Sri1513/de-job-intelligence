@@ -24,6 +24,7 @@ dependencies = [
     "google-auth",
     "google-auth-oauthlib",
     "langchain-google-genai>=2.0.0",
+    "langgraph",  # Sprint 4: StateGraph for the tailoring pipeline
     "openai",
     "protobuf<6.0.0,>=4.25.0",       # Prevents Protobuf 6 conflict with google-generativeai
     "grpcio-status<1.75.0",
