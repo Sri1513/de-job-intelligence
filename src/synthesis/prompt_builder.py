@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from src.core.config import settings
 from src.core.database import get_db_connection
+from src.engine.company_context import build_acronym_rule, select_company_context
 from src.engine.framework_selector import (
     load_framework,
     select_slot_frameworks,
@@ -459,6 +460,21 @@ def build_job_tailoring_prompt(
         {s: slot_data[s]["framework_id"] for s in slot_data},
     )
 
+    # Company context (Sprint 3, Lesson 3) — the business story + verified
+    # metrics per slot, from company_frameworks.json. A FILE lookup, not
+    # a DB lookup, so this runs on the WhatsApp path too (unlike the
+    # Lesson 2 retrieval, which needs the open connection). Fail-OPEN:
+    # a missing/corrupt file must never break tailoring.
+    try:
+        company_context = select_company_context(slot_ids)
+    except Exception as e:
+        logger.warning("company context failed for job %s: %s", job_id, e)
+        company_context = {}
+    # The acronym rule is a constant string, not a file read — it cannot
+    # fail, so it is built unconditionally: the glossary guard holds even
+    # when the company file is unreadable.
+    acronym_rule = build_acronym_rule()
+
     # Deterministic bullet ranking (Perfect Resume Engine, Phase 2):
     # each slot's bank pre-ranked by weighted canonical-skill overlap with
     # the JD, so the LLM selects from computed scores instead of vibes.
@@ -547,6 +563,18 @@ def build_job_tailoring_prompt(
                 "banks, so they are safe to use verbatim. If a requirement "
                 "has no evidence, fall back to that slot's bullet bank."
             ),
+            "company_context": company_context,
+            "company_context_policy": (
+                "COMPANY CONTEXT (verified, per slot): the business story "
+                "and verified metrics for the company behind each slot — "
+                "domain, what was broken, tech stack, named outcomes. When "
+                "a bullet needs a business outcome or a domain angle, "
+                "ground it in the matching slot's company context and use "
+                "its metrics exactly as written — never invent a number. "
+                "Slots with no company entry (None) have none; do not "
+                "invent one."
+            ),
+            "acronym_rule": acronym_rule,
             "fidelity_rules": FIDELITY_RULES,
             "tool_translation_policy": TOOL_TRANSLATION_POLICY,
             "skill_equivalences": load_skill_equivalences().get("equivalences", {}),
