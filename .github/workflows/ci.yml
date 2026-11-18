@@ -44,6 +44,12 @@ jobs:
         run: |
           pytest tests/ -v
 
+      - name: Eval gate (golden suite + RAGAS, fail below 0.85)
+        env:
+          RAGAS_JUDGE: gemini
+        run: |
+          python -m tests.evals.run_golden --mode stub --offline --ragas --gate 0.85
+
   deploy:
     name: Deploy to Oracle Cloud VM
     needs: test

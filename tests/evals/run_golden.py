@@ -25,8 +25,28 @@ traceability >= 0.8 with no must_not_claim violations. The
 draft-adversarial case passes when its fixture draft scores
 traceability BELOW 0.5 — the check must catch the invented draft.
 
-Run: python -m tests.evals.run_golden [--mode stub|live]
-Exit code 1 when any case fails.
+Run: python -m tests.evals.run_golden [--mode stub|live] [--offline]
+    [--ragas] [--gate 0.85] [--judge gemini|ollama]
+Exit code 1 when any case fails, or (with --ragas) when the mean
+RAGAS faithfulness across scored job cases falls below --gate.
+
+Modes:
+- ``stub`` (default): the graph runs with the draft node stubbed
+  to the selected bullets joined. Measures retrieve + rank +
+  verify. Needs the DB (the graph builds its bundle from it).
+- ``live`` (de-lab only): a real draft from the MSI's qwen2.5:7b.
+- ``--offline``: no graph, no DB — the recorded bullets ARE the
+  selection and the draft is those bullets joined. This is the
+  path CI runs: it proves the dataset, the verifier, and the
+  scorer wiring, without a database or a model.
+
+--ragas scores each job case's draft with RAGAS faithfulness +
+answer relevancy (src/evals/ragas_scorer.py). The judge is
+--judge (default from RAGAS_JUDGE, else "gemini"). A case whose
+judge call fails is recorded as unscored (None), never as zero:
+a missing judge is a data gap, not a failure. The gate then
+applies to the mean of the cases that WERE scored; if none were
+scored the gate does not fail the run.
 """
 
 import argparse
@@ -39,6 +59,29 @@ DATASET_PATH = Path(__file__).resolve().parent / "golden_tailoring.json"
 MSI_GENERATE_URL = "http://100.68.109.36:11434/api/generate"
 TRACEABILITY_LINE_THRESHOLD = 0.5
 TRACEABILITY_CASE_THRESHOLD = 0.8
+DEFAULT_GATE = 0.85
+
+
+def job_question(case):
+    """The RAGAS question for a case: the role, from the dataset's
+    title/company (patched from the DB in Lesson 3 Step 3)."""
+    return f"Tailor a resume for the {case.get('title', '')} role at {case.get('company', '')}"
+
+
+def gate_decision(faithfulness_scores, threshold=DEFAULT_GATE):
+    """The CI gate: mean faithfulness across scored job cases.
+
+    None scores (judge down) are excluded, not counted as zero.
+    When nothing was scored the gate does not fail the run — the
+    per-case bars still apply. Returns (passed, reason).
+    """
+    scored = [s for s in faithfulness_scores if s is not None]
+    if not scored:
+        return True, "RAGAS unscored (judge unavailable) — gate not applied"
+    mean = round(sum(scored) / len(scored), 3)
+    if mean >= threshold:
+        return True, f"mean faithfulness {mean} >= {threshold}"
+    return False, f"mean faithfulness {mean} < {threshold}"
 
 
 def load_dataset(path=DATASET_PATH):
@@ -138,7 +181,14 @@ def score_draft_case(case, reference_bullets):
     }
 
 
-def run_job_case(case, graph_runner, draft_fn=None, score_traceability=False):
+def run_job_case(
+    case,
+    graph_runner,
+    draft_fn=None,
+    score_traceability=False,
+    score_ragas=False,
+    judge_kind="gemini",
+):
     """Run the graph for one job case and score it.
 
     ``graph_runner`` is run_tailoring_graph (or a stub in tests).
@@ -191,6 +241,59 @@ def run_job_case(case, graph_runner, draft_fn=None, score_traceability=False):
         )
     else:
         result["passed"] = bullets == 1.0 and verdict_ok and not violations and not out.get("error")
+    if score_ragas:
+        from src.evals.ragas_scorer import score_draft
+
+        flat = [b for slot in selected.values() for b in slot]
+        ragas = score_draft(job_question(case), flat, draft, judge_kind=judge_kind)
+        result["faithfulness"] = ragas["faithfulness"]
+        result["answer_relevancy"] = ragas["answer_relevancy"]
+    return result
+
+
+def run_offline_case(case, score_ragas=False, judge_kind="gemini"):
+    """DB-free stub case: the recorded bullets ARE the selection.
+
+    No graph, no DB — the path CI runs. The draft is the recorded
+    bullets joined (the perfect drafter, same as stub_draft but
+    without a prompt to lift from). Verification runs on the draft
+    with the graph's own verify_node (pure). Bullets and
+    traceability are 1.0 by construction; the case still fails if
+    the recorded bullets contain a banned word or a must_not_claim
+    string, which is exactly what the gate should catch.
+    """
+    from src.core.tailoring_graph import verify_node
+
+    selected = case.get("expected_selected_bullets") or {}
+    draft = "\n".join(["Sri Omkar D"] + [f"- {b}" for slot in selected.values() for b in slot])
+    verification = verify_node({"draft": draft})["verification"]
+    verdict_ok = verification.get("passed", False) == (case.get("expected_verdict") == "pass")
+    violations = check_must_not_claim(draft, case.get("must_not_claim", []))
+    bullets, per_slot = bullet_match_score(selected, selected)
+    trace, untraced = traceability_score(draft, selected)
+    result = {
+        "case": case["name"],
+        "kind": case["kind"],
+        "bullets": bullets,
+        "per_slot": per_slot,
+        "verdict_ok": verdict_ok,
+        "verification": verification,
+        "draft_attempts": 1,
+        "error": None,
+        "must_not_claim_found": violations,
+        "traceability": trace,
+        "untraced_lines": untraced[:5],
+    }
+    if score_ragas:
+        from src.evals.ragas_scorer import score_draft
+
+        flat = [b for slot in selected.values() for b in slot]
+        ragas = score_draft(job_question(case), flat, draft, judge_kind=judge_kind)
+        result["faithfulness"] = ragas["faithfulness"]
+        result["answer_relevancy"] = ragas["answer_relevancy"]
+    result["passed"] = (
+        bullets == 1.0 and verdict_ok and not violations and trace >= TRACEABILITY_CASE_THRESHOLD
+    )
     return result
 
 
@@ -232,9 +335,32 @@ def live_draft(prompt, **kwargs):
 
 
 def main(argv=None):
+    import os
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["stub", "live"], default="stub")
     parser.add_argument("--cases", nargs="*", default=None, help="case names to run")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="DB-free: recorded bullets are the selection (the CI path)",
+    )
+    parser.add_argument(
+        "--ragas",
+        action="store_true",
+        help="score each job case with RAGAS faithfulness + answer relevancy",
+    )
+    parser.add_argument(
+        "--gate",
+        type=float,
+        default=DEFAULT_GATE,
+        help="mean faithfulness below this fails the run (with --ragas)",
+    )
+    parser.add_argument(
+        "--judge",
+        default=os.environ.get("RAGAS_JUDGE", "gemini"),
+        help="RAGAS judge kind: gemini (CI) or ollama (de-lab)",
+    )
     args = parser.parse_args(argv)
     cases = load_dataset()
     if args.cases:
@@ -248,6 +374,9 @@ def main(argv=None):
             ref = by_name[case["trace_against"]]["expected_selected_bullets"]
             results.append(score_draft_case(case, ref))
             continue
+        if args.offline:
+            results.append(run_offline_case(case, score_ragas=args.ragas, judge_kind=args.judge))
+            continue
         draft_fn = stub_draft if args.mode == "stub" else live_draft
         results.append(
             run_job_case(
@@ -255,19 +384,31 @@ def main(argv=None):
                 run_tailoring_graph,
                 draft_fn=draft_fn,
                 score_traceability=(args.mode == "live"),
+                score_ragas=args.ragas,
+                judge_kind=args.judge,
             )
         )
     passed = sum(1 for r in results if r["passed"])
-    print(f"mode: {args.mode}  cases: {len(results)}  passed: {passed}")
+    print(f"mode: {args.mode}  offline: {args.offline}  cases: {len(results)}  passed: {passed}")
     for r in results:
         mark = "PASS" if r["passed"] else "FAIL"
         detail = {k: v for k, v in r.items() if k not in ("case", "kind", "passed")}
         print(f"[{mark}] {r['case']}: {json.dumps(detail)}")
+    exit_code = 0
     if passed != len(results):
         print(f"\n{len(results) - passed} case(s) below bar.")
-        return 1
-    print("\nAll golden cases pass.")
-    return 0
+        exit_code = 1
+    if args.ragas:
+        # The gate reads job cases only: the draft-adversarial case
+        # is a negative control whose faithfulness is low by design.
+        scores = [r.get("faithfulness") for r in results if r["kind"] != "draft_adversarial"]
+        gate_ok, reason = gate_decision(scores, args.gate)
+        print(f"\nRAGAS gate: {reason}")
+        if not gate_ok:
+            exit_code = 1
+    if exit_code == 0:
+        print("\nAll golden cases pass.")
+    return exit_code
 
 
 if __name__ == "__main__":
