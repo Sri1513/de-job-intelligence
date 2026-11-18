@@ -32,12 +32,24 @@ BAD_DRAFT = (
 
 
 def _bundle():
+    # The REAL bundle shape: ranking entries carry only
+    # {id, score, matched}; the text lives in the slot's bullet_bank
+    # (dynamic_tool_bridging_policy.slot_frameworks). Lesson 1's test
+    # used a fake with "text" on the ranking entries and never caught
+    # that rank read a key that does not exist.
+    banks = {
+        "job1": [{"id": f"job1-{i}", "text": f"job1 bullet {i}"} for i in range(5)],
+        "job2": [{"id": f"job2-{i}", "text": f"job2 bullet {i}"} for i in range(5)],
+    }
     return {
         "job_metadata": {"title": "Data Engineer", "company": "Acme"},
         "tailoring_guidelines": {
             "deterministic_bullet_ranking": {
-                "job1": [{"text": f"job1 bullet {i}"} for i in range(5)],
-                "job2": [{"text": f"job2 bullet {i}"} for i in range(5)],
+                slot: [{"id": b["id"], "score": 5.0 - i, "matched": []} for i, b in enumerate(bank)]
+                for slot, bank in banks.items()
+            },
+            "dynamic_tool_bridging_policy": {
+                "slot_frameworks": {slot: {"bullet_bank": bank} for slot, bank in banks.items()}
             },
             "acronym_rule": "ACRONYM RULE: MCP = Model Context Protocol.",
         },
@@ -97,6 +109,21 @@ def test_rank_keeps_top_three_per_slot():
         "job1": ["job1 bullet 0", "job1 bullet 1", "job1 bullet 2"],
         "job2": ["job2 bullet 0", "job2 bullet 1", "job2 bullet 2"],
     }
+
+
+def test_rank_resolves_ids_and_never_emits_empty_strings():
+    # Regression: the real bundle's ranking entries have no "text" key
+    # (only id/score/matched). A ranked id missing from the bank must
+    # be skipped, never selected as "".
+    state = _state()
+    state["bundle"]["tailoring_guidelines"]["deterministic_bullet_ranking"]["job1"] = [
+        {"id": "job1-0", "score": 5.0, "matched": []},
+        {"id": "ghost-id", "score": 4.0, "matched": []},
+        {"id": "job1-1", "score": 3.0, "matched": []},
+    ]
+    result = rank_node(state)
+    assert result["selected_bullets"]["job1"] == ["job1 bullet 0", "job1 bullet 1"]
+    assert all(text for slot in result["selected_bullets"].values() for text in slot)
 
 
 def test_rank_noop_when_retrieve_failed():

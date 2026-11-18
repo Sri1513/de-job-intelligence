@@ -1,0 +1,766 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "4p-dataviz-powerbi",
+      "job_id": "4p-consulting-inc-data-visualization-engineer-1--c842ca",
+      "angle": "Lesson 1 baseline job",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Lesson 1 baseline job; Power BI/DAX/Databricks stack."
+    },
+    {
+      "name": "boston-insights-multi",
+      "job_id": "li-4490601153",
+      "angle": "Multi-stack senior DE",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Multi-stack senior DE; Databricks/Kafka/Power BI/PySpark."
+    },
+    {
+      "name": "madison-davis-snowflake",
+      "job_id": "li-4489775366",
+      "angle": "Snowflake/Azure/ADF/SSIS senior DE.",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Developed an agentic telemetry workflow with LangGraph routing: Kinesis-ingested IoT telemetry via Databricks Streaming/PySpark into Delta Lake, with agents calling REST/SQL tools against live Delta tables and Teradata star schemas for real-time equipment health analysis.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Snowflake/Azure/ADF/SSIS senior DE."
+    },
+    {
+      "name": "deloitte-databricks-a",
+      "job_id": "li-4491554558",
+      "angle": "Databricks senior DE",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Databricks senior DE; stability pair with -b."
+    },
+    {
+      "name": "deloitte-databricks-b",
+      "job_id": "li-4491550569",
+      "angle": "Near-duplicate of -a",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Near-duplicate of -a; the two must rank identically."
+    },
+    {
+      "name": "appzlogic-azure",
+      "job_id": "appzlogic-mobility-solutions-p-data-engineer-d788ee",
+      "angle": "Uncovered-tool hit (Informatica/Talend/Looker)",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Wrote T-SQL procedures, functions, and views behind the ETL and reports. Automated routine ops with UNIX scripts."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Uncovered-tool hit (Informatica/Talend/Looker); Azure DE."
+    },
+    {
+      "name": "superworq-snowflake-dbt",
+      "job_id": "li-4489740776",
+      "angle": "Snowflake/dbt/Kafka",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Snowflake/dbt/Kafka; dbt angle."
+    },
+    {
+      "name": "lmi-va-claims",
+      "job_id": "li-4483313478",
+      "angle": "Public-sector claims modernization",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog.",
+          "Landed data in S3 across raw, cleansed, and curated zones. No mixing."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Public-sector claims modernization; Snowflake/Power BI/Airflow/PySpark."
+    },
+    {
+      "name": "usaa-kafka-dbt",
+      "job_id": "li-4481842589",
+      "angle": "Kafka/dbt senior DE.",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Developed an agentic telemetry workflow with LangGraph routing: Kinesis-ingested IoT telemetry via Databricks Streaming/PySpark into Delta Lake, with agents calling REST/SQL tools against live Delta tables and Teradata star schemas for real-time equipment health analysis.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Kafka/dbt senior DE."
+    },
+    {
+      "name": "choice-hotels-dbt-terraform",
+      "job_id": "li-4486467347",
+      "angle": "dbt/Terraform/Airflow",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand.",
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "dbt/Terraform/Airflow; hospitality."
+    },
+    {
+      "name": "revstar-ai-engineer",
+      "job_id": "revstar-data-ai-engineer-21b356",
+      "angle": "AI title",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "AI title; Terraform + Databricks; AI/MCP angle."
+    },
+    {
+      "name": "oteemo-terraform",
+      "job_id": "oteemo-inc-sr-data-engineer-0ea15e",
+      "angle": "Terraform + LangChain senior DE.",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Ran the batches in Airflow and owned what happened after. DAGs, retries, SLA alerts. When something broke overnight, I found why and fixed it. Wrote the docs so the next person doesn't have to guess."
+        ],
+        "job3": [
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Terraform + LangChain senior DE."
+    },
+    {
+      "name": "sparksoft-database",
+      "job_id": "li-4447043120",
+      "angle": "Database Engineer title",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Built a RAG pipeline over legacy rental contracts and maintenance logs: CDC ingestion from AS400/Oracle via AWS DMS to S3; Airflow-orchestrated embedding jobs into pgvector on PostgreSQL, enabling natural-language querying of fleet repair history.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Database Engineer title; Power BI/Tableau."
+    },
+    {
+      "name": "ica-airflow",
+      "job_id": "li-4488367839",
+      "angle": "Remote",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Built a RAG pipeline over legacy rental contracts and maintenance logs: CDC ingestion from AS400/Oracle via AWS DMS to S3; Airflow-orchestrated embedding jobs into pgvector on PostgreSQL, enabling natural-language querying of fleet repair history.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Ran the batches in Airflow and owned what happened after. DAGs, retries, SLA alerts. When something broke overnight, I found why and fixed it. Wrote the docs so the next person doesn't have to guess.",
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Sped up slow batches 20\u201325%. Parquet outputs, fixed partitioning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Remote; Airflow/Dagster/FastAPI modern stack."
+    },
+    {
+      "name": "hillwood-pyspark",
+      "job_id": "li-4483907297",
+      "angle": "His own submitted role",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks."
+        ],
+        "job4": [
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "His own submitted role; known JD."
+    },
+    {
+      "name": "invita-healthcare",
+      "job_id": "li-4490702943",
+      "angle": "Healthcare",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%)."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map.",
+          "Landed data in S3 across raw, cleansed, and curated zones. No mixing."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Healthcare; tests Optum slot routing."
+    },
+    {
+      "name": "koch-de",
+      "job_id": "li-4469788591",
+      "angle": "Industrial",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Built a RAG pipeline over legacy rental contracts and maintenance logs: CDC ingestion from AS400/Oracle via AWS DMS to S3; Airflow-orchestrated embedding jobs into pgvector on PostgreSQL, enabling natural-language querying of fleet repair history.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Cut runtime 35\u201340% on financial pipelines. Diagnosed skew in Spark UI, applied salting, broadcast joins, AQE."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Industrial; Spark/Postgres/Elasticsearch."
+    },
+    {
+      "name": "entergy-de",
+      "job_id": "li-4487846081",
+      "angle": "Energy",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Energy; Snowflake/Airflow/PowerBI/SSIS."
+    },
+    {
+      "name": "rhino-staff-data",
+      "job_id": "rhino-staff-engineer-data-2c419e",
+      "angle": "Staff level",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand.",
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Staff level; dbt/Airflow/BigQuery."
+    },
+    {
+      "name": "horace-mann-de",
+      "job_id": "horace-mann-insurance-data-engineer-ii-36b8be",
+      "angle": "Insurance",
+      "kind": "positive",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%)."
+        ],
+        "job3": [
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map.",
+          "Landed data in S3 across raw, cleansed, and curated zones. No mixing.",
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Insurance; zero-overlap edge \u2014 the ranker returns bank-order bullets at score 0."
+    },
+    {
+      "name": "stability-ai-wrong-discipline",
+      "job_id": "stability-ai-staff-software-engineer-data-247f08",
+      "angle": "Staff SWE, Data \u2014 must not force-fit DE bullets into SWE claims",
+      "kind": "adversarial",
+      "expected_selected_bullets": {
+        "job1": [
+          "Built a RAG pipeline over legacy rental contracts and maintenance logs: CDC ingestion from AS400/Oracle via AWS DMS to S3; Airflow-orchestrated embedding jobs into pgvector on PostgreSQL, enabling natural-language querying of fleet repair history.",
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Built dbt models in layers: stg_ views over raw Redshift tables and S3 feeds, int_ for customer risk aggregation and transaction joins, dim_/fct_ marts for KYC risk scoring and daily loan ledger reconciliations. Incremental models on composite keys with a 3-day lookback, so late-arriving loan transactions landed without rescanning years of history.",
+          "Used Athena to query raw S3 data directly during migration. Fastest way to compare legacy output against new tables without loading anything.",
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Staff SWE, Data \u2014 must not force-fit DE bullets into SWE claims; traceability is the check."
+    },
+    {
+      "name": "placeholder-amazon-bi",
+      "job_id": "li-4455913479",
+      "angle": "Description is the scraper placeholder",
+      "kind": "adversarial",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%)."
+        ],
+        "job3": [
+          "Migrated legacy Ab Initio workflows to AWS. Mapped every old job first, then rebuilt from the map.",
+          "Landed data in S3 across raw, cleansed, and curated zones. No mixing.",
+          "Rebuilt transforms in PySpark on Glue. Registered every table in the Glue Data Catalog."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Where SSIS wasn't the right fit, built the transforms in Glue, PySpark, and HiveQL.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Description is the scraper placeholder; zero JD signal, graph must complete and the draft must not invent requirements."
+    },
+    {
+      "name": "placeholder-unitedhealthcare",
+      "job_id": "li-4484936748",
+      "angle": "Picked as a placeholder case, but its description yields real JD skills (top score 4.6) \u2014 behaves as a normal job",
+      "kind": "adversarial",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Tuned the slow parts. Profiled queries on Snowflake and Exasol, fixed joins, redrew partitions on the big tables."
+        ],
+        "job3": [
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving.",
+          "Replaced 800+ line Redshift stored procedures with dbt Core models, run through Airflow BashOperator on EC2. The old procedural SQL had no tests and no lineage \u2014 a failure halfway through meant manual rollbacks and cleaning up intermediate tables by hand."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "Picked as a placeholder case, but its description yields real JD skills (top score 4.6) \u2014 behaves as a normal job; kept as the near-miss."
+    },
+    {
+      "name": "tableau-analytics-non-de",
+      "job_id": "rjit-solutions-senior-tableau-analytics-engin-a68170",
+      "angle": "BI/visualization role, not DE pipelines",
+      "kind": "adversarial",
+      "expected_selected_bullets": {
+        "job1": [
+          "Replaced full-refresh cycles with scheduled incremental load patterns",
+          "Tuned partition strategies and optimized Spark SQL joins",
+          "Decoupled pipelines into modular checkpointed stages"
+        ],
+        "job2": [
+          "Owned ETL for retail supply chain data. Inventory, POS, orders, product movement. Sources were ERP systems, flat files, APIs. Target was the Azure data lake and Snowflake.",
+          "Rewrote PySpark transformation logic for the daily Azure Databricks supply-chain job: replaced iterative for-loop .withColumn() calls with single-pass vectorized .select() projections and removed redundant repartition() shuffles, cutting batch runtime from ~55 min to ~40 min (~25\u201330%).",
+          "Every transformation started with a source-to-target mapping. What comes in, what goes out, the business rules in between. Nothing got built until the mapping was signed off."
+        ],
+        "job3": [
+          "Put dbt tests on everything that mattered: unique, not_null, relationships on customer and transaction IDs, plus custom SQL tests proving daily loan ledger debits and credits balanced to zero before compliance saw the data. Cut incremental runtimes from over an hour to under 45 minutes. Caught duplicates and null-key leaks at the test stage instead of in audit.",
+          "Airflow for scheduling, CI/CD with Git and Jenkins across DEV, QA, PROD. Handed over with runbooks.",
+          "Automated the pipeline plumbing in Python. File checks, rerun scripts, alerts between jobs. The unglamorous code that keeps batches moving."
+        ],
+        "job4": [
+          "Built SSIS packages to extract from legacy SQL Server databases into an S3 data lake. Control flow for orchestration, data flow for transforms. Sales, subscription, and usage data.",
+          "Scheduled and watched everything on SQL Server Agent. Diagnosed failed loads, protected SLAs.",
+          "Wrote heavy SQL daily. Window functions, subqueries, multi-table joins. For validation, ad-hoc analysis, tuning."
+        ]
+      },
+      "expected_verdict": "pass",
+      "must_not_claim": [],
+      "notes": "BI/visualization role, not DE pipelines; traceability is the check."
+    },
+    {
+      "name": "3b-fake-draft",
+      "kind": "draft_adversarial",
+      "trace_against": "4p-dataviz-powerbi",
+      "draft": "### Sri Omkar D.\n**Data Visualization Engineer 1 4P/846**\n**4P Consulting Inc.**\n**Contact: [email protected] | 123-456-7890**\n\n---\n\n**Experience:**\n\n**Data Visualization Engineer 1 4P/846, 4P Consulting Inc. (2022 - Present)**\n- Utilized MCP servers to connect AI agents to data tools, enabling efficient data visualization.\n- Developed interactive dashboards using Tableau and PowerBI, enhancing data insights for clients.\n- Collaborated with cross-functional teams to identify data visualization needs and implement solutions.\n- Conducted data analysis to identify trends and patterns, improving decision-making processes.\n- Ensured data accuracy and integrity through regular audits and quality checks.\n\n**Data Analyst, XYZ Corporation (2020 - 2022)**\n- Applied MCP to integrate AI agents with data tools, facilitating real-time data visualization.\n- Created custom visualizations for internal reports, improving data communication.\n- Conducted data audits and quality checks to maintain data integrity.\n- Collaborated with IT and business teams to identify data needs and implement solutions.\n- Conducted data analysis to identify trends and patterns, supporting business decisions.\n\n**Data Analyst Intern, ABC Consulting (2019 - 2020)**\n- Assisted in the development of custom visualizations using Tableau and PowerBI.\n- Conducted data audits and quality checks to ensure data accuracy.\n- Collaborated with cross-functional teams to identify data needs and implement solutions.\n- Conducted data analysis to identify trends and patterns, supporting business decisions.\n\n---\n\n**Education:**\n- Bachelor of Science in Computer Science, [University Name], [Graduation Year]\n- Relevant coursework in data analysis, visualization, and programming languages.",
+      "expected_verdict": "fail",
+      "must_not_claim": [
+        "XYZ Corporation",
+        "ABC Consulting",
+        "4P Consulting Inc. (2022",
+        "[email protected]",
+        "123-456-7890",
+        "[University Name]"
+      ],
+      "notes": "The llm-prod 3B draft from Lesson 1 Step 3; passed every cheap check; the traceability check must fail it."
+    }
+  ],
+  "notes": "Expected bullets were recorded once from the live deterministic ranker (2026-11-17, de-lab, fixed rank_node resolving id -> text via the slot bullet_bank) and read by hand against each JD. After this they are frozen: change the ranker and the set changes, and the test fails. JD text is NOT copied here \u2014 the runner loads it from the DB by job_id, so the dataset cannot go stale."
+}
