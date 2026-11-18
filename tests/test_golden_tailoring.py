@@ -16,7 +16,11 @@ import pytest
 from tests.evals.run_golden import (
     bullet_match_score,
     check_must_not_claim,
+    gate_decision,
+    job_question,
+    load_dataset,
     run_job_case,
+    run_offline_case,
     score_draft_case,
     traceability_score,
 )
@@ -156,6 +160,50 @@ def test_draft_adversarial_case_fails_traceability():
     assert result["traceability"] < 0.5
     assert "XYZ Corporation" in result["must_not_claim_found"]
     assert "ABC Consulting" in result["must_not_claim_found"]
+
+
+def test_dataset_job_cases_have_title_and_company():
+    for case in _load()["cases"]:
+        if case["kind"] == "draft_adversarial":
+            continue
+        assert case["title"], case["name"]
+        assert case["company"], case["name"]
+
+
+def test_job_question_uses_title_and_company():
+    case = {"title": "Data Engineer", "company": "4P Consulting Inc."}
+    assert job_question(case) == (
+        "Tailor a resume for the Data Engineer role at 4P Consulting Inc."
+    )
+
+
+def test_gate_decision_passes_above_threshold():
+    passed, reason = gate_decision([0.9, 0.88, 1.0], 0.85)
+    assert passed
+    assert "0.927" in reason
+
+
+def test_gate_decision_fails_below_threshold():
+    passed, reason = gate_decision([0.9, 0.7, 0.85], 0.85)
+    assert not passed
+    assert "0.817" in reason
+
+
+def test_gate_decision_ignores_unscored_and_passes_when_none_scored():
+    passed, _ = gate_decision([0.9, None, 0.88], 0.85)
+    assert passed
+    passed, reason = gate_decision([None, None], 0.85)
+    assert passed
+    assert "unscored" in reason
+
+
+def test_offline_case_passes_without_db_or_llm():
+    case = next(c for c in load_dataset() if c["name"] == "4p-dataviz-powerbi")
+    result = run_offline_case(case)
+    assert result["passed"]
+    assert result["bullets"] == 1.0
+    assert result["traceability"] == 1.0
+    assert result["verdict_ok"]
 
 
 def test_dataset_shape():

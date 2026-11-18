@@ -30,7 +30,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Lesson 1 baseline job; Power BI/DAX/Databricks stack."
+      "notes": "Lesson 1 baseline job; Power BI/DAX/Databricks stack.",
+      "title": "Data Visualization Engineer 1 4P/846",
+      "company": "4P Consulting Inc."
     },
     {
       "name": "boston-insights-multi",
@@ -61,7 +63,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Multi-stack senior DE; Databricks/Kafka/Power BI/PySpark."
+      "notes": "Multi-stack senior DE; Databricks/Kafka/Power BI/PySpark.",
+      "title": "Senior Data Engineer",
+      "company": "Boston Insights"
     },
     {
       "name": "madison-davis-snowflake",
@@ -92,7 +96,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Snowflake/Azure/ADF/SSIS senior DE."
+      "notes": "Snowflake/Azure/ADF/SSIS senior DE.",
+      "title": "Senior Data Engineer",
+      "company": "Madison-Davis, LLC"
     },
     {
       "name": "deloitte-databricks-a",
@@ -123,7 +129,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Databricks senior DE; stability pair with -b."
+      "notes": "Databricks senior DE; stability pair with -b.",
+      "title": "Databricks Data Engineer",
+      "company": "Deloitte"
     },
     {
       "name": "deloitte-databricks-b",
@@ -154,7 +162,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Near-duplicate of -a; the two must rank identically."
+      "notes": "Near-duplicate of -a; the two must rank identically.",
+      "title": "Databricks Data Engineer",
+      "company": "Deloitte"
     },
     {
       "name": "appzlogic-azure",
@@ -185,7 +195,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Uncovered-tool hit (Informatica/Talend/Looker); Azure DE."
+      "notes": "Uncovered-tool hit (Informatica/Talend/Looker); Azure DE.",
+      "title": "Data Engineer",
+      "company": "Appzlogic Mobility Solutions Pvt Ltd"
     },
     {
       "name": "superworq-snowflake-dbt",
@@ -216,7 +228,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Snowflake/dbt/Kafka; dbt angle."
+      "notes": "Snowflake/dbt/Kafka; dbt angle.",
+      "title": "Data Engineer, Sr.",
+      "company": "Superworq"
     },
     {
       "name": "lmi-va-claims",
@@ -247,7 +261,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Public-sector claims modernization; Snowflake/Power BI/Airflow/PySpark."
+      "notes": "Public-sector claims modernization; Snowflake/Power BI/Airflow/PySpark.",
+      "title": "Data Engineer | VA Claims Modernization",
+      "company": "LMI"
     },
     {
       "name": "usaa-kafka-dbt",
@@ -278,7 +294,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Kafka/dbt senior DE."
+      "notes": "Kafka/dbt senior DE.",
+      "title": "Data Engineer - Senior Level",
+      "company": "USAA"
     },
     {
       "name": "choice-hotels-dbt-terraform",
@@ -309,7 +327,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "dbt/Terraform/Airflow; hospitality."
+      "notes": "dbt/Terraform/Airflow; hospitality.",
+      "title": "Data Engineer 2",
+      "company": "Choice Hotels International"
     },
     {
       "name": "revstar-ai-engineer",
@@ -340,7 +360,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "AI title; Terraform + Databricks; AI/MCP angle."
+      "notes": "AI title; Terraform + Databricks; AI/MCP angle.",
+      "title": "Data & AI Engineer",
+      "company": "Revstar"
     },
     {
       "name": "oteemo-terraform",
@@ -371,7 +393,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Terraform + LangChain senior DE."
+      "notes": "Terraform + LangChain senior DE.",
+      "title": "Sr. Data Engineer",
+      "company": "Oteemo, Inc"
     },
     {
       "name": "sparksoft-database",
@@ -402,7 +426,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Database Engineer title; Power BI/Tableau."
+      "notes": "Database Engineer title; Power BI/Tableau.",
+      "title": "Database Engineer",
+      "company": "Sparksoft Corporation"
     },
     {
       "name": "ica-airflow",
@@ -433,7 +459,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Remote; Airflow/Dagster/FastAPI modern stack."
+      "notes": "Remote; Airflow/Dagster/FastAPI modern stack.",
+      "title": "Data Engineer (Remote, Continental United States)",
+      "company": "ICA, Inc."
     },
     {
       "name": "hillwood-pyspark",
@@ -464,7 +492,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "His own submitted role; known JD."
+      "notes": "His own submitted role; known JD.",
+      "title": "Senior Data Engineer",
+      "company": "Hillwood"
     },
     {
       "name": "invita-healthcare",
@@ -495,7 +525,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Healthcare; tests Optum slot routing."
+      "notes": "Healthcare; tests Optum slot routing.",
+      "title": "Data Engineer II",
+      "company": "InVita Healthcare Technologies"
     },
     {
       "name": "koch-de",
@@ -526,7 +558,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Industrial; Spark/Postgres/Elasticsearch."
+      "notes": "Industrial; Spark/Postgres/Elasticsearch.",
+      "title": "Data Engineer",
+      "company": "Koch"
     },
     {
       "name": "entergy-de",
@@ -557,7 +591,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Energy; Snowflake/Airflow/PowerBI/SSIS."
+      "notes": "Energy; Snowflake/Airflow/PowerBI/SSIS.",
+      "title": "Data Engineer I-SR",
+      "company": "Entergy"
     },
     {
       "name": "rhino-staff-data",
@@ -588,7 +624,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Staff level; dbt/Airflow/BigQuery."
+      "notes": "Staff level; dbt/Airflow/BigQuery.",
+      "title": "Staff Engineer, Data",
+      "company": "Rhino"
     },
     {
       "name": "horace-mann-de",
@@ -619,7 +657,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Insurance; zero-overlap edge \u2014 the ranker returns bank-order bullets at score 0."
+      "notes": "Insurance; zero-overlap edge \u2014 the ranker returns bank-order bullets at score 0.",
+      "title": "Data Engineer II",
+      "company": "Horace Mann Insurance"
     },
     {
       "name": "stability-ai-wrong-discipline",
@@ -650,7 +690,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Staff SWE, Data \u2014 must not force-fit DE bullets into SWE claims; traceability is the check."
+      "notes": "Staff SWE, Data \u2014 must not force-fit DE bullets into SWE claims; traceability is the check.",
+      "title": "Staff Software Engineer, Data",
+      "company": "Stability AI"
     },
     {
       "name": "placeholder-amazon-bi",
@@ -681,7 +723,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Description is the scraper placeholder; zero JD signal, graph must complete and the draft must not invent requirements."
+      "notes": "Description is the scraper placeholder; zero JD signal, graph must complete and the draft must not invent requirements.",
+      "title": "Business Intelligence Engineer II, OpsTech IT, OTS Anchor Team",
+      "company": "Amazon"
     },
     {
       "name": "placeholder-unitedhealthcare",
@@ -712,7 +756,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "Picked as a placeholder case, but its description yields real JD skills (top score 4.6) \u2014 behaves as a normal job; kept as the near-miss."
+      "notes": "Picked as a placeholder case, but its description yields real JD skills (top score 4.6) \u2014 behaves as a normal job; kept as the near-miss.",
+      "title": "Senior Data Engineer",
+      "company": "UnitedHealthcare"
     },
     {
       "name": "tableau-analytics-non-de",
@@ -743,7 +789,9 @@
       },
       "expected_verdict": "pass",
       "must_not_claim": [],
-      "notes": "BI/visualization role, not DE pipelines; traceability is the check."
+      "notes": "BI/visualization role, not DE pipelines; traceability is the check.",
+      "title": "SENIOR TABLEAU ANALYTICS ENGINEER",
+      "company": "RJIT Solutions"
     },
     {
       "name": "3b-fake-draft",

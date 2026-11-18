@@ -74,6 +74,12 @@ ABSOLUTE_PATTERNS = (
     r"guarantee",
 )
 CANDIDATE_NAME = "Sri Omkar D"
+# Run 2 finding: the draft prompt carried no contact block, so the
+# model invented "sriomkar@example.com" / "(123) 456-7890". The prompt
+# now carries the real block, and says to use exactly this.
+CANDIDATE_CONTACT = (
+    "Sri Omkar D | sri.omkar.d@gmail.com | +1 (951) 545-2146 | linkedin.com/in/sri-omkar-58r4r4r8"
+)
 # Acronym expansions that are known-wrong (Lesson 3: the MCP hallucination).
 FORBIDDEN_EXPANSIONS = ("Microsoft Certified Professional",)
 
@@ -142,6 +148,9 @@ def _build_draft_prompt(state: TailoringState) -> str:
         "Write the tailored resume content for this role.",
         f"Role: {meta.get('title', '')} at {meta.get('company', '')}.",
         f"Candidate: {CANDIDATE_NAME}.",
+        "Contact block — use EXACTLY this for any contact details. "
+        "Never invent an email, phone number, or profile link.",
+        f"Contact: {CANDIDATE_CONTACT}.",
         "",
         "Use ONLY the selected experience bullets below, grouped by slot. "
         "Do not invent tools, employers, metrics, or responsibilities.",

@@ -4,6 +4,7 @@
 import pytest
 
 from src.core.tailoring_graph import (
+    CANDIDATE_CONTACT,
     MAX_DRAFT_ATTEMPTS,
     TOP_BULLETS_PER_SLOT,
     _build_draft_prompt,
@@ -162,6 +163,20 @@ def test_route_after_verify():
 
 
 # --- draft prompt ---
+
+
+def test_draft_prompt_carries_real_contact_block():
+    state = {
+        "bundle": {
+            "job_metadata": {"title": "Data Engineer", "company": "4P"},
+            "tailoring_guidelines": {},
+        },
+        "selected_bullets": {"job1": ["Built pipelines with PySpark"]},
+    }
+    prompt = _build_draft_prompt(state)
+    assert CANDIDATE_CONTACT in prompt
+    assert "Never invent an email" in prompt
+    assert "sriomkar@example.com" not in prompt
 
 
 def test_draft_prompt_includes_failures_on_retry():

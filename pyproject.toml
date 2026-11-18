@@ -35,6 +35,11 @@ dependencies = [
     "rapidfuzz",          # fuzzy skill normalization (Perfect Resume Engine)
     "rank-bm25",          # lexical bullet scoring (Perfect Resume Engine)
     "sentence-transformers",  # Sprint 3: 384-dim embeddings (all-MiniLM-L6-v2) for chunk retrieval
+    "ragas==0.4.4",       # Sprint 4: RAGAS faithfulness/relevancy scoring
+    "datasets>=4.0.0,<5",  # RAGAS pin: datasets 5.x needs pyarrow>=24 -> numpy>=2, repo pins numpy<2
+    "pyarrow>=15,<19",   # same pin: pyarrow 18 works with numpy 1.26
+    "langchain-ollama",   # RAGAS judge on de-lab (MSI 7b)
+    "langchain-community",  # HuggingFaceEmbeddings for RAGAS answer relevancy
 
     # Browser Automation
     "browser-use>=0.13.10",
