@@ -9,6 +9,7 @@ Authentication is enforced by BearerAuthMiddleware (see auth.py); this module
 only speaks protocol. Tool routing lives in dispatcher.py's TOOL_HANDLERS
 registry; business logic lives in engine/, workers/, and synthesis/.
 """
+
 import asyncio
 import json
 import logging
@@ -48,9 +49,7 @@ logger = logging.getLogger("de-job-intelligence.mcp")
 logger.setLevel(logging.INFO)
 _handler = logging.StreamHandler()
 _handler.setLevel(logging.INFO)
-_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-)
+_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s"))
 if not logger.handlers:
     logger.addHandler(_handler)
 logger.propagate = False
@@ -80,17 +79,17 @@ for _ingestion_logger_name in (
 # runtime transport by the negotiated version, so answering a hardcoded
 # 2024-11-05 to a client that asked for 2025-03-26 can break tool execution
 # even though registration (initialize + tools/list) succeeds.
-SUPPORTED_PROTOCOL_VERSIONS = frozenset(
-    {"2024-11-05", "2025-03-26", "2025-06-18"}
-)
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({"2024-11-05", "2025-03-26", "2025-06-18"})
 DEFAULT_PROTOCOL_VERSION = "2024-11-05"
 
 # Sprint 2, Batch 4: tools exempt from the 30s call timeout — slow by
 # nature. run_application_worker drives browser automation (minutes);
-# retry_job_evaluations runs backfill batches (LLM calls per job). Every
-# other tool must answer inside MCP_TOOL_TIMEOUT_SECONDS.
+# retry_job_evaluations runs backfill batches (LLM calls per job).
+# Sprint 4, Lesson 4: run_tailoring_graph drafts via the cloud LLM
+# chain (a minute or more). Every other tool must answer inside
+# MCP_TOOL_TIMEOUT_SECONDS.
 _TIMEOUT_EXEMPT_TOOLS = frozenset(
-    {"run_application_worker", "retry_job_evaluations"}
+    {"run_application_worker", "retry_job_evaluations", "run_tailoring_graph"}
 )
 
 

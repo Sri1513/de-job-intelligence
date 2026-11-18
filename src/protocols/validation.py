@@ -37,6 +37,7 @@ Handlers are untouched: `validate_tool_arguments` returns a plain dict
 (`model_dump()`, defaults applied), so the dispatch layer and every
 handler keep receiving exactly the shape they already handle.
 """
+
 import json
 from typing import Annotated, Any
 
@@ -187,6 +188,7 @@ class RunEmailPipelineArgs(_StrictModel):
 TOOL_ARGUMENT_MODELS: dict[str, type[_StrictModel]] = {
     "prepare_job_tailoring_prompt": PrepareJobTailoringPromptArgs,
     "fetch_job_for_tailoring": PrepareJobTailoringPromptArgs,
+    "run_tailoring_graph": PrepareJobTailoringPromptArgs,
     "export_tailored_resume": ExportTailoredResumeArgs,
     "generate_tailored_resume": ExportTailoredResumeArgs,
     "get_job_details": GetJobDetailsArgs,
