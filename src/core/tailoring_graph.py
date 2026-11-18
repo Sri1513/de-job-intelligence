@@ -107,15 +107,29 @@ def retrieve_node(state: TailoringState) -> dict:
 
 
 def rank_node(state: TailoringState) -> dict:
-    """Keep the top N bullets per slot from the deterministic ranking."""
+    """Keep the top N bullets per slot from the deterministic ranking.
+
+    The ranking entries carry only {id, score, matched} — the text
+    lives in the slot's bullet_bank, so each id is resolved to its
+    text here. A ranked id with no bank entry is skipped, never
+    emitted as an empty string. (Lesson 1 shipped the other shape:
+    it read a "text" key the entries never had, and selected three
+    empty strings per slot — caught by Lesson 2's recording run,
+    2026-11-17.)
+    """
     if state.get("error") or "bundle" not in state:
         return {}
-    ranking = (
-        state["bundle"].get("tailoring_guidelines", {}).get("deterministic_bullet_ranking", {})
-    )
+    guidelines = state["bundle"].get("tailoring_guidelines", {})
+    ranking = guidelines.get("deterministic_bullet_ranking", {})
+    frameworks = guidelines.get("dynamic_tool_bridging_policy", {}).get("slot_frameworks", {})
     selected = {}
     for slot, bullets in ranking.items():
-        selected[slot] = [b.get("text", "") for b in (bullets or [])[:TOP_BULLETS_PER_SLOT]]
+        bank = {
+            b.get("id"): b.get("text", "")
+            for b in (frameworks.get(slot) or {}).get("bullet_bank", [])
+        }
+        texts = [bank.get(b.get("id"), "") for b in (bullets or [])[:TOP_BULLETS_PER_SLOT]]
+        selected[slot] = [t for t in texts if t]
     return {"selected_bullets": selected}
 
 
