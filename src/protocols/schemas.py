@@ -15,6 +15,20 @@ MCP_TOOLS = [
         },
     },
     {
+        "name": "run_tailoring_graph",
+        "description": "Runs the LangGraph tailoring graph for one job (retrieve, rank, draft, verify) and returns the verified draft with its selected bullets and verification result. Gated on TAILORING_GRAPH_ENABLED.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "Unique identifier of the target job record in PostgreSQL.",
+                }
+            },
+            "required": ["job_id"],
+        },
+    },
+    {
         "name": "export_tailored_resume",
         "description": "Synthesizes tailored resume content into a standardized Google Document using OAuth 2.0, enforcing the 66-token template and Google XYZ formatting.",
         "inputSchema": {

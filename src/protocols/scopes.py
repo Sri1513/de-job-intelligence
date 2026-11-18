@@ -29,6 +29,7 @@ may re-derive them) — and stashed on the ASGI scope;
 with ``scopes=None`` is unrestricted — that path is for internal/direct
 callers only, never for HTTP traffic.
 """
+
 from typing import Optional
 
 SCOPE_READ = "mcp:read"
@@ -47,6 +48,7 @@ SCOPES_SUPPORTED = ["mcp", "mcp:read", "mcp:ingest", "mcp:apply"]
 TOOL_SCOPES: dict[str, str] = {
     "prepare_job_tailoring_prompt": SCOPE_READ,
     "fetch_job_for_tailoring": SCOPE_READ,
+    "run_tailoring_graph": SCOPE_READ,
     "get_job_details": SCOPE_READ,
     "search_saved_jobs": SCOPE_READ,
     "run_batch_ingestion": SCOPE_INGEST,
@@ -65,9 +67,7 @@ class InsufficientScopeError(Exception):
     """A tool call was denied: the caller's scopes lack the tool's scope."""
 
     def __init__(self, tool_name: str, required_scope: str, granted: frozenset):
-        super().__init__(
-            f"Insufficient scope: tool '{tool_name}' requires '{required_scope}'"
-        )
+        super().__init__(f"Insufficient scope: tool '{tool_name}' requires '{required_scope}'")
         self.tool_name = tool_name
         self.required_scope = required_scope
         self.granted = granted

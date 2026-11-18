@@ -7,13 +7,16 @@ MCP tool name to a single async handler. Transport code (app.py) never branches
 on tool names; business logic lives in engine/workers/synthesis. Adding a tool
 means writing one handler and one registry entry.
 """
+
 import asyncio
 import json
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from typing import Any, Dict
 
 from src.core.database import get_db_connection, get_job_by_id
+from src.core.tailoring_graph import run_tailoring_graph
 from src.engine.agent_bridge import stage_agent_jobs_workflow
 from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
@@ -112,6 +115,36 @@ async def _handle_prepare_job_tailoring_prompt(arguments: Dict[str, Any]) -> Any
     if not job_id:
         raise ValueError("Argument 'job_id' is required.")
     return await asyncio.to_thread(build_job_tailoring_prompt, job_id)
+
+
+# Sprint 4, Lesson 4: the graph as an MCP tool. The old
+# prepare_job_tailoring_prompt stays untouched (it returns the bundle);
+# this one runs the full graph and returns the verified draft.
+# Gated on TAILORING_GRAPH_ENABLED (default off): when off it answers
+# with a clean error instead of running.
+def _tailoring_graph_enabled() -> bool:
+    return os.environ.get("TAILORING_GRAPH_ENABLED", "").lower() in ("1", "true", "yes")
+
+
+async def _handle_run_tailoring_graph(arguments: Dict[str, Any]) -> Any:
+    job_id = arguments.get("job_id")
+    if not job_id:
+        raise ValueError("Argument 'job_id' is required.")
+    if not _tailoring_graph_enabled():
+        return {
+            "success": False,
+            "error": "run_tailoring_graph is disabled (TAILORING_GRAPH_ENABLED is not set).",
+        }
+    result = await asyncio.to_thread(run_tailoring_graph, job_id)
+    return {
+        "success": result.get("error") is None,
+        "job_id": job_id,
+        "draft": result.get("draft"),
+        "selected_bullets": result.get("selected_bullets"),
+        "verification": result.get("verification"),
+        "draft_attempts": result.get("draft_attempts"),
+        "error": result.get("error"),
+    }
 
 
 async def _handle_export_tailored_resume(arguments: Dict[str, Any]) -> Any:
@@ -267,6 +300,7 @@ async def _handle_stage_agent_jobs(arguments: Dict[str, Any]) -> Any:
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {
     "prepare_job_tailoring_prompt": _handle_prepare_job_tailoring_prompt,
     "fetch_job_for_tailoring": _handle_prepare_job_tailoring_prompt,
+    "run_tailoring_graph": _handle_run_tailoring_graph,
     "export_tailored_resume": _handle_export_tailored_resume,
     "generate_tailored_resume": _handle_export_tailored_resume,
     "get_job_details": _handle_get_job_details,
@@ -335,9 +369,7 @@ def _start_pipeline_run(tool_name, handler, arguments) -> Dict[str, Any]:
             ),
         }
     _pipeline_tool = tool_name
-    _pipeline_task = asyncio.create_task(
-        _run_pipeline_in_background(tool_name, handler, arguments)
-    )
+    _pipeline_task = asyncio.create_task(_run_pipeline_in_background(tool_name, handler, arguments))
     _pipeline_task.add_done_callback(_clear_pipeline_slot)
     logger.info("Background pipeline run started: %s", tool_name)
     return {
@@ -350,9 +382,7 @@ def _start_pipeline_run(tool_name, handler, arguments) -> Dict[str, Any]:
     }
 
 
-async def dispatch_tool_call(
-    tool_name: str, arguments: Dict[str, Any], scopes=None
-) -> Any:
+async def dispatch_tool_call(tool_name: str, arguments: Dict[str, Any], scopes=None) -> Any:
     """Dispatches a JSON-RPC tool request through the handler registry.
 
     Scope is checked first (Sprint 2, Batch 2): a caller that lacks the
