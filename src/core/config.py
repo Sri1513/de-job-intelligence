@@ -109,6 +109,11 @@ class Settings(BaseSettings):
     # Dashboard debug mode (tracebacks in responses). Keep off in production.
     DASHBOARD_DEBUG: bool = False
 
+    # Dynamic countdown lock screen (/lockscreen). Public read, showcase
+    # fields only. Flip off after the Handshake contest to remove the route
+    # (the handler 404s when disabled); no schema change to undo.
+    LOCKSCREEN_ENABLED: bool = True
+
     # URL the dashboard's admin health check uses to probe the MCP server.
     MCP_HEALTH_URL: str = "http://localhost:8000/health"
 
