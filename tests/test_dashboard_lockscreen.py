@@ -51,11 +51,34 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert "Pax8 — Senior Data Engineer II" in resp.text
     assert "2026-11-30T23:59:00-05:00" in resp.text
     assert "Nov 30, 2026" in resp.text
-    # Milestone dates derive from the deadline (minus 13/12/10/6 days).
+    # Six milestones derive from the deadline (minus 16/14/13/13/6/3 days).
+    assert "Nov 14" in resp.text
+    assert "Nov 16" in resp.text
     assert "Nov 17" in resp.text
-    assert "Nov 18" in resp.text
-    assert "Nov 20" in resp.text
     assert "Nov 24" in resp.text
+    assert "Nov 27" in resp.text
+    assert "Nov 18" not in resp.text
+    assert "Nov 20" not in resp.text
+    for label in (
+        "Job saved",
+        "Gate passed",
+        "Tailored package built",
+        "Application submitted",
+        "Follow up if no receipt",
+        "Reply expected",
+    ):
+        assert label in resp.text
+    # Dream-job design: mountain photo bg + responsive scaler.
+    assert "/static/lockscreen-bg.webp" in resp.text
+    assert 'id="scaler"' in resp.text
+
+
+def test_lockscreen_bg_image_serves(monkeypatch):
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/static/lockscreen-bg.webp")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/")
 
 
 def test_lockscreen_unknown_job_404(monkeypatch):
