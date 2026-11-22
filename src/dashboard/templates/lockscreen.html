@@ -23,8 +23,12 @@
   html, body { height: 100%; }
   body {
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Full-bleed photo behind the card. On a phone the 390px card covers
+       the screen, so this is invisible; on a wider screen (tablet,
+       desktop) the card only fills the middle, and the photo shows on the
+       sides instead of near-black bars (the old .88 overlay). */
     background:
-      linear-gradient(180deg, rgba(6,11,14,.88) 0%, rgba(6,11,14,.88) 100%),
+      linear-gradient(180deg, rgba(6,11,14,.45) 0%, rgba(6,11,14,.45) 100%),
       url("/static/lockscreen-bg.webp") center / cover no-repeat,
       #08161a;
     min-height: 100dvh;
