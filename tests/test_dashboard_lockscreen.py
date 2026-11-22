@@ -83,6 +83,18 @@ def test_lockscreen_naive_deadline_400(monkeypatch):
     assert resp.status_code == 400
 
 
+def test_lockscreen_plus_offset_arrives_as_space(monkeypatch):
+    # An unencoded "+" offset decodes to a space in the query string;
+    # the handler must restore it before parsing.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00+00:00"
+    )
+    assert resp.status_code == 200
+    assert "2026-11-30T23:59:00+00:00" in resp.text
+
+
 def test_lockscreen_disabled_404(monkeypatch):
     monkeypatch.setattr(settings, "LOCKSCREEN_ENABLED", False)
     _mock_db(monkeypatch, _job_row())

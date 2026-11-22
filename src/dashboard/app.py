@@ -1193,16 +1193,20 @@ LOCKSCREEN_MILESTONE_STEPS = (
 
 def _parse_lockscreen_deadline(raw: str | None) -> datetime | None:
     """Parse the deadline query param. Requires an explicit UTC offset so
-    the countdown is unambiguous; naive values are rejected."""
+    the countdown is unambiguous; naive values are rejected. An unencoded
+    "+" offset decodes to a space in the query string, so retry with spaces
+    restored to "+" before giving up."""
     if not raw:
         return None
-    try:
-        parsed = datetime.fromisoformat(raw)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return None
-    return parsed
+    for candidate in (raw, raw.replace(" ", "+")):
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            return None
+        return parsed
+    return None
 
 
 async def lockscreen_view(request: Request) -> Response:
