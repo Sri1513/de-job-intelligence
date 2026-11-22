@@ -73,6 +73,33 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert 'id="scaler"' in resp.text
 
 
+def test_lockscreen_top_safe_zone_clears_phone_clock(monkeypatch):
+    # Real-phone check (2026-11-22): a 148px clock-space let the phone's
+    # big lock-screen clock + date (~200px) cover the eyebrow and title.
+    # The safe zone must clear that at any phone scale.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    )
+    assert resp.status_code == 200
+    assert ".clock-space { height: 250px" in resp.text
+
+
+def test_lockscreen_body_bg_is_full_bleed_photo(monkeypatch):
+    # Wide screens (tablet, desktop): the 390px card only fills the middle,
+    # so the body's photo must show on the sides — not a near-black overlay
+    # (the old .88 left black bars on the tablet, 2026-11-22).
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    )
+    assert resp.status_code == 200
+    assert "rgba(6,11,14,.45) 100%)" in resp.text
+    assert "rgba(6,11,14,.88)" not in resp.text
+
+
 def test_lockscreen_bg_image_serves(monkeypatch):
     _mock_db(monkeypatch, _job_row())
     client = TestClient(app)
