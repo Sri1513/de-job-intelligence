@@ -3,85 +3,111 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deadline Lock Screen — {{ company }}, {{ deadline_display }}</title>
+<title>Dream Job Countdown — {{ company }}, {{ deadline_display }}</title>
 <!--
   Dynamic countdown lock screen (GET /lockscreen?job_id=...&deadline=...).
-  Parameterized from the static Handshake entry page: same 390x844 layout,
-  same dark-teal styling, same top ~150px left empty for the phone clock.
-  The handler supplies company, title, location, fit_score, deadline_iso,
-  start_iso, deadline_display, start_display, deadline_short, milestones,
-  next_index. Milestones are server-computed (dates = deadline minus
-  13/12/10/6 days; done once the date has passed).
+  Dream-job design: mountain photo background (Pexels, free license,
+  served from /static/lockscreen-bg.webp), milestones inside one
+  frosted-glass panel, smaller countdown units, six milestones.
+  Responsive: the design is a fixed 390x844 card, scaled by JS to fit any
+  viewport (phone, tablet, desktop) — one URL serves every screen, and on a
+  phone the scale is 1 so the layout is unchanged. The top ~150px stays
+  empty for the phone clock. The handler supplies company, title, location,
+  fit_score, deadline_iso, start_iso, deadline_display, start_display,
+  deadline_short, milestones, next_index. Milestones are server-computed
+  (dates = deadline minus 16/14/13/13/6/3 days; done once the date has
+  passed).
 -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #0b1f22;
-    display: flex; justify-content: center;
+    background:
+      linear-gradient(180deg, rgba(6,11,14,.88) 0%, rgba(6,11,14,.88) 100%),
+      url("/static/lockscreen-bg.webp") center / cover no-repeat,
+      #08161a;
+    min-height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
     color: #f2f7f7;
+    overflow: hidden;
   }
-  /* Phone-sized lock screen: 390 x 844 */
+  /* Fixed 390x844 design, scaled by JS to fit the viewport. */
+  .scaler { width: 390px; height: 844px; flex: none; transform-origin: center center; }
   .screen {
-    width: 390px; max-width: 100vw; min-height: 844px; height: 100dvh;
+    width: 390px; height: 844px;
     position: relative; overflow: hidden;
     background:
-      radial-gradient(120% 60% at 50% 0%, #14655f 0%, #0b1f22 55%),
-      linear-gradient(180deg, #0e2a2e 0%, #08161a 100%);
-    padding: 0 28px 34px;
+      linear-gradient(180deg, rgba(6,11,14,.80) 0%, rgba(6,11,14,.45) 28%, rgba(6,11,14,.52) 60%, rgba(6,11,14,.78) 100%),
+      url("/static/lockscreen-bg.webp") center 30% / cover no-repeat,
+      #08161a;
+    padding: 0 28px 30px;
     display: flex; flex-direction: column;
   }
   /* Top ~150px deliberately empty: room for the phone clock + status icons */
   .clock-space { height: 148px; flex: none; }
   .eyebrow {
     font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
-    color: #7fd4c9; text-align: center; margin-bottom: 10px;
+    color: #ffd9a0; text-align: center; margin-bottom: 10px;
   }
   .deadline-name {
     font-size: 26px; line-height: 1.2; font-weight: 700;
-    text-align: center;
+    text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55);
   }
   .deadline-sub {
-    font-size: 14px; color: #b9d6d2; text-align: center; margin-top: 6px;
+    font-size: 14px; color: #d8e6e2; text-align: center; margin-top: 6px;
+    text-shadow: 0 1px 8px rgba(0,0,0,.55);
   }
-  .count { display: flex; justify-content: center; gap: 10px; margin: 26px 0 6px; }
+  /* Countdown, shrunk to make room for six milestones */
+  .count { display: flex; justify-content: center; gap: 8px; margin: 18px 0 4px; }
   .unit {
-    width: 74px; padding: 12px 0 10px; text-align: center;
-    background: rgba(255,255,255,.08);
-    border: 1px solid rgba(255,255,255,.14); border-radius: 16px;
+    width: 60px; padding: 9px 0 8px; text-align: center;
+    background: rgba(10,18,20,.55);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
   }
-  .unit b { display: block; font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .unit span { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #9fc9c3; }
-  .due { text-align: center; font-size: 13px; color: #b9d6d2; margin-bottom: 22px; }
-  .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; }
+  .unit b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .unit span { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #cfe3de; }
+  .due { text-align: center; font-size: 13px; color: #d8e6e2; margin-bottom: 16px; text-shadow: 0 1px 8px rgba(0,0,0,.55); }
+  .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
   .bar-fill { height: 100%; width: 0%; border-radius: 99px; background: #2fb3a3; transition: width .5s; }
-  .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #9fc9c3; margin: 8px 2px 26px; }
-  .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #7fd4c9; margin-bottom: 12px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #cfe3de; margin: 8px 2px 16px; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+  /* Frosted-glass milestone panel */
+  .miles-panel {
+    background: rgba(9,15,19,.50);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 18px;
+    padding: 14px 16px 6px;
+  }
+  .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #ffd9a0; margin-bottom: 4px; }
   .mile {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 4px; border-top: 1px solid rgba(255,255,255,.10);
-    font-size: 15px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-top: 1px solid rgba(255,255,255,.10);
+    font-size: 13.5px;
   }
-  .mile:last-child { border-bottom: 1px solid rgba(255,255,255,.10); }
-  .dot {
-    width: 26px; height: 26px; flex: none; border-radius: 50%;
-    border: 2px solid #2fb3a3; display: flex; align-items: center; justify-content: center;
-    font-size: 14px; color: #2fb3a3;
+  .mile:first-of-type { border-top: none; }
+  .mile .dot {
+    width: 22px; height: 22px; flex: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
   }
-  .mile.done .dot { background: #2fb3a3; color: #08161a; }
-  .mile.done .mile-text { color: #8fb3ae; text-decoration: line-through; }
-  .mile-date { margin-left: auto; font-size: 12px; color: #9fc9c3; white-space: nowrap; }
-  .mile.next .mile-text { font-weight: 700; }
-  .mile.next .dot { box-shadow: 0 0 0 4px rgba(47,179,163,.25); }
-  .foot { margin-top: auto; padding-top: 26px; text-align: center; font-size: 12px; color: #7fa8a2; }
+  .mile.done .dot { background: #2fb3a3; color: #062a26; }
+  .mile.open .dot { border: 2px solid #ffd9a0; color: transparent; background: rgba(255,217,160,.08); }
+  .mile .label { flex: 1; }
+  .mile.done .label { text-decoration: line-through; color: #b9d6d2; }
+  .mile .when { color: #cfe3de; font-size: 12.5px; white-space: nowrap; }
+  .mile.next .label { font-weight: 700; }
+  .mile.next .dot { box-shadow: 0 0 0 4px rgba(255,217,160,.25); }
+  .foot { margin-top: auto; padding-top: 18px; text-align: center; font-size: 12px; color: #b9d6d2; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
 </style>
 </head>
 <body>
+<div class="scaler" id="scaler">
 <div class="screen">
   <div class="clock-space"></div>
 
-  <div class="eyebrow">Your deadline</div>
+  <div class="eyebrow">Dream Job Countdown</div>
   <div class="deadline-name">{{ company }} — {{ title }}</div>
   <div class="deadline-sub">{{ location }} &middot; Fit {{ fit_score }}/100</div>
 
@@ -96,18 +122,19 @@
   <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
   <div class="bar-label"><span>{{ start_display }}</span><span id="barPct">0% of the runway used</span><span>{{ deadline_short }}</span></div>
 
-  <div class="miles-title">Milestones</div>
-  <div id="miles">
+  <div class="miles-panel">
+    <div class="miles-title">Milestones</div>
     {% for ms in milestones %}
-    <div class="mile{% if ms.done %} done{% elif loop.index0 == next_index %} next{% endif %}">
-      <span class="dot">{% if ms.done %}&#10003;{% endif %}</span>
-      <span class="mile-text">{{ ms.text }}</span>
-      <span class="mile-date">{{ ms.date }}</span>
+    <div class="mile{% if ms.done %} done{% elif loop.index0 == next_index %} next{% else %} open{% endif %}">
+      <span class="dot">{% if ms.done %}&#10003;{% else %}&#9711;{% endif %}</span>
+      <span class="label">{{ ms.text }}</span>
+      <span class="when">{{ ms.date }}</span>
     </div>
     {% endfor %}
   </div>
 
   <div class="foot">Built for the countdown — one deadline, no noise.</div>
+</div>
 </div>
 
 <script>
@@ -135,8 +162,17 @@
     document.getElementById("barPct").textContent = pct + "% of the runway used";
   }
 
+  // Responsive scaling: the design is a fixed 390x844 card; scale it to
+  // fit any viewport (phone, tablet, desktop). On a phone the scale is 1.
+  function fit() {
+    var s = Math.min(window.innerWidth / 390, window.innerHeight / 844);
+    document.getElementById("scaler").style.transform = "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit);
+
   tick();
   setInterval(tick, 1000);
+  fit();
 </script>
 </body>
 </html>
