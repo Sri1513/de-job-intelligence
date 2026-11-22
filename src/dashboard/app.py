@@ -6,13 +6,13 @@ import hmac
 import json
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -1171,6 +1171,116 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
     )
 
 
+# ---------------------------------------------------------------------------
+# Dynamic countdown lock screen (/lockscreen).
+# Minimal, removable after the Handshake contest: no schema change, no MCP
+# tool, no image rendering. The deadline arrives as a query param; the job
+# row supplies company/title/location/fit only. Milestone dates are the
+# deadline minus 13/12/10/6 days (reproduces the Pax8 Nov 17/18/20/24 plan
+# from a Nov 30 deadline); a milestone counts as done once its date has
+# passed. Done-state is date-derived on purpose: the Pax8 row still reads
+# apply_status IDLE (it was submitted outside the apply engine), so the
+# apply_status column cannot tell the truth here. Flip
+# settings.LOCKSCREEN_ENABLED off to remove the route (404 as if absent).
+# ---------------------------------------------------------------------------
+LOCKSCREEN_MILESTONE_STEPS = (
+    (13, "Build the tailored package"),
+    (12, "Final look — resume + cover letter"),
+    (10, "Submit on {company}"),
+    (6, "Follow up if no receipt"),
+)
+
+
+def _parse_lockscreen_deadline(raw: str | None) -> datetime | None:
+    """Parse the deadline query param. Requires an explicit UTC offset so
+    the countdown is unambiguous; naive values are rejected."""
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
+
+
+async def lockscreen_view(request: Request) -> Response:
+    """Renders a live countdown lock screen for one saved job.
+
+    GET /lockscreen?job_id=<id>&deadline=<ISO with offset>. Public read,
+    showcase fields only (company, title, location, fit score). Unknown job
+    -> 404; missing or naive deadline -> 400; flag off -> 404.
+    """
+    if not settings.LOCKSCREEN_ENABLED:
+        return JSONResponse(
+            {"status": "error", "message": "Not found"}, status_code=404
+        )
+    job_id = request.query_params.get("job_id", "")
+    deadline = _parse_lockscreen_deadline(request.query_params.get("deadline"))
+    if not job_id or deadline is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "job_id and an ISO deadline with timezone offset "
+                "are required, e.g. ?job_id=li-1&deadline=2026-11-30T23:59:00-05:00",
+            },
+            status_code=400,
+        )
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT job_id, title, company, location, fit_score "
+                "FROM saved_jobs WHERE job_id = %s;",
+                (job_id,),
+            )
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.error(f"Error loading lockscreen job: {exc}", exc_info=True)
+        return JSONResponse(
+            {"status": "error", "message": str(exc)}, status_code=500
+        )
+    if row is None:
+        return JSONResponse(
+            {"status": "error", "message": "Job not found"}, status_code=404
+        )
+    job = dict(row)
+    today = date.today()
+    milestones = []
+    for offset_days, text_template in LOCKSCREEN_MILESTONE_STEPS:
+        milestone_date = deadline.date() - timedelta(days=offset_days)
+        milestones.append(
+            {
+                "text": text_template.format(company=job["company"]),
+                "date": f"{milestone_date.strftime('%b')} {milestone_date.day}",
+                "done": milestone_date < today,
+            }
+        )
+    next_index = next(
+        (i for i, item in enumerate(milestones) if not item["done"]),
+        len(milestones),
+    )
+    start = deadline - timedelta(days=14)
+    return templates.TemplateResponse(
+        request,
+        "lockscreen.html",
+        {
+            "company": job["company"],
+            "title": job["title"],
+            "location": job["location"] or "",
+            "fit_score": job["fit_score"],
+            "deadline_iso": deadline.isoformat(),
+            "start_iso": start.isoformat(),
+            "deadline_display": f"{deadline.strftime('%b')} {deadline.day}, "
+            f"{deadline.year}",
+            "start_display": f"{start.strftime('%b')} {start.day}",
+            "deadline_short": f"{deadline.strftime('%b')} {deadline.day}",
+            "milestones": milestones,
+            "next_index": next_index,
+        },
+    )
+
+
 async def api_skills_demographics(request: Request) -> JSONResponse:
     """Aggregates skill frequencies and normalizes aliases."""
     category = request.query_params.get("category", "data_engineering")
@@ -1346,6 +1456,7 @@ routes = [
     Route("/api/whatsapp-alerts", api_whatsapp_alerts, methods=["GET"]),
     Route("/api/whatsapp-alerts/update-status", api_update_outreach_status, methods=["POST"]),
     Route("/skills-analytics", skills_analytics_view, methods=["GET"]),
+    Route("/lockscreen", lockscreen_view, methods=["GET"]),
     Route("/api/skills-demographics", api_skills_demographics, methods=["GET"]),
     Mount("/screenshots", app=StaticFiles(directory=str(SCREENSHOTS_DIR)), name="screenshots"),
     Mount(

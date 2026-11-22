@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deadline Lock Screen — {{ company }}, {{ deadline_display }}</title>
+<!--
+  Dynamic countdown lock screen (GET /lockscreen?job_id=...&deadline=...).
+  Parameterized from the static Handshake entry page: same 390x844 layout,
+  same dark-teal styling, same top ~150px left empty for the phone clock.
+  The handler supplies company, title, location, fit_score, deadline_iso,
+  start_iso, deadline_display, start_display, deadline_short, milestones,
+  next_index. Milestones are server-computed (dates = deadline minus
+  13/12/10/6 days; done once the date has passed).
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0b1f22;
+    display: flex; justify-content: center;
+    color: #f2f7f7;
+  }
+  /* Phone-sized lock screen: 390 x 844 */
+  .screen {
+    width: 390px; max-width: 100vw; min-height: 844px; height: 100dvh;
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(120% 60% at 50% 0%, #14655f 0%, #0b1f22 55%),
+      linear-gradient(180deg, #0e2a2e 0%, #08161a 100%);
+    padding: 0 28px 34px;
+    display: flex; flex-direction: column;
+  }
+  /* Top ~150px deliberately empty: room for the phone clock + status icons */
+  .clock-space { height: 148px; flex: none; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+    color: #7fd4c9; text-align: center; margin-bottom: 10px;
+  }
+  .deadline-name {
+    font-size: 26px; line-height: 1.2; font-weight: 700;
+    text-align: center;
+  }
+  .deadline-sub {
+    font-size: 14px; color: #b9d6d2; text-align: center; margin-top: 6px;
+  }
+  .count { display: flex; justify-content: center; gap: 10px; margin: 26px 0 6px; }
+  .unit {
+    width: 74px; padding: 12px 0 10px; text-align: center;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 16px;
+  }
+  .unit b { display: block; font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .unit span { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #9fc9c3; }
+  .due { text-align: center; font-size: 13px; color: #b9d6d2; margin-bottom: 22px; }
+  .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; }
+  .bar-fill { height: 100%; width: 0%; border-radius: 99px; background: #2fb3a3; transition: width .5s; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #9fc9c3; margin: 8px 2px 26px; }
+  .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #7fd4c9; margin-bottom: 12px; }
+  .mile {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 4px; border-top: 1px solid rgba(255,255,255,.10);
+    font-size: 15px;
+  }
+  .mile:last-child { border-bottom: 1px solid rgba(255,255,255,.10); }
+  .dot {
+    width: 26px; height: 26px; flex: none; border-radius: 50%;
+    border: 2px solid #2fb3a3; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #2fb3a3;
+  }
+  .mile.done .dot { background: #2fb3a3; color: #08161a; }
+  .mile.done .mile-text { color: #8fb3ae; text-decoration: line-through; }
+  .mile-date { margin-left: auto; font-size: 12px; color: #9fc9c3; white-space: nowrap; }
+  .mile.next .mile-text { font-weight: 700; }
+  .mile.next .dot { box-shadow: 0 0 0 4px rgba(47,179,163,.25); }
+  .foot { margin-top: auto; padding-top: 26px; text-align: center; font-size: 12px; color: #7fa8a2; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="clock-space"></div>
+
+  <div class="eyebrow">Your deadline</div>
+  <div class="deadline-name">{{ company }} — {{ title }}</div>
+  <div class="deadline-sub">{{ location }} &middot; Fit {{ fit_score }}/100</div>
+
+  <div class="count">
+    <div class="unit"><b id="d">--</b><span>Days</span></div>
+    <div class="unit"><b id="h">--</b><span>Hours</span></div>
+    <div class="unit"><b id="m">--</b><span>Mins</span></div>
+    <div class="unit"><b id="s">--</b><span>Secs</span></div>
+  </div>
+  <div class="due">Applications close {{ deadline_display }}</div>
+
+  <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+  <div class="bar-label"><span>{{ start_display }}</span><span id="barPct">0% of the runway used</span><span>{{ deadline_short }}</span></div>
+
+  <div class="miles-title">Milestones</div>
+  <div id="miles">
+    {% for ms in milestones %}
+    <div class="mile{% if ms.done %} done{% elif loop.index0 == next_index %} next{% endif %}">
+      <span class="dot">{% if ms.done %}&#10003;{% endif %}</span>
+      <span class="mile-text">{{ ms.text }}</span>
+      <span class="mile-date">{{ ms.date }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="foot">Built for the countdown — one deadline, no noise.</div>
+</div>
+
+<script>
+  // Server-injected: deadline + runway start (ISO with offset, validated by the handler).
+  var DEADLINE = new Date("{{ deadline_iso }}");
+  var START     = new Date("{{ start_iso }}");
+
+  var pad = function (n) { return String(n).padStart(2, "0"); };
+
+  function tick() {
+    var now = new Date();
+    var diff = DEADLINE - now;
+    if (diff < 0) diff = 0;
+    var days = Math.floor(diff / 86400000);
+    var hrs  = Math.floor(diff / 3600000) % 24;
+    var mins = Math.floor(diff / 60000) % 60;
+    var secs = Math.floor(diff / 1000) % 60;
+    document.getElementById("d").textContent = days;
+    document.getElementById("h").textContent = pad(hrs);
+    document.getElementById("m").textContent = pad(mins);
+    document.getElementById("s").textContent = pad(secs);
+    var total = DEADLINE - START, used = now - START;
+    var pct = Math.max(0, Math.min(100, Math.round((used / total) * 100)));
+    document.getElementById("bar").style.width = pct + "%";
+    document.getElementById("barPct").textContent = pct + "% of the runway used";
+  }
+
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
