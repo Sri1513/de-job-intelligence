@@ -1176,8 +1176,10 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 # Minimal, removable after the Handshake contest: no schema change, no MCP
 # tool, no image rendering. The deadline arrives as a query param; the job
 # row supplies company/title/location/fit only. Milestone dates are the
-# deadline minus 16/14/13/13/6/3 days (for Pax8, Nov 30: saved Nov 14, gate
-# Nov 16, package + submit Nov 17, follow-up Nov 24, reply expected Nov 27);
+# deadline minus 16/14/13/13/13/13/13/6/3 days (for Pax8, Nov 30: saved
+# Nov 14, gate Nov 16, package + its three sub-steps + submit Nov 17,
+# follow-up Nov 24, reply expected Nov 27); an optional ?bg=<name> picks
+# the background (glow default, mist, fog — allowlist, unknown falls back).
 # a milestone counts as done once its date has passed. Done-state is
 # date-derived on purpose: the Pax8 row still reads apply_status IDLE (it
 # was submitted outside the apply engine), so the apply_status column cannot
@@ -1187,13 +1189,25 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 # serves every screen.
 # ---------------------------------------------------------------------------
 LOCKSCREEN_MILESTONE_STEPS = (
-    (16, "Job saved"),
-    (14, "Gate passed"),
-    (13, "Tailored package built"),
-    (13, "Application submitted"),
-    (6, "Follow up if no receipt"),
-    (3, "Reply expected"),
+    # (days before deadline, label, sub-item of the tailored package)
+    (16, "Job saved", False),
+    (14, "Gate passed", False),
+    (13, "Tailored package built", False),
+    (13, "Resume tailored", True),
+    (13, "Cover letter drafted", True),
+    (13, "Outreach draft ready", True),
+    (13, "Application submitted", False),
+    (6, "Follow up if no receipt", False),
+    (3, "Reply expected", False),
 )
+
+# Background choices for /lockscreen (?bg=<name>). Allowlist only — an
+# unknown name falls back to the default. All Pexels, free license.
+LOCKSCREEN_BACKGROUNDS = {
+    "glow": "lockscreen-bg.webp",
+    "mist": "lockscreen-bg-mist.jpg",
+    "fog": "lockscreen-bg-fog.webp",
+}
 
 
 def _parse_lockscreen_deadline(raw: str | None) -> datetime | None:
@@ -1256,15 +1270,19 @@ async def lockscreen_view(request: Request) -> Response:
     job = dict(row)
     today = date.today()
     milestones = []
-    for offset_days, text in LOCKSCREEN_MILESTONE_STEPS:
+    for offset_days, text, sub in LOCKSCREEN_MILESTONE_STEPS:
         milestone_date = deadline.date() - timedelta(days=offset_days)
         milestones.append(
             {
                 "text": text,
                 "date": f"{milestone_date.strftime('%b')} {milestone_date.day}",
                 "done": milestone_date < today,
+                "sub": sub,
             }
         )
+    bg_file = LOCKSCREEN_BACKGROUNDS.get(
+        request.query_params.get("bg", "glow"), LOCKSCREEN_BACKGROUNDS["glow"]
+    )
     next_index = next(
         (i for i, item in enumerate(milestones) if not item["done"]),
         len(milestones),
@@ -1286,6 +1304,7 @@ async def lockscreen_view(request: Request) -> Response:
             "deadline_short": f"{deadline.strftime('%b')} {deadline.day}",
             "milestones": milestones,
             "next_index": next_index,
+            "bg_file": bg_file,
         },
     )
 

@@ -30,7 +30,7 @@
        sides instead of near-black bars (the old .88 overlay). */
     background:
       linear-gradient(180deg, rgba(6,11,14,.45) 0%, rgba(6,11,14,.45) 100%),
-      url("/static/lockscreen-bg.webp") center / cover no-repeat,
+      url("/static/{{ bg_file }}") center / cover no-repeat,
       #08161a;
     min-height: 100dvh;
     display: flex; align-items: center; justify-content: center;
@@ -44,9 +44,9 @@
     position: relative; overflow: hidden;
     background:
       linear-gradient(180deg, rgba(6,11,14,.80) 0%, rgba(6,11,14,.45) 28%, rgba(6,11,14,.52) 60%, rgba(6,11,14,.78) 100%),
-      url("/static/lockscreen-bg.webp") center 30% / cover no-repeat,
+      url("/static/{{ bg_file }}") center 30% / cover no-repeat,
       #08161a;
-    padding: 0 28px 30px;
+    padding: 0 28px 22px;
     display: flex; flex-direction: column;
   }
   /* Top ~230px deliberately empty: room for the phone clock + status icons.
@@ -75,13 +75,13 @@
      pebble-round corners. NOTE: WeasyPrint (cover renders) ignores
      backdrop-filter, so the frost shows on the phone, not in renders. */
   .tile {
-    background: linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 45%, rgba(10,18,20,.30) 100%);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+    background: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 45%, rgba(10,18,20,.44) 100%);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
     border: 1px solid rgba(255,255,255,.30);
     border-radius: 22px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 10px 28px rgba(0,0,0,.35);
     padding: 14px 16px 12px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   /* Countdown, shrunk to make room for six milestones.
      Panel lift 2026-11-22: count/due/bar-label margins tightened so the
@@ -102,17 +102,23 @@
   .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
   .bar-fill { height: 100%; width: 0%; border-radius: 99px; background: #2fb3a3; transition: width .5s; }
   .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #cfe3de; margin: 4px 2px 0; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
-  /* Milestones tile (shares the .tile glass; tighter bottom padding). */
-  .miles-panel { padding-bottom: 4px; }
+  /* Milestones tile (shares the .tile glass; tighter top/bottom padding
+     so nine rows still fit the 844px card with the footer visible). */
+  .miles-panel { padding-top: 10px; padding-bottom: 4px; }
   .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #ffd9a0; margin-bottom: 4px; }
   .mile {
     display: flex; align-items: center; gap: 10px;
-    padding: 6px 0; border-top: 1px solid rgba(255,255,255,.10);
+    padding: 3px 0; border-top: 1px solid rgba(255,255,255,.10);
     font-size: 13.5px;
   }
   .mile:first-of-type { border-top: none; }
+  /* Sub-milestones branch under "Tailored package built": indented,
+     smaller dot and text, no divider of their own. */
+  .mile.sub { padding: 3px 0 3px 32px; font-size: 12.5px; border-top: none; }
+  .mile.sub .dot { width: 16px; height: 16px; font-size: 10px; }
+  .mile.sub .when { font-size: 12px; }
   .mile .dot {
-    width: 22px; height: 22px; flex: none; border-radius: 50%;
+    width: 20px; height: 20px; flex: none; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700;
   }
@@ -123,7 +129,7 @@
   .mile .when { color: #cfe3de; font-size: 12.5px; white-space: nowrap; }
   .mile.next .label { font-weight: 700; }
   .mile.next .dot { box-shadow: 0 0 0 4px rgba(255,217,160,.25); }
-  .foot { margin-top: auto; padding-top: 12px; text-align: center; font-size: 12px; color: #b9d6d2; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+  .foot { margin-top: auto; padding-top: 8px; text-align: center; font-size: 12px; color: #b9d6d2; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
 </style>
 </head>
 <body>
@@ -153,7 +159,7 @@
   <div class="tile miles-panel">
     <div class="miles-title">Milestones</div>
     {% for ms in milestones %}
-    <div class="mile{% if ms.done %} done{% elif loop.index0 == next_index %} next{% else %} open{% endif %}">
+    <div class="mile{% if ms.done %} done{% elif loop.index0 == next_index %} next{% else %} open{% endif %}{% if ms.sub %} sub{% endif %}">
       <span class="dot">{% if ms.done %}&#10003;{% else %}&#9711;{% endif %}</span>
       <span class="label">{{ ms.text }}</span>
       <span class="when">{{ ms.date }}</span>

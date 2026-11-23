@@ -51,7 +51,9 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert "Pax8 — Senior Data Engineer II" in resp.text
     assert "2026-11-30T23:59:00-05:00" in resp.text
     assert "Nov 30, 2026" in resp.text
-    # Six milestones derive from the deadline (minus 16/14/13/13/6/3 days).
+    # Nine milestones derive from the deadline: six steps (minus
+    # 16/14/13/13/6/3 days) plus three sub-steps under the tailored
+    # package, all Nov 17 (minus 13 days).
     assert "Nov 14" in resp.text
     assert "Nov 16" in resp.text
     assert "Nov 17" in resp.text
@@ -63,11 +65,16 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
         "Job saved",
         "Gate passed",
         "Tailored package built",
+        "Resume tailored",
+        "Cover letter drafted",
+        "Outreach draft ready",
         "Application submitted",
         "Follow up if no receipt",
         "Reply expected",
     ):
         assert label in resp.text
+    # The three package sub-steps render indented under their parent.
+    assert "mile done sub" in resp.text
     # Dream-job design: mountain photo bg + responsive scaler.
     assert "/static/lockscreen-bg.webp" in resp.text
     assert 'id="scaler"' in resp.text
@@ -102,12 +109,29 @@ def test_lockscreen_body_bg_is_full_bleed_photo(monkeypatch):
     assert "rgba(6,11,14,.88)" not in resp.text
 
 
+def test_lockscreen_bg_option(monkeypatch):
+    # ?bg= picks the background (glow default, mist, fog); an unknown
+    # name falls back to the default instead of 400ing.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    base = "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    assert "lockscreen-bg.webp" in client.get(base).text
+    assert "lockscreen-bg-mist.jpg" in client.get(base + "&bg=mist").text
+    assert "lockscreen-bg-fog.webp" in client.get(base + "&bg=fog").text
+    assert "lockscreen-bg.webp" in client.get(base + "&bg=nope").text
+
+
 def test_lockscreen_bg_image_serves(monkeypatch):
     _mock_db(monkeypatch, _job_row())
     client = TestClient(app)
-    resp = client.get("/static/lockscreen-bg.webp")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("image/")
+    for bg_file in (
+        "/static/lockscreen-bg.webp",
+        "/static/lockscreen-bg-mist.jpg",
+        "/static/lockscreen-bg-fog.webp",
+    ):
+        resp = client.get(bg_file)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/")
 
 
 def test_lockscreen_unknown_job_404(monkeypatch):
