@@ -150,7 +150,7 @@
   <div class="tile title-tile">
     <div class="eyebrow">Dream Job Countdown</div>
     <div class="deadline-name">{{ company }} — {{ title }}</div>
-    <div class="deadline-sub">{{ location }} &middot; Fit {{ fit_score }}/100</div>
+    <div class="deadline-sub">{{ location }}{% if show_fit %} &middot; Fit {{ fit_score }}/100{% endif %}</div>
   </div>
 
   <div class="tile count-tile">
