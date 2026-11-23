@@ -46,7 +46,7 @@ class FakeCursor:
         self._last_sql = sql
 
     def fetchone(self):
-        if "SELECT description, metadata FROM saved_jobs" in self._last_sql:
+        if "SELECT description, metadata, posted_at FROM saved_jobs" in self._last_sql:
             return self.existing_row
         if "SELECT metadata FROM saved_jobs" in self._last_sql:
             return self.metadata_row

@@ -23,14 +23,18 @@ def normalize_dice_job(raw_job: dict) -> dict:
     else:
         sponsorship = "Not Mentioned"
 
+    # No posted date on the payload -> None, never "Recently": the
+    # staging normalizer turns a missing date into a NULL posted_at,
+    # and a placeholder string would look like a real date downstream.
     raw_date = (
         raw_job.get("postedDate")
         or raw_job.get("datePosted")
         or raw_job.get("date_posted")
-        or "Recently"
     )
     posted_date = (
-        raw_date.split("T")[0] if isinstance(raw_date, str) and "T" in raw_date else raw_date
+        raw_date.split("T")[0]
+        if isinstance(raw_date, str) and "T" in raw_date
+        else raw_date
     )
 
     job_description = (
