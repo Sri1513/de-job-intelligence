@@ -1,10 +1,16 @@
 # tests/test_dashboard_lockscreen.py
-"""Tests for the dynamic countdown lock screen (/lockscreen).
+"""Tests for the dynamic countdown lock screen (/lockscreen) and the
+current dream-job endpoint (/api/lockscreen/current).
 
-Public GET: one saved job + an ISO deadline with a timezone offset renders
-the countdown page. Unknown job -> 404; missing or naive deadline -> 400;
-flag off -> 404. No schema change, no MCP tool: the deadline is a param.
+Public GET: one saved job + an optional ISO deadline with a timezone
+offset renders the countdown page. An explicit deadline always wins;
+when omitted it derives as posted_at + 7 days. Unknown job -> 404;
+naive deadline, or omitted deadline with no posted date -> 400; flag
+off -> 404. /api/lockscreen/current returns the next dream job in line
+under the default ordering rule (open, posted date known, deadline not
+passed; highest fit first, earliest derived deadline breaks ties).
 """
+from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +30,20 @@ def _mock_db(monkeypatch, row):
     monkeypatch.setattr("src.dashboard.app.get_db_connection", lambda: cm)
 
 
+def _mock_db_recording(monkeypatch, row):
+    """Like _mock_db, but returns the cursor mock so the test can assert
+    on the SQL the handler sent (the ordering rule lives in the query,
+    and the mock DB never executes it)."""
+    cur = MagicMock()
+    cur.fetchone.return_value = row
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+    cm = MagicMock()
+    cm.__enter__.return_value = conn
+    monkeypatch.setattr("src.dashboard.app.get_db_connection", lambda: cm)
+    return cur
+
+
 def _job_row(**overrides):
     row = {
         "job_id": "li-4474501423",
@@ -31,6 +51,7 @@ def _job_row(**overrides):
         "company": "Pax8",
         "location": "USA",
         "fit_score": 63,
+        "posted_at": date(2026, 11, 21),
     }
     row.update(overrides)
     return row
@@ -216,11 +237,111 @@ def test_lockscreen_unknown_job_404(monkeypatch):
     assert resp.status_code == 404
 
 
-def test_lockscreen_missing_deadline_400(monkeypatch):
+def test_lockscreen_missing_job_id_400(monkeypatch):
     _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/lockscreen")
+    assert resp.status_code == 400
+
+
+def test_lockscreen_missing_deadline_no_posted_date_400(monkeypatch):
+    # Omitted deadline + NULL posted_at -> 400. The saved date is never
+    # a substitute (owner decision 2026-11-22).
+    _mock_db(monkeypatch, _job_row(posted_at=None))
     client = TestClient(app)
     resp = client.get("/lockscreen?job_id=li-4474501423")
     assert resp.status_code == 400
+
+
+def test_lockscreen_derived_deadline(monkeypatch):
+    # No deadline param: posted 2026-11-21 -> deadline Nov 28, 23:59
+    # local. Milestones derive from the effective deadline exactly as
+    # from an explicit one: saved Nov 12, fit Nov 14, package Nov 15,
+    # follow-up Nov 22, reply Nov 25.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/lockscreen?job_id=li-4474501423")
+    assert resp.status_code == 200
+    assert "2026-11-28T23:59:00-05:00" in resp.text
+    assert "Nov 28, 2026" in resp.text
+    for day in ("Nov 12", "Nov 14", "Nov 15", "Nov 22", "Nov 25"):
+        assert day in resp.text
+
+
+def test_lockscreen_explicit_deadline_wins_over_derived(monkeypatch):
+    # The row has a posted date, but an explicit deadline beats it —
+    # the contest link (Dec 7, not posted + 7) must keep working.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    )
+    assert resp.status_code == 200
+    assert "Nov 30, 2026" in resp.text
+    assert "Nov 28, 2026" not in resp.text
+
+
+def test_lockscreen_unknown_job_no_deadline_404(monkeypatch):
+    # Unknown job 404s before any derivation is attempted.
+    _mock_db(monkeypatch, None)
+    client = TestClient(app)
+    resp = client.get("/lockscreen?job_id=li-nope")
+    assert resp.status_code == 404
+
+
+def test_api_lockscreen_current_returns_job(monkeypatch):
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["job_id"] == "li-4474501423"
+    assert body["company"] == "Pax8"
+    assert body["title"] == "Senior Data Engineer II"
+    assert body["location"] == "USA"
+    assert body["fit_score"] == 63
+    # Derived deadline: posted Nov 21 + 7 days, end of day local.
+    assert body["deadline"] == "2026-11-28T23:59:00-05:00"
+    assert body["deadline_display"] == "Nov 28, 2026"
+    # The URL carries the job only — the deadline derives server-side.
+    assert body["lockscreen_url"] == (
+        "http://testserver/lockscreen?job_id=li-4474501423"
+    )
+    assert "deadline=" not in body["lockscreen_url"]
+
+
+def test_api_lockscreen_current_query_orders_by_fit_then_deadline(monkeypatch):
+    # The ordering rule lives in the SQL (the mock never executes it),
+    # so assert on what the handler sent: open jobs only, posted date
+    # known, deadline not passed; highest fit first (safe-cast, since
+    # fit_score is TEXT), earliest derived deadline breaks ties.
+    cur = _mock_db_recording(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 200
+    sql = cur.execute.call_args[0][0]
+    assert "apply_status = 'IDLE'" in sql
+    assert "posted_at IS NOT NULL" in sql
+    assert "posted_at + 7 >= CURRENT_DATE" in sql
+    assert "fit_score::numeric" in sql
+    assert "DESC NULLS LAST" in sql
+    assert "posted_at ASC" in sql
+    assert "LIMIT 1" in sql
+
+
+def test_api_lockscreen_current_no_job_404(monkeypatch):
+    _mock_db(monkeypatch, None)
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 404
+
+
+def test_api_lockscreen_current_disabled_404(monkeypatch):
+    monkeypatch.setattr(settings, "LOCKSCREEN_ENABLED", False)
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 404
 
 
 def test_lockscreen_naive_deadline_400(monkeypatch):
