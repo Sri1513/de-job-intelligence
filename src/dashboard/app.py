@@ -1176,10 +1176,10 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 # Minimal, removable after the Handshake contest: no schema change, no MCP
 # tool, no image rendering. The deadline arrives as a query param; the job
 # row supplies company/title/location/fit only. Milestone dates are the
-# deadline minus 16/14/13/13/13/13/13/6/3 days (for Pax8, Nov 30: saved
-# Nov 14, gate Nov 16, package + its three sub-steps + submit Nov 17,
-# follow-up Nov 24, reply expected Nov 27); an optional ?bg=<name> picks
-# the background (glow default, mist, fog — allowlist, unknown falls back).
+# deadline minus 16/14/13/13/6/3 days (for Pax8, Nov 30: saved Nov 14,
+# fit check Nov 16, package + its one sub-line + submit Nov 17, follow-up
+# Nov 24, reply expected Nov 27); an optional ?bg=<name> picks the
+# background (glow default, mist, fog — allowlist, unknown falls back).
 # a milestone counts as done once its date has passed. Done-state is
 # date-derived on purpose: the Pax8 row still reads apply_status IDLE (it
 # was submitted outside the apply engine), so the apply_status column cannot
@@ -1190,12 +1190,14 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 # ---------------------------------------------------------------------------
 LOCKSCREEN_MILESTONE_STEPS = (
     # (days before deadline, label, sub-item of the tailored package)
+    # "Fit Check Passed" (was "Gate passed" — pipeline jargon judges
+    # don't know). The three package sub-steps collapsed 2026-11-23
+    # into one sub-line: five rows all reading the same date was dense
+    # for a lock-screen glance, and they are one day's work.
     (16, "Job saved", False),
-    (14, "Gate passed", False),
+    (14, "Fit Check Passed", False),
     (13, "Tailored package built", False),
-    (13, "Resume tailored", True),
-    (13, "Cover letter drafted", True),
-    (13, "Outreach draft ready", True),
+    (13, "Resume · Cover letter · Outreach", True),
     (13, "Application submitted", False),
     (6, "Follow up if no receipt", False),
     (3, "Reply expected", False),
@@ -1314,7 +1316,11 @@ async def lockscreen_view(request: Request) -> Response:
         (i for i, item in enumerate(milestones) if not item["done"]),
         len(milestones),
     )
-    start = deadline - timedelta(days=14)
+    # The runway bar spans from the first milestone (job saved) to the
+    # deadline, so it shows real progress instead of 0% on day one
+    # (the old deadline-minus-14 start left the bar empty even though
+    # the first milestone was already done).
+    start = deadline - timedelta(days=16)
     return templates.TemplateResponse(
         request,
         "lockscreen.html",

@@ -48,12 +48,19 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
         "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
     )
     assert resp.status_code == 200
-    assert "Pax8 — Senior Data Engineer II" in resp.text
+    # Company is the bold primary heading, role on the line below —
+    # never joined with an em dash (the old single line wrapped
+    # mid-title: "Amazon — Data / Engineer I").
+    assert "Pax8" in resp.text
+    assert "Senior Data Engineer II" in resp.text
+    assert "Pax8 — Senior Data Engineer II" not in resp.text
     assert "2026-11-30T23:59:00-05:00" in resp.text
     assert "Nov 30, 2026" in resp.text
-    # Nine milestones derive from the deadline: six steps (minus
-    # 16/14/13/13/6/3 days) plus three sub-steps under the tailored
-    # package, all Nov 17 (minus 13 days).
+    # Seven milestones derive from the deadline: six steps (minus
+    # 16/14/13/13/6/3 days) plus one sub-line under the tailored
+    # package, Nov 17 (minus 13 days). The three old sub-steps
+    # collapsed into that one line 2026-11-23, and "Gate passed"
+    # became "Fit Check Passed" (pipeline jargon judges don't know).
     assert "Nov 14" in resp.text
     assert "Nov 16" in resp.text
     assert "Nov 17" in resp.text
@@ -63,18 +70,23 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert "Nov 20" not in resp.text
     for label in (
         "Job saved",
-        "Gate passed",
+        "Fit Check Passed",
         "Tailored package built",
-        "Resume tailored",
-        "Cover letter drafted",
-        "Outreach draft ready",
+        "Resume · Cover letter · Outreach",
         "Application submitted",
         "Follow up if no receipt",
         "Reply expected",
     ):
         assert label in resp.text
-    # The three package sub-steps render indented under their parent.
+    assert "Gate passed" not in resp.text
+    assert "Resume tailored" not in resp.text
+    assert "Cover letter drafted" not in resp.text
+    assert "Outreach draft ready" not in resp.text
+    # The package sub-line renders indented under its parent.
     assert "mile done sub" in resp.text
+    # The runway bar spans from the first milestone (job saved, Nov 14)
+    # to the deadline, so it shows real progress instead of 0% on day one.
+    assert "Nov 14" in resp.text
     # Dream-job design: mountain photo bg + responsive scaler.
     assert "/static/lockscreen-bg.webp" in resp.text
     assert 'id="scaler"' in resp.text

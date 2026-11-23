@@ -50,7 +50,10 @@
       linear-gradient(180deg, rgba(6,11,14,.40) 0%, rgba(6,11,14,.22) 28%, rgba(6,11,14,.26) 60%, rgba(6,11,14,.39) 100%),
       {% if bg_url %}url("{{ bg_url|safe }}"){% else %}url("/static/{{ bg_file }}"){% endif %} center 30% / cover no-repeat,
       #08161a;
-    padding: 0 28px 22px;
+    /* Bottom padding 34px (was 22px): lifts the footer tagline clear
+       of the phone's swipe-up home bar once the cover's lock-screen
+       overlay is on. The room comes from the collapsed sub-line. */
+    padding: 0 28px 34px;
     display: flex; flex-direction: column;
   }
   /* Top ~230px deliberately empty: room for the phone clock + status icons.
@@ -70,9 +73,17 @@
     font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
     color: #ffd9a0; text-align: center; margin-bottom: 6px;
   }
-  .deadline-name {
+  /* Company as the bold primary heading, role underneath: the old
+     single-line "Company — Role" wrapped mid-title ("Amazon — Data /
+     Engineer I"). Two lines, clean hierarchy, same total height. */
+  .deadline-company {
     font-size: 26px; line-height: 1.2; font-weight: 700;
     text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55);
+  }
+  .deadline-role {
+    font-size: 18px; line-height: 1.25; font-weight: 600;
+    text-align: center; color: #e6f0ee; margin-top: 2px;
+    text-shadow: 0 1px 8px rgba(0,0,0,.55);
   }
   .deadline-sub {
     font-size: 14px; color: #d8e6e2; text-align: center; margin-top: 4px;
@@ -92,7 +103,18 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 10px 28px rgba(0,0,0,.35);
     padding: 14px 16px 12px;
     margin-bottom: 8px;
+    /* Never shrink below content height: the fixed 844px flex column
+       was squeezing the title tile and the location sub-line spilled
+       out below its border (caught 2026-11-23 on the Amazon cover —
+       "Bellevue, WA, USA" sat between the tiles). The column has room
+       for the tiles at full height; if it ever runs out, the
+       milestones panel is the one to trim, not the tiles. */
+    flex-shrink: 0;
   }
+  /* Title tile: more air below the location line (22px vs the 12px
+     base) so it breathes above the bottom border; the top padding
+     comes down the same amount, so the tile is no taller. */
+  .title-tile { padding-top: 10px; padding-bottom: 22px; }
   /* Countdown, shrunk to make room for six milestones.
      Panel lift 2026-11-22: count/due/bar-label margins tightened so the
      milestones panel sits ~16px higher; second lift the same evening
@@ -114,17 +136,19 @@
   .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #cfe3de; margin: 4px 2px 0; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
   /* Milestones tile (shares the .tile glass; tighter top/bottom padding
      so nine rows still fit the 844px card with the footer visible). */
-  .miles-panel { padding-top: 10px; padding-bottom: 4px; }
+  .miles-panel { padding-top: 8px; padding-bottom: 2px; }
   .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #ffd9a0; margin-bottom: 4px; }
   .mile {
     display: flex; align-items: center; gap: 10px;
-    padding: 3px 0; border-top: 1px solid rgba(255,255,255,.10);
+    /* 2px (was 3px): with the tiles no longer shrinking, the 9-row
+       panel needs the room back so the footer stays on the card. */
+    padding: 2px 0; border-top: 1px solid rgba(255,255,255,.10);
     font-size: 13.5px; text-shadow: 0 1px 6px rgba(0,0,0,.4);
   }
   .mile:first-of-type { border-top: none; }
   /* Sub-milestones branch under "Tailored package built": indented,
      smaller dot and text, no divider of their own. */
-  .mile.sub { padding: 3px 0 3px 32px; font-size: 12.5px; border-top: none; }
+  .mile.sub { padding: 2px 0 2px 32px; font-size: 12.5px; border-top: none; }
   .mile.sub .dot { width: 16px; height: 16px; font-size: 10px; }
   .mile.sub .when { font-size: 12px; }
   .mile .dot {
@@ -149,7 +173,8 @@
 
   <div class="tile title-tile">
     <div class="eyebrow">Dream Job Countdown</div>
-    <div class="deadline-name">{{ company }} — {{ title }}</div>
+    <div class="deadline-company">{{ company }}</div>
+    <div class="deadline-role">{{ title }}</div>
     <div class="deadline-sub">{{ location }}{% if show_fit %} &middot; Fit {{ fit_score }}/100{% endif %}</div>
   </div>
 
