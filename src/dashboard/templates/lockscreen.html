@@ -11,7 +11,7 @@
   frosted-glass panel, smaller countdown units, six milestones.
   Responsive: the design is a fixed 390x844 card, scaled by JS to fit any
   viewport (phone, tablet, desktop) — one URL serves every screen, and on a
-  phone the scale is 1 so the layout is unchanged. The top ~250px stays
+  phone the scale is 1 so the layout is unchanged. The top ~230px stays
   empty for the phone clock. The handler supplies company, title, location,
   fit_score, deadline_iso, start_iso, deadline_display, start_display,
   deadline_short, milestones, next_index. Milestones are server-computed
@@ -48,12 +48,14 @@
     padding: 0 28px 30px;
     display: flex; flex-direction: column;
   }
-  /* Top ~250px deliberately empty: room for the phone clock + status icons.
+  /* Top ~230px deliberately empty: room for the phone clock + status icons.
      148px was not enough — on a real phone (2026-11-22) the big lock-screen
      clock + date run to ~200px and covered the eyebrow and title. 250px
-     clears it at any phone scale (0.92–1.06x). The trims below buy back
-     the room so nothing falls off the bottom. */
-  .clock-space { height: 250px; flex: none; }
+     cleared it; the third lift (same evening) cut it to 230px because the
+     owner saw empty space above the eyebrow on his phone — 230px still
+     clears a ~200px clock (30px at scale 1, ~18px at 1.06x). The trims
+     below buy back the room so nothing falls off the bottom. */
+  .clock-space { height: 230px; flex: none; }
   .eyebrow {
     font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
     color: #ffd9a0; text-align: center; margin-bottom: 6px;
@@ -69,9 +71,10 @@
   /* Countdown, shrunk to make room for six milestones.
      Panel lift 2026-11-22: count/due/bar-label margins tightened so the
      milestones panel sits ~16px higher; second lift the same evening
-     (~16px more) via eyebrow/sub/count/unit/due/bar-label trims.
-     The 250px safe zone is untouched in both. */
-  .count { display: flex; justify-content: center; gap: 8px; margin: 6px 0 2px; }
+     (~16px more) via eyebrow/sub/count/unit/due/bar-label trims; third
+     lift cuts the safe zone 250px -> 230px plus 4px of middle trims.
+     The safe zone is untouched in the first two lifts only. */
+  .count { display: flex; justify-content: center; gap: 8px; margin: 4px 0 2px; }
   .unit {
     width: 60px; padding: 7px 0 6px; text-align: center;
     background: rgba(10,18,20,.55);
@@ -80,7 +83,7 @@
   }
   .unit b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .unit span { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #cfe3de; }
-  .due { text-align: center; font-size: 13px; color: #d8e6e2; margin-bottom: 6px; text-shadow: 0 1px 8px rgba(0,0,0,.55); }
+  .due { text-align: center; font-size: 13px; color: #d8e6e2; margin-bottom: 4px; text-shadow: 0 1px 8px rgba(0,0,0,.55); }
   .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
   .bar-fill { height: 100%; width: 0%; border-radius: 99px; background: #2fb3a3; transition: width .5s; }
   .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #cfe3de; margin: 4px 2px 6px; text-shadow: 0 1px 6px rgba(0,0,0,.5); }

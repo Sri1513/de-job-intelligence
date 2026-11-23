@@ -76,14 +76,16 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
 def test_lockscreen_top_safe_zone_clears_phone_clock(monkeypatch):
     # Real-phone check (2026-11-22): a 148px clock-space let the phone's
     # big lock-screen clock + date (~200px) cover the eyebrow and title.
-    # The safe zone must clear that at any phone scale.
+    # 250px cleared it; the owner then saw empty space above the eyebrow
+    # and asked for the panel higher, so the zone is 230px — still clears
+    # a ~200px clock (30px at scale 1, ~18px at 1.06x).
     _mock_db(monkeypatch, _job_row())
     client = TestClient(app)
     resp = client.get(
         "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
     )
     assert resp.status_code == 200
-    assert ".clock-space { height: 250px" in resp.text
+    assert ".clock-space { height: 230px" in resp.text
 
 
 def test_lockscreen_body_bg_is_full_bleed_photo(monkeypatch):
