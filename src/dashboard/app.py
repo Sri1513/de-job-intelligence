@@ -1497,7 +1497,14 @@ async def api_lockscreen_current(request: Request) -> JSONResponse:
             {"status": "error", "message": "No open job with a live deadline"},
             status_code=404,
         )
+    # The dashboard sits behind Cloudflare, which terminates TLS at the
+    # proxy: the request reaches the app as plain http, so request.base_url
+    # is http:// even though the site is always served over https. The phone
+    # wallpaper app rejects non-https lockscreen URLs (its validator
+    # requires https://), so force https here.
     base = str(request.base_url).rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
     return JSONResponse(
         {
             "job_id": job["job_id"],

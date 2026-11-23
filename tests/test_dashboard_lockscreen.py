@@ -304,10 +304,27 @@ def test_api_lockscreen_current_returns_job(monkeypatch):
     assert body["deadline"] == "2026-11-28T23:59:00-05:00"
     assert body["deadline_display"] == "Nov 28, 2026"
     # The URL carries the job only — the deadline derives server-side.
+    # Always https: the dashboard sits behind Cloudflare (TLS terminates
+    # at the proxy), so the request arrives as plain http — but the phone
+    # wallpaper app rejects non-https lockscreen URLs.
     assert body["lockscreen_url"] == (
-        "http://testserver/lockscreen?job_id=li-4474501423"
+        "https://testserver/lockscreen?job_id=li-4474501423"
     )
     assert "deadline=" not in body["lockscreen_url"]
+
+
+def test_api_lockscreen_current_url_is_https(monkeypatch):
+    # Production shape of the bug: the request reaches the app as
+    # http://jobs.sriomkar.com (Cloudflare terminates TLS), yet the
+    # returned lockscreen URL must still be https:// — the phone app
+    # rejects http:// and falls back to its saved link.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app, base_url="http://jobs.sriomkar.com")
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 200
+    assert resp.json()["lockscreen_url"] == (
+        "https://jobs.sriomkar.com/lockscreen?job_id=li-4474501423"
+    )
 
 
 def test_api_lockscreen_current_query_orders_by_fit_then_deadline(monkeypatch):
