@@ -92,6 +92,13 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 10px 28px rgba(0,0,0,.35);
     padding: 14px 16px 12px;
     margin-bottom: 8px;
+    /* Never shrink below content height: the fixed 844px flex column
+       was squeezing the title tile and the location sub-line spilled
+       out below its border (caught 2026-11-23 on the Amazon cover —
+       "Bellevue, WA, USA" sat between the tiles). The column has room
+       for the tiles at full height; if it ever runs out, the
+       milestones panel is the one to trim, not the tiles. */
+    flex-shrink: 0;
   }
   /* Countdown, shrunk to make room for six milestones.
      Panel lift 2026-11-22: count/due/bar-label margins tightened so the
@@ -114,17 +121,19 @@
   .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #cfe3de; margin: 4px 2px 0; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
   /* Milestones tile (shares the .tile glass; tighter top/bottom padding
      so nine rows still fit the 844px card with the footer visible). */
-  .miles-panel { padding-top: 10px; padding-bottom: 4px; }
+  .miles-panel { padding-top: 8px; padding-bottom: 2px; }
   .miles-title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #ffd9a0; margin-bottom: 4px; }
   .mile {
     display: flex; align-items: center; gap: 10px;
-    padding: 3px 0; border-top: 1px solid rgba(255,255,255,.10);
+    /* 2px (was 3px): with the tiles no longer shrinking, the 9-row
+       panel needs the room back so the footer stays on the card. */
+    padding: 2px 0; border-top: 1px solid rgba(255,255,255,.10);
     font-size: 13.5px; text-shadow: 0 1px 6px rgba(0,0,0,.4);
   }
   .mile:first-of-type { border-top: none; }
   /* Sub-milestones branch under "Tailored package built": indented,
      smaller dot and text, no divider of their own. */
-  .mile.sub { padding: 3px 0 3px 32px; font-size: 12.5px; border-top: none; }
+  .mile.sub { padding: 2px 0 2px 32px; font-size: 12.5px; border-top: none; }
   .mile.sub .dot { width: 16px; height: 16px; font-size: 10px; }
   .mile.sub .when { font-size: 12px; }
   .mile .dot {
