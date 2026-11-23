@@ -69,14 +69,15 @@
     font-size: 14px; color: #d8e6e2; text-align: center; margin-top: 4px;
     text-shadow: 0 1px 8px rgba(0,0,0,.55);
   }
-  /* Foggy-glass tile (iPhone-style): one per section — title, countdown,
-     milestones. Translucent gradient, strong blur, glossy top edge,
+  /* Foggy-glass tile (iPhone / macOS Tahoe-style): one per section —
+     title, countdown, milestones. Clearer and more transparent than a
+     dark panel: light tint, strong blur + saturate, glossy top edge,
      pebble-round corners. NOTE: WeasyPrint (cover renders) ignores
      backdrop-filter, so the frost shows on the phone, not in renders. */
   .tile {
-    background: linear-gradient(180deg, rgba(255,255,255,.10) 0%, rgba(10,18,20,.42) 100%);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid rgba(255,255,255,.22);
+    background: linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 45%, rgba(10,18,20,.30) 100%);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+    border: 1px solid rgba(255,255,255,.30);
     border-radius: 22px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 10px 28px rgba(0,0,0,.35);
     padding: 14px 16px 12px;
@@ -91,7 +92,7 @@
   .count { display: flex; justify-content: center; gap: 8px; margin: 0 0 2px; }
   .unit {
     width: 60px; padding: 7px 0 6px; text-align: center;
-    background: rgba(10,18,20,.35);
+    background: rgba(10,18,20,.28);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,.18); border-radius: 16px;
   }
