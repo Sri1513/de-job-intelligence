@@ -1202,11 +1202,15 @@ LOCKSCREEN_MILESTONE_STEPS = (
 )
 
 # Background choices for /lockscreen (?bg=<name>). Allowlist only — an
-# unknown name falls back to the default. All Pexels, free license.
+# unknown name falls back to the default. All Pexels, free license
+# (photo IDs: glow 17917581, mist 1-mist-peaks, fog 2-dolomites-fog,
+# forest 40990378 twilight evergreens, rain 1184454 stormy sky).
 LOCKSCREEN_BACKGROUNDS = {
     "glow": "lockscreen-bg.webp",
     "mist": "lockscreen-bg-mist.jpg",
     "fog": "lockscreen-bg-fog.webp",
+    "forest": "lockscreen-bg-forest.jpg",
+    "rain": "lockscreen-bg-rain.jpg",
 }
 
 

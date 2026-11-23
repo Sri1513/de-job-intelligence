@@ -120,6 +120,8 @@ def test_lockscreen_bg_option(monkeypatch):
     assert "lockscreen-bg.webp" in client.get(base).text
     assert "lockscreen-bg-mist.jpg" in client.get(base + "&bg=mist").text
     assert "lockscreen-bg-fog.webp" in client.get(base + "&bg=fog").text
+    assert "lockscreen-bg-forest.jpg" in client.get(base + "&bg=forest").text
+    assert "lockscreen-bg-rain.jpg" in client.get(base + "&bg=rain").text
     assert "lockscreen-bg.webp" in client.get(base + "&bg=nope").text
 
 
@@ -130,6 +132,8 @@ def test_lockscreen_bg_image_serves(monkeypatch):
         "/static/lockscreen-bg.webp",
         "/static/lockscreen-bg-mist.jpg",
         "/static/lockscreen-bg-fog.webp",
+        "/static/lockscreen-bg-forest.jpg",
+        "/static/lockscreen-bg-rain.jpg",
     ):
         resp = client.get(bg_file)
         assert resp.status_code == 200
