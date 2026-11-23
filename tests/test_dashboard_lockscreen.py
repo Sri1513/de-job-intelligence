@@ -120,7 +120,51 @@ def test_lockscreen_bg_option(monkeypatch):
     assert "lockscreen-bg.webp" in client.get(base).text
     assert "lockscreen-bg-mist.jpg" in client.get(base + "&bg=mist").text
     assert "lockscreen-bg-fog.webp" in client.get(base + "&bg=fog").text
+    assert "lockscreen-bg-forest.jpg" in client.get(base + "&bg=forest").text
+    assert "lockscreen-bg-rain.jpg" in client.get(base + "&bg=rain").text
     assert "lockscreen-bg.webp" in client.get(base + "&bg=nope").text
+
+
+def test_lockscreen_bgurl_custom_image(monkeypatch):
+    # ?bgurl= takes any direct https image link and uses it as the
+    # background (it overrides the named ?bg= choice). The URL must
+    # survive intact — including & in its own query string, so the
+    # template renders it |safe after the handler's strict validation.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    base = "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    custom = (
+        "https://images.pexels.com/photos/40990378/pexels-photo-40990378/"
+        "free-photo-of-misty-forest-with-evergreen-trees-in-twilight.jpeg"
+        "?auto=compress&cs=tinysrgb&w=1260"
+    )
+    import urllib.parse
+
+    resp = client.get(base + "&bg=mist&bgurl=" + urllib.parse.quote(custom, safe=""))
+    assert resp.status_code == 200
+    assert custom in resp.text
+    assert "&amp;" not in resp.text
+    assert "lockscreen-bg-mist.jpg" not in resp.text
+
+
+def test_lockscreen_bgurl_rejects_unsafe(monkeypatch):
+    # javascript:/http:/quotes/parens all fall back to the default glow
+    # background instead of landing in the page.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    base = "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    import urllib.parse
+
+    for bad in (
+        "javascript:alert(1)",
+        "http://example.com/x.jpg",
+        'https://example.com/x.jpg")',
+        "https://example.com/x.jpg');alert(1);//",
+    ):
+        resp = client.get(base + "&bgurl=" + urllib.parse.quote(bad, safe=""))
+        assert resp.status_code == 200
+        assert "lockscreen-bg.webp" in resp.text
+        assert bad not in resp.text
 
 
 def test_lockscreen_bg_image_serves(monkeypatch):
@@ -130,6 +174,8 @@ def test_lockscreen_bg_image_serves(monkeypatch):
         "/static/lockscreen-bg.webp",
         "/static/lockscreen-bg-mist.jpg",
         "/static/lockscreen-bg-fog.webp",
+        "/static/lockscreen-bg-forest.jpg",
+        "/static/lockscreen-bg-rain.jpg",
     ):
         resp = client.get(bg_file)
         assert resp.status_code == 200

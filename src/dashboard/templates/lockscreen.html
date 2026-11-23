@@ -30,7 +30,7 @@
        sides instead of near-black bars (the old .88 overlay). */
     background:
       linear-gradient(180deg, rgba(6,11,14,.22) 0%, rgba(6,11,14,.22) 100%),
-      url("/static/{{ bg_file }}") center / cover no-repeat,
+      {% if bg_url %}url("{{ bg_url|safe }}"){% else %}url("/static/{{ bg_file }}"){% endif %} center / cover no-repeat,
       #08161a;
     min-height: 100dvh;
     display: flex; align-items: center; justify-content: center;
@@ -48,7 +48,7 @@
        at the bottom for the footer; take it to 0 if he wants it gone. */
     background:
       linear-gradient(180deg, rgba(6,11,14,.40) 0%, rgba(6,11,14,.22) 28%, rgba(6,11,14,.26) 60%, rgba(6,11,14,.39) 100%),
-      url("/static/{{ bg_file }}") center 30% / cover no-repeat,
+      {% if bg_url %}url("{{ bg_url|safe }}"){% else %}url("/static/{{ bg_file }}"){% endif %} center 30% / cover no-repeat,
       #08161a;
     padding: 0 28px 22px;
     display: flex; flex-direction: column;
