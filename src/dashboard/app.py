@@ -1213,6 +1213,22 @@ LOCKSCREEN_BACKGROUNDS = {
     "rain": "lockscreen-bg-rain.jpg",
 }
 
+# A custom background (?bgurl=<https image URL>) is rendered with |safe in
+# the template's <style> block, so it must pass this strict check first:
+# https only (http would be blocked as mixed content on the https page),
+# no quotes, parens, angle brackets, backticks, backslashes or whitespace
+# (those could break out of the CSS url("...")), max 2048 chars. Anything
+# else falls back to the ?bg= choice. The server never fetches the URL —
+# the phone's browser loads the image directly, so a non-image link just
+# shows the dark fallback colour instead of a photo.
+_BG_URL_RE = re.compile(r"^https://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$")
+
+
+def _valid_lockscreen_bg_url(raw: str | None) -> str | None:
+    if not raw or len(raw) > 2048:
+        return None
+    return raw if _BG_URL_RE.match(raw) else None
+
 
 def _parse_lockscreen_deadline(raw: str | None) -> datetime | None:
     """Parse the deadline query param. Requires an explicit UTC offset so
@@ -1287,6 +1303,9 @@ async def lockscreen_view(request: Request) -> Response:
     bg_file = LOCKSCREEN_BACKGROUNDS.get(
         request.query_params.get("bg", "glow"), LOCKSCREEN_BACKGROUNDS["glow"]
     )
+    # A custom image URL overrides the named choice (validated above;
+    # anything invalid falls back to the named background).
+    bg_url = _valid_lockscreen_bg_url(request.query_params.get("bgurl"))
     next_index = next(
         (i for i, item in enumerate(milestones) if not item["done"]),
         len(milestones),
@@ -1309,6 +1328,7 @@ async def lockscreen_view(request: Request) -> Response:
             "milestones": milestones,
             "next_index": next_index,
             "bg_file": bg_file,
+            "bg_url": bg_url,
         },
     )
 
