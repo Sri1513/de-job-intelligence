@@ -98,15 +98,17 @@ def test_lockscreen_top_safe_zone_clears_phone_clock(monkeypatch):
 def test_lockscreen_body_bg_is_full_bleed_photo(monkeypatch):
     # Wide screens (tablet, desktop): the 390px card only fills the middle,
     # so the body's photo must show on the sides — not a near-black overlay
-    # (the old .88 left black bars on the tablet, 2026-11-22).
+    # (the old .88 left black bars on the tablet, 2026-11-22; the veil was
+    # halved to .22 on 2026-11-23 because it dulled the photo between tiles).
     _mock_db(monkeypatch, _job_row())
     client = TestClient(app)
     resp = client.get(
         "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
     )
     assert resp.status_code == 200
-    assert "rgba(6,11,14,.45) 100%)" in resp.text
+    assert "rgba(6,11,14,.22) 100%)" in resp.text
     assert "rgba(6,11,14,.88)" not in resp.text
+    assert "rgba(6,11,14,.45) 100%)" not in resp.text
 
 
 def test_lockscreen_bg_option(monkeypatch):

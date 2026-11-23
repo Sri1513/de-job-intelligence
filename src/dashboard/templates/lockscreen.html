@@ -29,7 +29,7 @@
        desktop) the card only fills the middle, and the photo shows on the
        sides instead of near-black bars (the old .88 overlay). */
     background:
-      linear-gradient(180deg, rgba(6,11,14,.45) 0%, rgba(6,11,14,.45) 100%),
+      linear-gradient(180deg, rgba(6,11,14,.22) 0%, rgba(6,11,14,.22) 100%),
       url("/static/{{ bg_file }}") center / cover no-repeat,
       #08161a;
     min-height: 100dvh;
@@ -42,8 +42,12 @@
   .screen {
     width: 390px; height: 844px;
     position: relative; overflow: hidden;
+    /* Dark veil over the photo, halved 2026-11-23: it was washing the
+       photo out between the tiles on the tablet wallpaper (.80/.45/.52/
+       .78). Still dark enough at the top for the white system clock and
+       at the bottom for the footer; take it to 0 if he wants it gone. */
     background:
-      linear-gradient(180deg, rgba(6,11,14,.80) 0%, rgba(6,11,14,.45) 28%, rgba(6,11,14,.52) 60%, rgba(6,11,14,.78) 100%),
+      linear-gradient(180deg, rgba(6,11,14,.40) 0%, rgba(6,11,14,.22) 28%, rgba(6,11,14,.26) 60%, rgba(6,11,14,.39) 100%),
       url("/static/{{ bg_file }}") center 30% / cover no-repeat,
       #08161a;
     padding: 0 28px 22px;
