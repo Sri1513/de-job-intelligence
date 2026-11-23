@@ -9,6 +9,8 @@ import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -1173,20 +1175,22 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 
 # ---------------------------------------------------------------------------
 # Dynamic countdown lock screen (/lockscreen).
-# Minimal, removable after the Handshake contest: no schema change, no MCP
-# tool, no image rendering. The deadline arrives as a query param; the job
-# row supplies company/title/location/fit only. Milestone dates are the
-# deadline minus 16/14/13/13/6/3 days (for Pax8, Nov 30: saved Nov 14,
-# fit check Nov 16, package + its one sub-line + submit Nov 17, follow-up
-# Nov 24, reply expected Nov 27); an optional ?bg=<name> picks the
-# background (glow default, mist, fog — allowlist, unknown falls back).
-# a milestone counts as done once its date has passed. Done-state is
-# date-derived on purpose: the Pax8 row still reads apply_status IDLE (it
-# was submitted outside the apply engine), so the apply_status column cannot
+# Minimal, removable after the Handshake contest: no MCP tool, no image
+# rendering. The deadline is a query param when given; when omitted it is
+# derived server-side as posted_at + 7 days (migration 009, branch
+# friday/job-posted-date-capture) — the job row supplies company/title/
+# location/fit/posted_at. Milestone dates are the deadline minus 16/14/
+# 13/13/6/3 days (for Pax8, Nov 30: saved Nov 14, fit check Nov 16,
+# package + its one sub-line + submit Nov 17, follow-up Nov 24, reply
+# expected Nov 27); an optional ?bg=<name> picks the background (glow
+# default, mist, fog — allowlist, unknown falls back). A milestone
+# counts as done once its date has passed. Done-state is date-derived
+# on purpose: the Pax8 row still reads apply_status IDLE (it was
+# submitted outside the apply engine), so the apply_status column cannot
 # tell the truth here. Flip settings.LOCKSCREEN_ENABLED off to remove the
-# route (404 as if absent). The page is responsive: a fixed 390x844 design
-# scaled by JS to fit any viewport (phone, tablet, desktop), so one URL
-# serves every screen.
+# route (404 as if absent). The page is responsive: a fixed 390x844
+# design scaled by JS to fit any viewport (phone, tablet, desktop), so
+# one URL serves every screen.
 # ---------------------------------------------------------------------------
 LOCKSCREEN_MILESTONE_STEPS = (
     # (days before deadline, label, sub-item of the tailored package)
@@ -1250,33 +1254,69 @@ def _parse_lockscreen_deadline(raw: str | None) -> datetime | None:
     return None
 
 
+# Derived deadlines end at 23:59 in the owner's local time — the same
+# convention as the explicit deadlines in the contest links (-05:00).
+# ZoneInfo follows EST/EDT, so the offset tracks the season.
+LOCKSCREEN_DERIVED_TZ = ZoneInfo("America/New_York")
+
+
+def _derive_lockscreen_deadline(posted_at: date | datetime | None) -> datetime | None:
+    """Deadline for a job with no explicit ?deadline=: posted date + 7
+    days, end of day. NULL posted date -> None (the caller 400s; the
+    saved date is never a substitute — owner decision 2026-11-22)."""
+    if posted_at is None:
+        return None
+    if isinstance(posted_at, datetime):
+        posted_at = posted_at.date()
+    close = posted_at + timedelta(days=7)
+    return datetime(
+        close.year, close.month, close.day, 23, 59, 0, tzinfo=LOCKSCREEN_DERIVED_TZ
+    )
+
+
 async def lockscreen_view(request: Request) -> Response:
     """Renders a live countdown lock screen for one saved job.
 
-    GET /lockscreen?job_id=<id>&deadline=<ISO with offset>. Public read,
-    showcase fields only (company, title, location, fit score). Unknown job
-    -> 404; missing or naive deadline -> 400; flag off -> 404.
+    GET /lockscreen?job_id=<id>[&deadline=<ISO with offset>]. Public read,
+    showcase fields only (company, title, location, fit score). An explicit
+    deadline always wins; when omitted it derives as posted_at + 7 days.
+    Unknown job -> 404; naive deadline, or omitted deadline with no posted
+    date -> 400; flag off -> 404.
     """
     if not settings.LOCKSCREEN_ENABLED:
         return JSONResponse(
             {"status": "error", "message": "Not found"}, status_code=404
         )
     job_id = request.query_params.get("job_id", "")
-    deadline = _parse_lockscreen_deadline(request.query_params.get("deadline"))
-    if not job_id or deadline is None:
+    if not job_id:
         return JSONResponse(
             {
                 "status": "error",
-                "message": "job_id and an ISO deadline with timezone offset "
-                "are required, e.g. ?job_id=li-1&deadline=2026-11-30T23:59:00-05:00",
+                "message": "job_id is required, e.g. ?job_id=li-1",
             },
             status_code=400,
         )
+    # An explicit deadline is validated before the lookup (a naive one
+    # 400s even for an unknown job, as before). When omitted, the
+    # deadline derives from the row's posted_at after the lookup.
+    raw_deadline = request.query_params.get("deadline")
+    deadline = None
+    if raw_deadline is not None:
+        deadline = _parse_lockscreen_deadline(raw_deadline)
+        if deadline is None:
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "deadline must be an ISO timestamp with a "
+                    "timezone offset, e.g. 2026-11-30T23:59:00-05:00",
+                },
+                status_code=400,
+            )
     try:
         with get_db_connection() as conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT job_id, title, company, location, fit_score "
-                "FROM saved_jobs WHERE job_id = %s;",
+                "SELECT job_id, title, company, location, fit_score, posted_at "
+                "FROM scout.saved_jobs WHERE job_id = %s;",
                 (job_id,),
             )
             row = cur.fetchone()
@@ -1290,6 +1330,17 @@ async def lockscreen_view(request: Request) -> Response:
             {"status": "error", "message": "Job not found"}, status_code=404
         )
     job = dict(row)
+    if deadline is None:
+        deadline = _derive_lockscreen_deadline(job.get("posted_at"))
+        if deadline is None:
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "no deadline given and this job has no "
+                    "posted date to derive one from",
+                },
+                status_code=400,
+            )
     today = date.today()
     milestones = []
     for offset_days, text, sub in LOCKSCREEN_MILESTONE_STEPS:
@@ -1341,6 +1392,78 @@ async def lockscreen_view(request: Request) -> Response:
             "bg_url": bg_url,
             "show_fit": show_fit,
         },
+    )
+
+
+# Default "next dream job in line" ordering for /api/lockscreen/current
+# (owner can change it): still open, known posted date, deadline not
+# passed; highest fit first, earliest derived deadline breaks ties.
+# fit_score is stored as TEXT, so the numeric comparison goes through
+# the same safe-cast pattern as the MCP layer (non-numeric scores sort
+# last instead of erroring the query).
+LOCKSCREEN_CURRENT_QUERY = """
+    SELECT job_id, title, company, location, fit_score, posted_at
+    FROM scout.saved_jobs
+    WHERE apply_status = 'IDLE'
+      AND posted_at IS NOT NULL
+      AND posted_at + 7 >= CURRENT_DATE
+    ORDER BY
+      CASE WHEN fit_score::text ~ '^[0-9]+(\\.[0-9]+)?$'
+        THEN fit_score::numeric ELSE NULL END DESC NULLS LAST,
+      posted_at ASC
+    LIMIT 1;
+"""
+
+
+async def api_lockscreen_current(request: Request) -> JSONResponse:
+    """The next dream job in line: the top open job with a known posted
+    date whose 7-day deadline has not passed, under the default ordering
+    rule (see LOCKSCREEN_CURRENT_QUERY). Public GET, showcase fields
+    only — title, company, location, fit, the derived deadline, and the
+    lockscreen URL (job_id only; the deadline derives server-side, so
+    the URL carries no deadline param). No live job -> 404; flag off
+    -> 404.
+    """
+    if not settings.LOCKSCREEN_ENABLED:
+        return JSONResponse(
+            {"status": "error", "message": "Not found"}, status_code=404
+        )
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(LOCKSCREEN_CURRENT_QUERY)
+            row = cur.fetchone()
+    except Exception as exc:
+        logger.error(
+            f"Error loading current lockscreen job: {exc}", exc_info=True
+        )
+        return JSONResponse(
+            {"status": "error", "message": str(exc)}, status_code=500
+        )
+    if row is None:
+        return JSONResponse(
+            {"status": "error", "message": "No open job with a live deadline"},
+            status_code=404,
+        )
+    job = dict(row)
+    deadline = _derive_lockscreen_deadline(job.get("posted_at"))
+    if deadline is None:  # Unreachable: the query filters NULL posted_at.
+        return JSONResponse(
+            {"status": "error", "message": "No open job with a live deadline"},
+            status_code=404,
+        )
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse(
+        {
+            "job_id": job["job_id"],
+            "title": job["title"],
+            "company": job["company"],
+            "location": job["location"],
+            "fit_score": job["fit_score"],
+            "deadline": deadline.isoformat(),
+            "deadline_display": f"{deadline.strftime('%b')} {deadline.day}, "
+            f"{deadline.year}",
+            "lockscreen_url": f"{base}/lockscreen?job_id={quote(job['job_id'], safe='')}",
+        }
     )
 
 
@@ -1520,6 +1643,7 @@ routes = [
     Route("/api/whatsapp-alerts/update-status", api_update_outreach_status, methods=["POST"]),
     Route("/skills-analytics", skills_analytics_view, methods=["GET"]),
     Route("/lockscreen", lockscreen_view, methods=["GET"]),
+    Route("/api/lockscreen/current", api_lockscreen_current, methods=["GET"]),
     Route("/api/skills-demographics", api_skills_demographics, methods=["GET"]),
     Mount("/screenshots", app=StaticFiles(directory=str(SCREENSHOTS_DIR)), name="screenshots"),
     Mount(
