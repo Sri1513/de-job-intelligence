@@ -1306,6 +1306,10 @@ async def lockscreen_view(request: Request) -> Response:
     # A custom image URL overrides the named choice (validated above;
     # anything invalid falls back to the named background).
     bg_url = _valid_lockscreen_bg_url(request.query_params.get("bgurl"))
+    # &fit=hide drops the "· Fit N/100" from the title tile (a display
+    # choice — the score itself is never rewritten; it stays in the DB
+    # row and on the dashboard). Anything else shows it.
+    show_fit = request.query_params.get("fit", "") != "hide"
     next_index = next(
         (i for i, item in enumerate(milestones) if not item["done"]),
         len(milestones),
@@ -1329,6 +1333,7 @@ async def lockscreen_view(request: Request) -> Response:
             "next_index": next_index,
             "bg_file": bg_file,
             "bg_url": bg_url,
+            "show_fit": show_fit,
         },
     )
 

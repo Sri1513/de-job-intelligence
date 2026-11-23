@@ -147,6 +147,19 @@ def test_lockscreen_bgurl_custom_image(monkeypatch):
     assert "lockscreen-bg-mist.jpg" not in resp.text
 
 
+def test_lockscreen_fit_hide(monkeypatch):
+    # &fit=hide drops the fit score from the title tile (display only —
+    # the score stays in the DB row); anything else shows it.
+    _mock_db(monkeypatch, _job_row())
+    client = TestClient(app)
+    base = "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    assert "Fit 63/100" in client.get(base).text
+    assert "Fit 63/100" in client.get(base + "&fit=bogus").text
+    hidden = client.get(base + "&fit=hide").text
+    assert "Fit 63/100" not in hidden
+    assert "USA" in hidden
+
+
 def test_lockscreen_bgurl_rejects_unsafe(monkeypatch):
     # javascript:/http:/quotes/parens all fall back to the default glow
     # background instead of landing in the page.
