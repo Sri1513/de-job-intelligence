@@ -56,7 +56,12 @@
      owner saw empty space above the eyebrow on his phone — 230px still
      clears a ~200px clock (30px at scale 1, ~18px at 1.06x). The trims
      below buy back the room so nothing falls off the bottom. */
-  .clock-space { height: 230px; flex: none; }
+  /* 215px: clears the phone's big clock (~200px, measured from his
+     lock-screen photo) with 15px to spare. Was 250px, then 230px; a
+     fourth lift 2026-11-22 takes it to 215px — space was still left
+     above the title tile. Do not shrink this for spacing; use the
+     margins below instead. */
+  .clock-space { height: 215px; flex: none; }
   .eyebrow {
     font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
     color: #ffd9a0; text-align: center; margin-bottom: 6px;
@@ -69,13 +74,14 @@
     font-size: 14px; color: #d8e6e2; text-align: center; margin-top: 4px;
     text-shadow: 0 1px 8px rgba(0,0,0,.55);
   }
-  /* Foggy-glass tile (iPhone / macOS Tahoe-style): one per section —
-     title, countdown, milestones. Clearer and more transparent than a
-     dark panel: light tint, strong blur + saturate, glossy top edge,
-     pebble-round corners. NOTE: WeasyPrint (cover renders) ignores
+  /* See-through foggy-glass tile (iPhone / macOS Tahoe-style): one per
+     section — title, countdown, milestones. The tint is deliberately
+     light, so whichever background is picked shows through the glass
+     and the tiles change with it; the frost comes from the blur, not
+     from a dark panel. NOTE: WeasyPrint (cover renders) ignores
      backdrop-filter, so the frost shows on the phone, not in renders. */
   .tile {
-    background: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 45%, rgba(10,18,20,.44) 100%);
+    background: linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.05) 45%, rgba(10,18,20,.28) 100%);
     -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
     border: 1px solid rgba(255,255,255,.30);
     border-radius: 22px;
@@ -92,11 +98,11 @@
   .count { display: flex; justify-content: center; gap: 8px; margin: 0 0 2px; }
   .unit {
     width: 60px; padding: 7px 0 6px; text-align: center;
-    background: rgba(10,18,20,.28);
+    background: rgba(10,18,20,.20);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,.18); border-radius: 16px;
   }
-  .unit b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .unit b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.45); }
   .unit span { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #cfe3de; }
   .due { text-align: center; font-size: 13px; color: #d8e6e2; margin-bottom: 4px; text-shadow: 0 1px 8px rgba(0,0,0,.55); }
   .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
@@ -109,7 +115,7 @@
   .mile {
     display: flex; align-items: center; gap: 10px;
     padding: 3px 0; border-top: 1px solid rgba(255,255,255,.10);
-    font-size: 13.5px;
+    font-size: 13.5px; text-shadow: 0 1px 6px rgba(0,0,0,.4);
   }
   .mile:first-of-type { border-top: none; }
   /* Sub-milestones branch under "Tailored package built": indented,

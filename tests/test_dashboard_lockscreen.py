@@ -92,7 +92,7 @@ def test_lockscreen_top_safe_zone_clears_phone_clock(monkeypatch):
         "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
     )
     assert resp.status_code == 200
-    assert ".clock-space { height: 230px" in resp.text
+    assert ".clock-space { height: 215px" in resp.text
 
 
 def test_lockscreen_body_bg_is_full_bleed_photo(monkeypatch):
