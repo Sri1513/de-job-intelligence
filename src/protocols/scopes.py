@@ -58,6 +58,8 @@ TOOL_SCOPES: dict[str, str] = {
     "retry_job_evaluations": SCOPE_INGEST,
     "queue_job_for_application": SCOPE_APPLY,
     "run_application_worker": SCOPE_APPLY,
+    "pin_lockscreen_job": SCOPE_APPLY,
+    "clear_lockscreen_pin": SCOPE_APPLY,
     "export_tailored_resume": SCOPE_APPLY,
     "generate_tailored_resume": SCOPE_APPLY,
 }

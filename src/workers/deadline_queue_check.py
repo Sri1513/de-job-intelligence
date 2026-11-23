@@ -26,6 +26,13 @@ only a verified closed/rejected determination notifies.
 Re-runs never re-notify: a departed job is already 'done' and no longer
 current, so the before/after comparison cannot fire twice for it.
 
+The pinned job (scout.lockscreen_pin, branch friday/lockscreen-pin)
+is the current job while it still qualifies; the before/after
+snapshots use the same pin-first rule as the endpoint, so a pinned
+departure notifies like any other. When the pinned job is verified
+closed/rejected/applied in a run, its pin row is deleted so the
+pointer falls back to the auto pick.
+
 Daily trigger — cron on the VM (ubuntu's crontab). The module only
 exists inside the dashboard container after the branch merges and CI
 deploys, so the cron runs the deployed code via exec (same pattern as
@@ -47,7 +54,7 @@ from typing import Any, Callable, Optional
 import requests
 
 from src.core.database import get_db_connection
-from src.dashboard.app import LOCKSCREEN_CURRENT_QUERY
+from src.dashboard.app import fetch_current_lockscreen_job
 from src.engine.llm_text import generate_text
 from src.engine.notifier import send_whatsapp
 
@@ -98,6 +105,13 @@ UPDATE_QUEUE_SQL = """
     UPDATE scout.deadline_queue
     SET state = %s, outcome = %s, last_checked_at = NOW()
     WHERE job_id = %s;
+"""
+
+# Pin clearing: when the pinned job is verified closed/rejected/
+# applied, its pin row is deleted so the next current-job lookup falls
+# back to the auto pick. A no-op when the job was never pinned.
+CLEAR_PIN_SQL = """
+    DELETE FROM scout.lockscreen_pin WHERE job_id = %s;
 """
 
 # Fail-open touch: the check ran but could not tell — record the attempt,
@@ -230,12 +244,17 @@ def enqueue_expired_jobs(conn) -> list[str]:
 
 def get_current_job(conn) -> Optional[dict]:
     """The job GET /api/lockscreen/current would return right now, under
-    the same ordering rule (imported from the dashboard, not copied —
+    the same pin-first rule (imported from the dashboard, not copied —
     one source of truth)."""
     with conn.cursor() as cur:
-        cur.execute(LOCKSCREEN_CURRENT_QUERY)
-        row = cur.fetchone()
-    return dict(row) if row else None
+        return fetch_current_lockscreen_job(cur)
+
+
+def clear_pin_for_job(conn, job_id: str) -> None:
+    """Deletes the pin row for one job (its pointer is gone). A no-op
+    when the job was never pinned."""
+    with conn.cursor() as cur:
+        cur.execute(CLEAR_PIN_SQL, (job_id,))
 
 
 def check_queued_jobs(
@@ -345,6 +364,15 @@ def _run_daily_check(
     before = get_current_job(conn)
     enqueued = enqueue_expired_jobs(conn)
     determinations = check_queued_jobs(conn, fetcher=fetcher)
+    # A pinned job verified closed/rejected/applied this run loses its
+    # pin before the after-snapshot, so the pointer falls back to the
+    # auto pick and the notification names the true next job.
+    # Expiry-only (still_open) departures keep their pin row: the
+    # endpoint's deadline guard already skips them, and the pin is
+    # cleared if the job is later determined gone.
+    for determination in determinations:
+        if determination["outcome"] in TERMINAL_OUTCOMES:
+            clear_pin_for_job(conn, determination["job_id"])
     after = get_current_job(conn)
     notified = False
     if before is not None and (

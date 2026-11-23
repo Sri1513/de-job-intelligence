@@ -1415,14 +1415,62 @@ LOCKSCREEN_CURRENT_QUERY = """
 """
 
 
+# Public origin of the dashboard, for lockscreen URLs built outside a
+# request (the MCP pin tool has no request to read base_url from).
+# Same origin as MCP_ALLOWED_ORIGINS in src/core/config.py.
+LOCKSCREEN_SITE_URL = "https://jobs.sriomkar.com"
+
+
+# Pinned-job first pick for /api/lockscreen/current (branch
+# friday/lockscreen-pin, owner decision 2026-11-23: both ways stay).
+# The pin wins while it still qualifies — IDLE, posted date known,
+# deadline not passed, not verified gone in the deadline queue — else
+# it is ignored and the caller falls through to the auto pick below.
+# A stale pin therefore never 404s the endpoint while an auto job
+# exists. "Today" is DB CURRENT_DATE (UTC) vs the NY end-of-day
+# deadline, the known minor edge shared with the auto query — not
+# changed here.
+LOCKSCREEN_PINNED_QUERY = """
+    SELECT s.job_id, s.title, s.company, s.location, s.fit_score, s.posted_at
+    FROM scout.lockscreen_pin p
+    JOIN scout.saved_jobs s ON s.job_id = p.job_id
+    WHERE p.id = 1
+      AND s.apply_status = 'IDLE'
+      AND s.posted_at IS NOT NULL
+      AND s.posted_at + 7 >= CURRENT_DATE
+      AND NOT EXISTS (
+          SELECT 1 FROM scout.deadline_queue dq
+          WHERE dq.job_id = s.job_id
+            AND dq.state = 'done'
+            AND dq.outcome IN ('closed', 'rejected', 'applied')
+      )
+    LIMIT 1;
+"""
+
+
+def fetch_current_lockscreen_job(cur) -> dict | None:
+    """Pin-first current-job resolution, shared by the endpoint and the
+    daily worker: the pinned job when it still qualifies, else the
+    default auto pick. One source of truth — the two callers must never
+    disagree about which job is current."""
+    cur.execute(LOCKSCREEN_PINNED_QUERY)
+    row = cur.fetchone()
+    if row is not None:
+        return dict(row)
+    cur.execute(LOCKSCREEN_CURRENT_QUERY)
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
 async def api_lockscreen_current(request: Request) -> JSONResponse:
-    """The next dream job in line: the top open job with a known posted
-    date whose 7-day deadline has not passed, under the default ordering
-    rule (see LOCKSCREEN_CURRENT_QUERY). Public GET, showcase fields
-    only — title, company, location, fit, the derived deadline, and the
-    lockscreen URL (job_id only; the deadline derives server-side, so
-    the URL carries no deadline param). No live job -> 404; flag off
-    -> 404.
+    """The next dream job in line: the pinned job first when it still
+    qualifies (see LOCKSCREEN_PINNED_QUERY), else the top open job with
+    a known posted date whose 7-day deadline has not passed, under the
+    default ordering rule (see LOCKSCREEN_CURRENT_QUERY). Public GET,
+    showcase fields only — title, company, location, fit, the derived
+    deadline, and the lockscreen URL (job_id only; the deadline derives
+    server-side, so the URL carries no deadline param). No live job ->
+    404; flag off -> 404.
     """
     if not settings.LOCKSCREEN_ENABLED:
         return JSONResponse(
@@ -1430,8 +1478,7 @@ async def api_lockscreen_current(request: Request) -> JSONResponse:
         )
     try:
         with get_db_connection() as conn, conn.cursor() as cur:
-            cur.execute(LOCKSCREEN_CURRENT_QUERY)
-            row = cur.fetchone()
+            job = fetch_current_lockscreen_job(cur)
     except Exception as exc:
         logger.error(
             f"Error loading current lockscreen job: {exc}", exc_info=True
@@ -1439,12 +1486,11 @@ async def api_lockscreen_current(request: Request) -> JSONResponse:
         return JSONResponse(
             {"status": "error", "message": str(exc)}, status_code=500
         )
-    if row is None:
+    if job is None:
         return JSONResponse(
             {"status": "error", "message": "No open job with a live deadline"},
             status_code=404,
         )
-    job = dict(row)
     deadline = _derive_lockscreen_deadline(job.get("posted_at"))
     if deadline is None:  # Unreachable: the query filters NULL posted_at.
         return JSONResponse(

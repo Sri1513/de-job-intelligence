@@ -13,10 +13,13 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import Any, Dict
+from urllib.parse import quote
 
 from src.core.database import get_db_connection, get_job_by_id
 from src.core.tailoring_graph import run_tailoring_graph
+from src.dashboard.app import LOCKSCREEN_SITE_URL, _derive_lockscreen_deadline
 from src.engine.agent_bridge import stage_agent_jobs_workflow
 from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
@@ -204,6 +207,135 @@ async def _handle_queue_job_for_application(arguments: Dict[str, Any]) -> Any:
     return await asyncio.to_thread(_queue_job_for_apply, job_id)
 
 
+# ---------------------------------------------------------------------------
+# Lockscreen pin (branch friday/lockscreen-pin, owner decision 2026-11-23:
+# both ways stay). Gemini pins one saved job as the lock-screen dream
+# job; the endpoint returns it first while it still qualifies, then
+# falls back to the auto pick. The pin is one job, one row (id = 1).
+# ---------------------------------------------------------------------------
+
+PIN_JOB_SQL = """
+    SELECT s.job_id, s.title, s.company, s.apply_status, s.posted_at,
+           (s.posted_at + 7 >= CURRENT_DATE) AS deadline_live,
+           EXISTS (
+               SELECT 1 FROM scout.deadline_queue dq
+               WHERE dq.job_id = s.job_id
+                 AND dq.state = 'done'
+                 AND dq.outcome IN ('closed', 'rejected', 'applied')
+           ) AS verified_gone
+    FROM scout.saved_jobs s
+    WHERE s.job_id = %s;
+"""
+
+PIN_UPSERT_SQL = """
+    INSERT INTO scout.lockscreen_pin (id, job_id, pinned_via)
+    VALUES (1, %s, %s)
+    ON CONFLICT (id) DO UPDATE
+    SET job_id = EXCLUDED.job_id,
+        pinned_at = NOW(),
+        pinned_via = EXCLUDED.pinned_via;
+"""
+
+CLEAR_PIN_SQL = """
+    DELETE FROM scout.lockscreen_pin WHERE id = 1 RETURNING job_id;
+"""
+
+
+def _pin_lockscreen_job(job_id: str, pinned_via: str = "gemini") -> dict[str, Any]:
+    """Validates one saved job and stores it as the single lockscreen
+    pin. Validation failures name the reason; nothing is written on
+    failure. The deadline liveness check runs in SQL (DB CURRENT_DATE),
+    the same clock the endpoint's pin query uses, and the returned
+    deadline is the dashboard's shared derivation (posted_at + 7 days,
+    23:59 America/New_York)."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(PIN_JOB_SQL, (job_id,))
+            row = cur.fetchone()
+        if row is None:
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' not found in saved_jobs.",
+            }
+        job = dict(row)
+        if job.get("posted_at") is None:
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' has no posted date, so no 7-day "
+                "deadline can be derived; it cannot be pinned.",
+            }
+        if not job.get("deadline_live"):
+            deadline = job["posted_at"] + timedelta(days=7)
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' deadline passed on {deadline}; "
+                "it cannot be pinned.",
+            }
+        if (job.get("apply_status") or "") != "IDLE":
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' is not open "
+                f"(apply_status={job.get('apply_status')}); only IDLE "
+                "jobs can be pinned.",
+            }
+        if job.get("verified_gone"):
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' was verified closed, rejected, "
+                "or applied; it cannot be pinned.",
+            }
+        with conn.cursor() as cur:
+            cur.execute(PIN_UPSERT_SQL, (job_id, pinned_via))
+        conn.commit()
+    deadline = _derive_lockscreen_deadline(job["posted_at"])
+    return {
+        "success": True,
+        "job_id": job_id,
+        "title": job.get("title"),
+        "company": job.get("company"),
+        "deadline": deadline.isoformat() if deadline else None,
+        "lockscreen_url": (
+            f"{LOCKSCREEN_SITE_URL}/lockscreen?job_id={quote(job_id, safe='')}"
+        ),
+        "message": f"Pinned {job.get('title')} at {job.get('company')} "
+        "as the lock-screen job.",
+    }
+
+
+def _clear_lockscreen_pin() -> dict[str, Any]:
+    """Deletes the single pin row, if any. Returns which job was
+    unpinned (None when nothing was pinned)."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(CLEAR_PIN_SQL)
+            row = cur.fetchone()
+        conn.commit()
+    cleared = dict(row) if row else None
+    return {
+        "success": True,
+        "cleared": cleared is not None,
+        "cleared_job_id": cleared.get("job_id") if cleared else None,
+        "message": (
+            f"Removed the lock-screen pin ({cleared['job_id']})."
+            if cleared
+            else "No lock-screen pin was set."
+        ),
+    }
+
+
+async def _handle_pin_lockscreen_job(arguments: Dict[str, Any]) -> Any:
+    job_id = arguments.get("job_id")
+    if not job_id:
+        raise ValueError("Argument 'job_id' is required.")
+    return await asyncio.to_thread(
+        _pin_lockscreen_job, job_id, arguments.get("pinned_via") or "gemini"
+    )
+
+
+async def _handle_clear_lockscreen_pin(arguments: Dict[str, Any]) -> Any:
+    return await asyncio.to_thread(_clear_lockscreen_pin)
+
+
 async def _handle_run_application_worker(arguments: Dict[str, Any]) -> Any:
     # Lazy import so protocol tests and basic MCP health endpoints don't require browser-use
     from src.workers.apply_worker import process_apply_queue
@@ -306,6 +438,8 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {
     "get_job_details": _handle_get_job_details,
     "search_saved_jobs": _handle_search_saved_jobs,
     "queue_job_for_application": _handle_queue_job_for_application,
+    "pin_lockscreen_job": _handle_pin_lockscreen_job,
+    "clear_lockscreen_pin": _handle_clear_lockscreen_pin,
     "run_application_worker": _handle_run_application_worker,
     "retry_job_evaluations": _handle_retry_job_evaluations,
     "run_batch_ingestion": _handle_run_batch_ingestion,

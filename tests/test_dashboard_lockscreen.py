@@ -314,12 +314,18 @@ def test_api_lockscreen_current_query_orders_by_fit_then_deadline(monkeypatch):
     # The ordering rule lives in the SQL (the mock never executes it),
     # so assert on what the handler sent: open jobs only, posted date
     # known, deadline not passed; highest fit first (safe-cast, since
-    # fit_score is TEXT), earliest derived deadline breaks ties.
+    # fit_score is TEXT), earliest derived deadline breaks ties. The
+    # pin query runs first and returns nothing here (stale/absent pin),
+    # so the auto query is the second call.
     cur = _mock_db_recording(monkeypatch, _job_row())
+    cur.fetchone.side_effect = [None, _job_row()]
     client = TestClient(app)
     resp = client.get("/api/lockscreen/current")
     assert resp.status_code == 200
-    sql = cur.execute.call_args[0][0]
+    calls = cur.execute.call_args_list
+    assert len(calls) == 2
+    assert "lockscreen_pin" in calls[0][0][0]
+    sql = calls[-1][0][0]
     assert "apply_status = 'IDLE'" in sql
     assert "posted_at IS NOT NULL" in sql
     assert "posted_at + 7 >= CURRENT_DATE" in sql
@@ -327,6 +333,39 @@ def test_api_lockscreen_current_query_orders_by_fit_then_deadline(monkeypatch):
     assert "DESC NULLS LAST" in sql
     assert "posted_at ASC" in sql
     assert "LIMIT 1" in sql
+
+
+def test_api_lockscreen_current_pin_first(monkeypatch):
+    # A live pin wins: the pinned job is returned and the auto query
+    # never runs.
+    cur = _mock_db_recording(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "li-4474501423"
+    assert len(cur.execute.call_args_list) == 1
+    assert "lockscreen_pin" in cur.execute.call_args_list[0][0][0]
+
+
+def test_api_lockscreen_current_stale_pin_falls_back_to_auto(monkeypatch):
+    # The pin query returns nothing (stale/absent pin) and the auto
+    # pick answers instead — a stale pin never 404s the endpoint while
+    # an auto job exists.
+    cur = _mock_db_recording(monkeypatch, _job_row())
+    cur.fetchone.side_effect = [None, _job_row()]
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "li-4474501423"
+    assert len(cur.execute.call_args_list) == 2
+
+
+def test_api_lockscreen_current_no_pin_no_auto_404(monkeypatch):
+    cur = _mock_db_recording(monkeypatch, None)
+    cur.fetchone.side_effect = [None, None]
+    client = TestClient(app)
+    resp = client.get("/api/lockscreen/current")
+    assert resp.status_code == 404
 
 
 def test_api_lockscreen_current_no_job_404(monkeypatch):
