@@ -5,6 +5,7 @@ from typing import Any
 from src.core.database import get_db_connection
 from src.engine.matcher import calculate_match_score
 from src.ingestion.dice_client import DiceJobClient
+from src.ingestion.posted_date import parse_posted_date
 
 logger = logging.getLogger("de-job-intelligence.batch_ingestion")
 
@@ -20,10 +21,12 @@ def persist_jobs(jobs: list[dict[str, Any]], category_slug: str = "data_engineer
     insert_query = """
         INSERT INTO saved_jobs (
             job_id, title, company, location, is_remote, job_url,
-            description, job_category, fit_score, ai_status, saved_at
+            description, job_category, fit_score, ai_status, saved_at,
+            posted_at
         ) VALUES (
             %(job_id)s, %(title)s, %(company)s, %(location)s, %(is_remote)s, %(job_url)s,
-            %(description)s, %(job_category)s, %(fit_score)s, 'PENDING', NOW()
+            %(description)s, %(job_category)s, %(fit_score)s, 'PENDING', NOW(),
+            %(posted_at)s
         )
         ON CONFLICT (job_id) DO NOTHING;
     """
@@ -45,6 +48,9 @@ def persist_jobs(jobs: list[dict[str, Any]], category_slug: str = "data_engineer
                     "description": description,
                     "job_category": category_slug,
                     "fit_score": str(scoring["score"]),
+                    # Real posted date only; None -> NULL. Never the
+                    # ingest date (owner decision 2026-11-22).
+                    "posted_at": parse_posted_date(job.get("date_posted")),
                 }
                 cur.execute(insert_query, params)
                 inserted_count += 1

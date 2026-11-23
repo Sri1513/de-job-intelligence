@@ -3,8 +3,10 @@ import email
 import imaplib
 import os
 import re
-from datetime import datetime
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
+
+from src.ingestion.posted_date import extract_posted_date_from_text
 
 TARGET_KEYWORDS = [
     "data engineer",
@@ -43,8 +45,16 @@ def clean_job_title(raw_title: str) -> str | None:
     return title
 
 
-def parse_linkedin_plain_text_email(body_text: str) -> list:
-    """Parses LinkedIn alert blocks separated by dashed lines into structured job records."""
+def parse_linkedin_plain_text_email(body_text: str, reference_date=None) -> list:
+    """Parses LinkedIn alert blocks separated by dashed lines into structured job records.
+
+    reference_date is the email's received date (its Date header): a chunk
+    line like "Posted 2 days ago" resolves against it, not against today —
+    an alert fetched days late would otherwise mis-date every job in it.
+    Chunks with no posted-date line get date_posted=None. The old behavior
+    stamped today, which is the saved date wearing a posted date's clothes
+    and is explicitly rejected: a missing posted date stays missing.
+    """
     extracted_jobs = []
     chunks = body_text.split("---------------------------------------------------------")
 
@@ -76,12 +86,17 @@ def parse_linkedin_plain_text_email(body_text: str) -> list:
         company = lines[1]
         location = "United States"
         job_url = "https://www.linkedin.com"
+        posted_date = None
 
         for line in lines[2:]:
             if line.startswith("View job:"):
                 url_parts = line.split("View job:")
                 if len(url_parts) > 1:
                     job_url = url_parts[1].strip()
+            elif posted_date is None and (
+                line_date := extract_posted_date_from_text(line, reference_date)
+            ):
+                posted_date = line_date
             elif not any(
                 badge in line.lower()
                 for badge in ["company alum", "actively hiring", "apply with", "view job"]
@@ -99,7 +114,7 @@ def parse_linkedin_plain_text_email(body_text: str) -> list:
                 "employment_type": "Unknown",
                 "sponsorship": "Not Mentioned",
                 "source": "Email Alert",
-                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                "date_posted": posted_date.isoformat() if posted_date else None,
             }
         )
 
@@ -169,7 +184,17 @@ def fetch_jobs_from_email(limit: int = 10) -> list:
                         if payload:
                             body = payload.decode("utf-8", errors="ignore")
 
-                    parsed_jobs = parse_linkedin_plain_text_email(body)
+                    # The alert's own Date header is the reference for
+                    # any "N days ago" line in its body: resolving
+                    # against today would mis-date jobs in an alert
+                    # fetched days late. Unparseable -> today (the
+                    # parser's default); a missing date line still
+                    # yields None, never today.
+                    try:
+                        reference_date = parsedate_to_datetime(msg["Date"]).date()
+                    except (TypeError, ValueError, AttributeError):
+                        reference_date = None
+                    parsed_jobs = parse_linkedin_plain_text_email(body, reference_date)
                     all_jobs.extend(parsed_jobs)
 
         mail.logout()

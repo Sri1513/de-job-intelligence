@@ -9,6 +9,7 @@ from typing import Optional
 from src.core.utils import get_cached_resume
 from src.engine.dedup import find_duplicate
 from src.engine.matcher import calculate_local_fit_score
+from src.ingestion.posted_date import parse_posted_date
 
 logger = logging.getLogger(__name__)
 
@@ -168,9 +169,16 @@ def stage_raw_jobs(
             if len(job_desc) < 20:
                 job_desc = f"Role: {title} at {company}. Extracted via scraper."
 
+            # The REAL posted date for this row, or None when the source
+            # carries none. Never the ingest date — that is not a proxy
+            # for when the job was posted (owner decision 2026-11-22).
+            incoming_posted_at = parse_posted_date(job.get("date_posted"))
+
             # 1. Check if record already exists
             cur.execute(
-                "SELECT description, metadata FROM saved_jobs WHERE job_id = %s;", (job_id,)
+                "SELECT description, metadata, posted_at FROM saved_jobs "
+                "WHERE job_id = %s;",
+                (job_id,),
             )
             existing_record = cur.fetchone()
 
@@ -178,9 +186,24 @@ def stage_raw_jobs(
                 if isinstance(existing_record, dict):
                     existing_desc = existing_record.get("description") or ""
                     metadata = existing_record.get("metadata") or {}
+                    existing_posted_at = existing_record.get("posted_at")
                 else:
                     existing_desc = existing_record[0] or ""
                     metadata = existing_record[1] or {}
+                    existing_posted_at = (
+                        existing_record[2] if len(existing_record) > 2 else None
+                    )
+
+                # Heal a dateless row: a job first seen via an email alert
+                # (no posted date in the alert) and re-found later by
+                # JobSpy/Dice with a real date gets its posted_at filled.
+                # Never overwrites a stored date — the first real date
+                # wins, even if a later source disagrees.
+                posted_heal = (
+                    incoming_posted_at
+                    if existing_posted_at is None and incoming_posted_at is not None
+                    else None
+                )
 
                 # Heal: an email-alert placeholder must be replaced when a real
                 # posting description arrives later (e.g. batch ingestion
@@ -213,26 +236,35 @@ def stage_raw_jobs(
                     locations_list.append({"city": city, "url": job_url})
                     metadata["locations"] = locations_list
                     changed = True
+                if posted_heal is not None:
+                    changed = True
 
                 if changed:
+                    # posted_at rides along with whichever UPDATE runs:
+                    # COALESCE keeps a stored date untouched, so the
+                    # heal only ever fills a NULL. Appended last, so
+                    # existing param positions are unchanged.
                     if healed:
                         cur.execute(
                             """
                             UPDATE saved_jobs
-                            SET description = %s, fit_score = %s, metadata = %s
+                            SET description = %s, fit_score = %s, metadata = %s,
+                                posted_at = COALESCE(posted_at, %s)
                             WHERE job_id = %s;
                             """,
                             (
                                 job_desc,
                                 str(healed_eval.get("score", 0)),
                                 json.dumps(metadata),
+                                posted_heal,
                                 job_id,
                             ),
                         )
                     else:
                         cur.execute(
-                            "UPDATE saved_jobs SET metadata = %s WHERE job_id = %s;",
-                            (json.dumps(metadata), job_id),
+                            "UPDATE saved_jobs SET metadata = %s, "
+                            "posted_at = COALESCE(posted_at, %s) WHERE job_id = %s;",
+                            (json.dumps(metadata), posted_heal, job_id),
                         )
                     updated_count += 1
                 else:
@@ -293,13 +325,15 @@ def stage_raw_jobs(
             cur.execute(
                 """
                 INSERT INTO saved_jobs (
-                    job_id, job_url, status, title, company, location, is_remote, 
+                    job_id, job_url, status, title, company, location, is_remote,
                     salary_min, salary_max, fit_score, notes, description, metadata,
-                    employment_type, sponsorship, job_category, ai_status, saved_at
+                    employment_type, sponsorship, job_category, ai_status, saved_at,
+                    posted_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, 
-                    %s, %s, %s, %s, %s, %s, 
-                    %s, %s, %s, 'PENDING', CURRENT_TIMESTAMP
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, 'PENDING', CURRENT_TIMESTAMP,
+                    %s
                 )
                 ON CONFLICT (job_id) DO NOTHING;
                 """,
@@ -320,6 +354,7 @@ def stage_raw_jobs(
                     str(job.get("employment_type", "Unknown")),
                     str(job.get("sponsorship", "Not Mentioned")),
                     job_category,
+                    incoming_posted_at,
                 ),
             )
             saved_count += 1
