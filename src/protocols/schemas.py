@@ -276,4 +276,31 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        "name": "pin_lockscreen_job",
+        "description": "Pins one saved job as the lock-screen dream job: GET /api/lockscreen/current returns it first until it closes, is rejected, or is applied, then falls back to the automatic pick. The job must exist, be IDLE, have a known posted date with its 7-day deadline still live, and not be verified closed/rejected/applied. Replaces any previous pin (one job on the lock screen at a time).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The unique identifier of the job in saved_jobs.",
+                },
+                "pinned_via": {
+                    "type": "string",
+                    "description": "Who pinned it, e.g. 'gemini'.",
+                    "default": "gemini",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
+    {
+        "name": "clear_lockscreen_pin",
+        "description": "Removes the pinned lock-screen job, if any; the next /api/lockscreen/current call falls back to the automatic pick.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]

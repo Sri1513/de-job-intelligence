@@ -32,10 +32,13 @@ CLOSED_PAGE = (
 class FakeCursor:
     """Statements recorded; fetchone/fetchall dispatch on SQL text."""
 
-    def __init__(self, current_rows=None, enqueue_rows=None, tracking_rows=None):
+    def __init__(self, current_rows=None, enqueue_rows=None, tracking_rows=None, pinned_rows=None):
         # fetchone pops: the daily run snapshots the current job twice
-        # (before, after), so the list is consumed in order.
+        # (before, after), so the list is consumed in order. Each
+        # snapshot runs the pin query first, then the auto query — the
+        # pin rows are consumed separately from the auto rows.
         self._current = list(current_rows or [])
+        self._pinned = list(pinned_rows or [])
         self.enqueue_rows = list(enqueue_rows or [])
         self.tracking_rows = list(tracking_rows or [])
         self.statements = []
@@ -46,6 +49,8 @@ class FakeCursor:
         self._last_sql = sql
 
     def fetchone(self):
+        if "lockscreen_pin" in self._last_sql:
+            return self._pinned.pop(0) if self._pinned else None
         if "posted_at + 7 >= CURRENT_DATE" in self._last_sql:
             return self._current.pop(0) if self._current else None
         return None
@@ -242,10 +247,11 @@ class TestCheckQueuedJobs:
         assert updates[0][1] == ("tracking", "still_open", "li-1")
 
 
-def _run(before, after, tracking_rows, mapping):
+def _run(before, after, tracking_rows, mapping, pinned=None):
     cur = FakeCursor(
         current_rows=[b for b in (before, after)],
         tracking_rows=tracking_rows,
+        pinned_rows=pinned or [],
     )
     conn = FakeConnection(cur)
     sent = []
@@ -332,6 +338,114 @@ class TestRunDailyCheck:
         )
         assert summary["notified"] is True
         assert "NONE" in sent[0]
+
+
+class TestPinClearing:
+    """A pinned job verified closed/rejected/applied loses its pin in
+    the run, so the next current-job lookup falls back to the auto pick
+    — and the advance notification still fires for a pinned departure,
+    naming the pinned job and the new current job. A still-open pinned
+    job keeps its pin."""
+
+    def test_pinned_job_closed_clears_pin_and_notifies(self):
+        summary, sent, conn = _run_pinned(
+            _current_row("li-1"),
+            _current_row("li-2"),
+            [_tracking_row("li-1", "https://x/1")],
+            {"https://x/1": (404, "")},
+        )
+        deletes = [
+            s
+            for s in conn._cursor.statements
+            if "DELETE FROM scout.lockscreen_pin" in s[0]
+        ]
+        assert len(deletes) == 1
+        assert deletes[0][1] == ("li-1",)
+        assert summary["previous_current"] == "li-1"
+        assert summary["current"] == "li-2"
+        assert summary["notified"] is True
+        assert "li-1" in sent[0] and "li-2" in sent[0]
+
+    def test_pinned_job_rejected_clears_pin_and_notifies(self):
+        summary, sent, conn = _run_pinned(
+            _current_row("li-1"),
+            _current_row("li-2"),
+            [
+                _tracking_row(
+                    "li-1",
+                    "https://x/1",
+                    metadata={"tracker": {"stage": "rejected"}},
+                )
+            ],
+            {"https://x/1": (200, LIVE_PAGE)},
+        )
+        deletes = [
+            s
+            for s in conn._cursor.statements
+            if "DELETE FROM scout.lockscreen_pin" in s[0]
+        ]
+        assert len(deletes) == 1
+        assert deletes[0][1] == ("li-1",)
+        assert summary["notified"] is True
+        assert "li-1" in sent[0] and "li-2" in sent[0]
+
+    def test_pinned_job_applied_clears_pin_without_notification(self):
+        summary, sent, conn = _run_pinned(
+            _current_row("li-1"),
+            _current_row("li-2"),
+            [_tracking_row("li-1", "https://x/1", apply_status="SUBMITTED")],
+            {"https://x/1": (200, LIVE_PAGE)},
+        )
+        deletes = [
+            s
+            for s in conn._cursor.statements
+            if "DELETE FROM scout.lockscreen_pin" in s[0]
+        ]
+        assert len(deletes) == 1
+        assert deletes[0][1] == ("li-1",)
+        # Applied departures never notify (existing rule); the pin is
+        # still cleared so the pointer moves on.
+        assert summary["notified"] is False
+        assert sent == []
+
+    def test_pin_survives_when_pinned_job_still_open(self):
+        summary, sent, conn = _run_pinned(
+            _current_row("li-1"),
+            _current_row("li-1"),
+            [_tracking_row("li-1", "https://x/1")],
+            {"https://x/1": (200, LIVE_PAGE)},
+        )
+        assert not any(
+            "DELETE FROM scout.lockscreen_pin" in s[0]
+            for s in conn._cursor.statements
+        )
+        assert summary["notified"] is False
+        assert summary["current"] == "li-1"
+
+
+def _run_pinned(pinned_row, after_row, tracking_rows, mapping):
+    """Daily run where the before snapshot is the pinned job: the pin
+    query consumes the pinned row, the after snapshot falls through to
+    the auto pick once the pin is gone."""
+    cur = FakeCursor(
+        current_rows=[after_row] if after_row else [],
+        tracking_rows=tracking_rows,
+        pinned_rows=[pinned_row] if pinned_row else [],
+    )
+    conn = FakeConnection(cur)
+    sent = []
+
+    def draft(old, reason, new):
+        return f"DRAFT {old['job_id']} | {reason} | {new['job_id'] if new else 'NONE'}"
+
+    def sender(msg):
+        sent.append(msg)
+        return True
+
+    summary = run_daily_check(
+        conn, fetcher=_fetcher(mapping), draft_fn=draft, sender=sender
+    )
+    return summary, sent, conn
 
 
 class TestDraftAdvanceMessage:
