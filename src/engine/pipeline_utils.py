@@ -357,6 +357,27 @@ def stage_raw_jobs(
                     incoming_posted_at,
                 ),
             )
+            # The saved milestone lives in scout.job_milestones: a newly
+            # staged job is saved by definition, so mark it done now.
+            # Fail-open (and only when the INSERT actually landed — the
+            # ON CONFLICT DO NOTHING above can skip it): a milestones
+            # failure must never block ingestion, and the lock-screen
+            # handler defaults 'saved' to done when no row exists.
+            try:
+                if cur.rowcount == 1:
+                    cur.execute(
+                        "INSERT INTO scout.job_milestones "
+                        "(job_id, milestone_key, done, done_at, marked_by) "
+                        "VALUES (%s, 'saved', TRUE, NOW(), 'ingest') "
+                        "ON CONFLICT (job_id, milestone_key) DO NOTHING;",
+                        (job_id,),
+                    )
+            except Exception:
+                logger.warning(
+                    "job_milestones saved-mark failed for %s; continuing",
+                    job_id,
+                    exc_info=True,
+                )
             saved_count += 1
             staged_jobs.append({"job_id": job_id, "title": title, "company": company})
 

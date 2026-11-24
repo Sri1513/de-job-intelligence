@@ -126,6 +126,17 @@ class ClearLockscreenPinArgs(_StrictModel):
     """No arguments: clears whatever pin is set, if any."""
 
 
+class MarkJobMilestoneArgs(_StrictModel):
+    job_id: str = Field(..., min_length=1)
+    milestone: str = Field(..., min_length=1)
+    done: bool = True
+    marked_by: str | None = None
+
+
+class ListJobMilestonesArgs(_StrictModel):
+    job_id: str = Field(..., min_length=1)
+
+
 class RunApplicationWorkerArgs(_StrictModel):
     limit: int = Field(3, ge=1, le=20)
     # Legacy alias the handler reads as a fallback for limit.
@@ -205,6 +216,8 @@ TOOL_ARGUMENT_MODELS: dict[str, type[_StrictModel]] = {
     "queue_job_for_application": QueueJobForApplicationArgs,
     "pin_lockscreen_job": PinLockscreenJobArgs,
     "clear_lockscreen_pin": ClearLockscreenPinArgs,
+    "mark_job_milestone": MarkJobMilestoneArgs,
+    "list_job_milestones": ListJobMilestonesArgs,
     "run_application_worker": RunApplicationWorkerArgs,
     "retry_job_evaluations": RetryJobEvaluationsArgs,
     "run_batch_ingestion": RunBatchIngestionArgs,

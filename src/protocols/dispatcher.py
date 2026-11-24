@@ -13,13 +13,17 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from urllib.parse import quote
 
 from src.core.database import get_db_connection, get_job_by_id
 from src.core.tailoring_graph import run_tailoring_graph
-from src.dashboard.app import LOCKSCREEN_SITE_URL, _derive_lockscreen_deadline
+from src.dashboard.app import (
+    LOCKSCREEN_MILESTONE_STEPS,
+    LOCKSCREEN_SITE_URL,
+    _derive_lockscreen_deadline,
+)
 from src.engine.agent_bridge import stage_agent_jobs_workflow
 from src.engine.alert_pipeline import process_whatsapp_job_alert
 from src.engine.ingestion import run_batch_ingestion_workflow
@@ -240,6 +244,29 @@ CLEAR_PIN_SQL = """
     DELETE FROM scout.lockscreen_pin WHERE id = 1 RETURNING job_id;
 """
 
+# Milestone keys/labels, in page order — single source of truth is the
+# dashboard's LOCKSCREEN_MILESTONE_STEPS (the handler renders from it).
+MILESTONE_LABELS = {step[3]: step[1] for step in LOCKSCREEN_MILESTONE_STEPS}
+MILESTONE_KEYS = tuple(MILESTONE_LABELS)
+
+MILESTONE_JOB_SQL = """
+    SELECT job_id, title, company FROM scout.saved_jobs WHERE job_id = %s;
+"""
+
+MILESTONE_UPSERT_SQL = """
+    INSERT INTO scout.job_milestones (job_id, milestone_key, done, done_at, marked_by)
+    VALUES (%s, %s, %s, %s, %s)
+    ON CONFLICT (job_id, milestone_key) DO UPDATE
+    SET done = EXCLUDED.done,
+        done_at = EXCLUDED.done_at,
+        marked_by = EXCLUDED.marked_by;
+"""
+
+MILESTONE_LIST_SQL = """
+    SELECT milestone_key, done, done_at, marked_by
+    FROM scout.job_milestones WHERE job_id = %s;
+"""
+
 
 def _pin_lockscreen_job(job_id: str, pinned_via: str = "gemini") -> dict[str, Any]:
     """Validates one saved job and stores it as the single lockscreen
@@ -323,6 +350,109 @@ def _clear_lockscreen_pin() -> dict[str, Any]:
     }
 
 
+def _mark_job_milestone(
+    job_id: str, milestone: str, done: bool = True, marked_by: str = "gemini"
+) -> dict[str, Any]:
+    """Marks one lock-screen milestone done (or re-opens it) for a saved
+    job. The lock-screen page reads scout.job_milestones, so this is how
+    the owner or Gemini drives the check-offs: the step happened, so it
+    gets marked — never the other way round. Unknown job or unknown
+    milestone key names the reason; nothing is written on failure."""
+    if milestone not in MILESTONE_KEYS:
+        return {
+            "success": False,
+            "error": f"Unknown milestone '{milestone}'. Known milestones: "
+            f"{', '.join(MILESTONE_KEYS)}.",
+        }
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(MILESTONE_JOB_SQL, (job_id,))
+            row = cur.fetchone()
+        if row is None:
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' not found in saved_jobs.",
+            }
+        job = dict(row)
+        with conn.cursor() as cur:
+            cur.execute(
+                MILESTONE_UPSERT_SQL,
+                (
+                    job_id,
+                    milestone,
+                    done,
+                    datetime.now(timezone.utc) if done else None,
+                    marked_by,
+                ),
+            )
+        conn.commit()
+    milestones = _list_job_milestones(job_id)
+    return {
+        "success": True,
+        "job_id": job_id,
+        "title": job.get("title"),
+        "company": job.get("company"),
+        "milestone": milestone,
+        "done": done,
+        "marked_by": marked_by,
+        "milestones": milestones.get("milestones", []),
+        "lockscreen_url": (
+            f"{LOCKSCREEN_SITE_URL}/lockscreen?job_id={quote(job_id, safe='')}"
+        ),
+        "message": f"Marked '{MILESTONE_LABELS[milestone]}' "
+        f"{'done' if done else 'not done'} for {job.get('title')} at "
+        f"{job.get('company')}.",
+    }
+
+
+def _list_job_milestones(job_id: str) -> dict[str, Any]:
+    """Returns all seven lock-screen milestones for a saved job with
+    their done-states, in page order, as the page renders them. Missing
+    rows read as not done — except 'saved', which is done by definition
+    (the job row exists)."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(MILESTONE_JOB_SQL, (job_id,))
+            row = cur.fetchone()
+        if row is None:
+            return {
+                "success": False,
+                "error": f"Job '{job_id}' not found in saved_jobs.",
+            }
+        job = dict(row)
+        with conn.cursor() as cur:
+            cur.execute(MILESTONE_LIST_SQL, (job_id,))
+            rows = cur.fetchall()
+        marked = {}
+        for r in rows:
+            key = r["milestone_key"] if isinstance(r, dict) else r[0]
+            done = r["done"] if isinstance(r, dict) else r[1]
+            done_at = r["done_at"] if isinstance(r, dict) else r[2]
+            by = r["marked_by"] if isinstance(r, dict) else r[3]
+            marked[key] = {
+                "done": bool(done),
+                "done_at": done_at.isoformat() if done_at is not None else None,
+                "marked_by": by,
+            }
+    milestones = [
+        {
+            "key": key,
+            "label": MILESTONE_LABELS[key],
+            "done": marked.get(key, {"done": key == "saved"})["done"],
+            "done_at": marked.get(key, {}).get("done_at"),
+            "marked_by": marked.get(key, {}).get("marked_by"),
+        }
+        for key in MILESTONE_KEYS
+    ]
+    return {
+        "success": True,
+        "job_id": job_id,
+        "title": job.get("title"),
+        "company": job.get("company"),
+        "milestones": milestones,
+    }
+
+
 async def _handle_pin_lockscreen_job(arguments: Dict[str, Any]) -> Any:
     job_id = arguments.get("job_id")
     if not job_id:
@@ -334,6 +464,32 @@ async def _handle_pin_lockscreen_job(arguments: Dict[str, Any]) -> Any:
 
 async def _handle_clear_lockscreen_pin(arguments: Dict[str, Any]) -> Any:
     return await asyncio.to_thread(_clear_lockscreen_pin)
+
+
+async def _handle_mark_job_milestone(arguments: Dict[str, Any]) -> Any:
+    job_id = arguments.get("job_id")
+    if not job_id:
+        raise ValueError("Argument 'job_id' is required.")
+    milestone = arguments.get("milestone")
+    if not milestone:
+        raise ValueError("Argument 'milestone' is required.")
+    done = arguments.get("done", True)
+    if isinstance(done, str):
+        done = done.lower() in ("true", "1", "yes")
+    return await asyncio.to_thread(
+        _mark_job_milestone,
+        job_id,
+        milestone,
+        bool(done),
+        arguments.get("marked_by") or "gemini",
+    )
+
+
+async def _handle_list_job_milestones(arguments: Dict[str, Any]) -> Any:
+    job_id = arguments.get("job_id")
+    if not job_id:
+        raise ValueError("Argument 'job_id' is required.")
+    return await asyncio.to_thread(_list_job_milestones, job_id)
 
 
 async def _handle_run_application_worker(arguments: Dict[str, Any]) -> Any:
@@ -440,6 +596,8 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {
     "queue_job_for_application": _handle_queue_job_for_application,
     "pin_lockscreen_job": _handle_pin_lockscreen_job,
     "clear_lockscreen_pin": _handle_clear_lockscreen_pin,
+    "mark_job_milestone": _handle_mark_job_milestone,
+    "list_job_milestones": _handle_list_job_milestones,
     "run_application_worker": _handle_run_application_worker,
     "retry_job_evaluations": _handle_retry_job_evaluations,
     "run_batch_ingestion": _handle_run_batch_ingestion,
