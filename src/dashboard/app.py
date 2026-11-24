@@ -1193,18 +1193,19 @@ async def skills_analytics_view(request: Request) -> HTMLResponse:
 # one URL serves every screen.
 # ---------------------------------------------------------------------------
 LOCKSCREEN_MILESTONE_STEPS = (
-    # (days before deadline, label, sub-item of the tailored package)
+    # (days before deadline, label, sub-item of the tailored package,
+    #  milestone key in scout.job_milestones)
     # "Fit Check Passed" (was "Gate passed" — pipeline jargon judges
     # don't know). The three package sub-steps collapsed 2026-11-23
     # into one sub-line: five rows all reading the same date was dense
     # for a lock-screen glance, and they are one day's work.
-    (16, "Job saved", False),
-    (14, "Fit Check Passed", False),
-    (13, "Tailored package built", False),
-    (13, "Resume · Cover letter · Outreach", True),
-    (13, "Application submitted", False),
-    (6, "Follow up if no receipt", False),
-    (3, "Reply expected", False),
+    (16, "Job saved", False, "saved"),
+    (14, "Fit Check Passed", False, "fit_check"),
+    (13, "Tailored package built", False, "package_built"),
+    (13, "Resume · Cover letter · Outreach", True, "package_assets"),
+    (13, "Application submitted", False, "submitted"),
+    (6, "Follow up if no receipt", False, "follow_up"),
+    (3, "Reply expected", False, "reply_expected"),
 )
 
 # Background choices for /lockscreen (?bg=<name>). Allowlist only — an
@@ -1342,14 +1343,50 @@ async def lockscreen_view(request: Request) -> Response:
                 status_code=400,
             )
     today = date.today()
+    # Milestone done-states come from scout.job_milestones — marked by
+    # the owner or Gemini (mark_job_milestone MCP tool) — not from the
+    # calendar. The old rule (done once the milestone date passed) lied:
+    # with a Nov 28 deadline it showed "Application submitted" checked
+    # for a job never applied to (owner decision 2026-11-23). Migration
+    # 012 seeds the table from current state, so existing pages render
+    # exactly as before. If the table is missing (migration not run
+    # yet), fall back to the old date-derived checks so the page stays
+    # up during the deploy gap.
+    try:
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT milestone_key, done FROM scout.job_milestones "
+                "WHERE job_id = %s;",
+                (job_id,),
+            )
+            marked = {
+                (r["milestone_key"] if isinstance(r, dict) else r[0]): bool(
+                    r["done"] if isinstance(r, dict) else r[1]
+                )
+                for r in cur.fetchall()
+            }
+        table_ok = True
+    except Exception as exc:
+        logger.warning(
+            "job_milestones unreadable, falling back to date-derived "
+            f"milestones: {exc}"
+        )
+        marked = {}
+        table_ok = False
     milestones = []
-    for offset_days, text, sub in LOCKSCREEN_MILESTONE_STEPS:
+    for offset_days, text, sub, key in LOCKSCREEN_MILESTONE_STEPS:
         milestone_date = deadline.date() - timedelta(days=offset_days)
+        if table_ok:
+            # 'saved' is done by definition: the job row exists, and
+            # staging marks it. Any other missing row reads as not done.
+            done = marked.get(key, key == "saved")
+        else:
+            done = milestone_date < today
         milestones.append(
             {
                 "text": text,
                 "date": f"{milestone_date.strftime('%b')} {milestone_date.day}",
-                "done": milestone_date < today,
+                "done": done,
                 "sub": sub,
             }
         )

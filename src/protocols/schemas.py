@@ -303,4 +303,46 @@ MCP_TOOLS = [
             "properties": {},
         },
     },
+    {
+        "name": "mark_job_milestone",
+        "description": "Marks one lock-screen milestone done (or re-opens it) for a saved job: the lock-screen page reads scout.job_milestones, so this is how the owner or Gemini drives the check-offs. The seven milestones, in page order: saved, fit_check, package_built, package_assets (the 'Resume · Cover letter · Outreach' sub-line), submitted, follow_up, reply_expected. Returns the job's full milestone board.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The unique identifier of the job in saved_jobs.",
+                },
+                "milestone": {
+                    "type": "string",
+                    "description": "Which milestone to mark: saved, fit_check, package_built, package_assets, submitted, follow_up, or reply_expected.",
+                },
+                "done": {
+                    "type": "boolean",
+                    "description": "True to mark it done, false to re-open it (default: true).",
+                    "default": True,
+                },
+                "marked_by": {
+                    "type": "string",
+                    "description": "Who marked it, e.g. 'gemini'.",
+                    "default": "gemini",
+                },
+            },
+            "required": ["job_id", "milestone"],
+        },
+    },
+    {
+        "name": "list_job_milestones",
+        "description": "Returns all seven lock-screen milestones for a saved job with their done-states, in page order, as the page renders them. Missing rows read as not done, except 'saved', which is done by definition.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "The unique identifier of the job in saved_jobs.",
+                },
+            },
+            "required": ["job_id"],
+        },
+    },
 ]

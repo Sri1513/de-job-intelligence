@@ -9,8 +9,11 @@ naive deadline, or omitted deadline with no posted date -> 400; flag
 off -> 404. /api/lockscreen/current returns the next dream job in line
 under the default ordering rule (open, posted date known, deadline not
 passed; highest fit first, earliest derived deadline breaks ties).
+Milestone dates derive from the deadline; done-states come from
+scout.job_milestones (migration 012) — marked by the owner or Gemini —
+falling back to date-derived checks when the table is missing.
 """
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,9 +23,34 @@ from src.core.config import settings
 from src.dashboard.app import app
 
 
-def _mock_db(monkeypatch, row):
+def _mock_db(monkeypatch, row, milestones=None):
+    """Job row via fetchone; milestone rows via fetchall, as the handler
+    reads scout.job_milestones. None means no rows at all — table path,
+    only 'saved' done."""
     cur = MagicMock()
     cur.fetchone.return_value = row
+    cur.fetchall.return_value = list(milestones) if milestones is not None else []
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+    cm = MagicMock()
+    cm.__enter__.return_value = conn
+    monkeypatch.setattr("src.dashboard.app.get_db_connection", lambda: cm)
+
+
+def _milestone_rows(*done_keys):
+    """Milestone rows as the handler reads them: every named key done."""
+    return [{"milestone_key": key, "done": True} for key in done_keys]
+
+
+def _mock_db_milestone_error(monkeypatch, row):
+    """Like _mock_db, but the milestone query raises (table missing, e.g.
+    migration 012 not run yet) so the handler falls back to date-derived
+    done-states."""
+    cur = MagicMock()
+    cur.fetchone.return_value = row
+    cur.fetchall.side_effect = Exception(
+        'relation "scout.job_milestones" does not exist'
+    )
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
     cm = MagicMock()
@@ -63,7 +91,17 @@ def _enable_lockscreen(monkeypatch):
 
 
 def test_lockscreen_renders_job_and_deadline(monkeypatch):
-    _mock_db(monkeypatch, _job_row())
+    # Milestone rows marked done through 'submitted', as the table would
+    # hold for a job at that stage — done-states come from the table,
+    # not the calendar (the old date rule checked "Application
+    # submitted" done on Nov 17 for a job never applied to).
+    _mock_db(
+        monkeypatch,
+        _job_row(),
+        milestones=_milestone_rows(
+            "saved", "fit_check", "package_built", "package_assets", "submitted"
+        ),
+    )
     client = TestClient(app)
     resp = client.get(
         "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
@@ -77,11 +115,13 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert "Pax8 — Senior Data Engineer II" not in resp.text
     assert "2026-11-30T23:59:00-05:00" in resp.text
     assert "Nov 30, 2026" in resp.text
-    # Seven milestones derive from the deadline: six steps (minus
+    # Seven milestone dates derive from the deadline: six steps (minus
     # 16/14/13/13/6/3 days) plus one sub-line under the tailored
     # package, Nov 17 (minus 13 days). The three old sub-steps
     # collapsed into that one line 2026-11-23, and "Gate passed"
     # became "Fit Check Passed" (pipeline jargon judges don't know).
+    # Done-states come from the table rows passed above, not these
+    # dates — five done here (saved through submitted).
     assert "Nov 14" in resp.text
     assert "Nov 16" in resp.text
     assert "Nov 17" in resp.text
@@ -105,12 +145,50 @@ def test_lockscreen_renders_job_and_deadline(monkeypatch):
     assert "Outreach draft ready" not in resp.text
     # The package sub-line renders indented under its parent.
     assert "mile done sub" in resp.text
+    assert resp.text.count('class="mile done') == 5
     # The runway bar spans from the first milestone (job saved, Nov 14)
     # to the deadline, so it shows real progress instead of 0% on day one.
     assert "Nov 14" in resp.text
     # Dream-job design: mountain photo bg + responsive scaler.
     assert "/static/lockscreen-bg.webp" in resp.text
     assert 'id="scaler"' in resp.text
+
+
+def test_lockscreen_milestones_come_from_table_not_dates(monkeypatch):
+    # The point of the table (owner decision 2026-11-23): with a Nov 30
+    # deadline the old date rule checked "Application submitted" done
+    # on Nov 17 for a job never applied to. The table holds no rows
+    # here, so the page shows exactly one done milestone ('saved')
+    # even though five milestone dates have already passed.
+    _mock_db(monkeypatch, _job_row(), milestones=[])
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423&deadline=2026-11-30T23:59:00-05:00"
+    )
+    assert resp.status_code == 200
+    assert resp.text.count('class="mile done') == 1
+    assert "mile done sub" not in resp.text
+    assert "Application submitted" in resp.text
+
+
+def test_lockscreen_milestones_fall_back_to_dates_when_table_missing(
+    monkeypatch,
+):
+    # Migration 012 not run yet: the milestone query raises, the handler
+    # falls back to the old date-derived checks so the page stays up
+    # during the deploy gap. The deadline is computed from today (10
+    # days out) so the count is stable whenever the test runs: five
+    # milestone dates before today, two after.
+    deadline = date.today() + timedelta(days=10)
+    _mock_db_milestone_error(monkeypatch, _job_row())
+    client = TestClient(app)
+    resp = client.get(
+        "/lockscreen?job_id=li-4474501423"
+        f"&deadline={deadline.isoformat()}T23:59:00-05:00"
+    )
+    assert resp.status_code == 200
+    assert resp.text.count('class="mile done') == 5
+    assert "mile done sub" in resp.text
 
 
 def test_lockscreen_top_safe_zone_clears_phone_clock(monkeypatch):
